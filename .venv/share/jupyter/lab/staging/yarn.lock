@@ -609,7 +609,7 @@ __metadata:
     handlebars: ^4.7.8
     html-loader: ~1.3.0
     html-webpack-plugin: ^5.5.0
-    jupyter-simple-extension: "file:../extensions/jupyter-simple-extension-0.1.0-55d8a6f36066380d30e60d91d1ebe375aa0c7bf3.tgz"
+    jupyter-simple-extension: "file:../extensions/jupyter-simple-extension-0.1.0-eb126296a758ad60d01ee967a5dd80ee50381dec.tgz"
     license-webpack-plugin: ^4.0.2
     mini-css-extract-plugin: ^2.7.0
     mini-svg-data-uri: ^1.4.4
@@ -7740,14 +7740,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jupyter-simple-extension@file:C:\\Users\\11459\\Documents\\GitHub\\jupyter-llm-ext\\.venv\\share\\jupyter\\lab\\extensions\\jupyter-simple-extension-0.1.0-55d8a6f36066380d30e60d91d1ebe375aa0c7bf3.tgz::locator=%40jupyterlab%2Fapplication-top%40workspace%3A.":
+"jupyter-simple-extension@file:C:\\Users\\11459\\Documents\\GitHub\\jupyter-llm-ext\\.venv\\share\\jupyter\\lab\\extensions\\jupyter-simple-extension-0.1.0-eb126296a758ad60d01ee967a5dd80ee50381dec.tgz::locator=%40jupyterlab%2Fapplication-top%40workspace%3A.":
   version: 0.1.0
-  resolution: "jupyter-simple-extension@file:/C:/Users/11459/Documents/GitHub/jupyter-llm-ext/.venv/share/jupyter/lab/extensions/jupyter-simple-extension-0.1.0-55d8a6f36066380d30e60d91d1ebe375aa0c7bf3.tgz::locator=%40jupyterlab%2Fapplication-top%40workspace%3A."
+  resolution: "jupyter-simple-extension@file:/C:/Users/11459/Documents/GitHub/jupyter-llm-ext/.venv/share/jupyter/lab/extensions/jupyter-simple-extension-0.1.0-eb126296a758ad60d01ee967a5dd80ee50381dec.tgz::locator=%40jupyterlab%2Fapplication-top%40workspace%3A."
   dependencies:
     "@jupyterlab/application": ^4.4.0
     "@jupyterlab/launcher": ^4.4.0
     "@jupyterlab/ui-components": ^4.4.0
-  checksum: e9278af2f728bda4cb93b0acf745a1856b1cb439e365199c3b471dc2ea59b7c7c8da5791461b8341d30f3ff689e74b802bc2068843752dafe7b59b0347bcd684
+  checksum: f493f065fbe86c4a5a2f9d66dc402c2b71778bdeaad0c62a9df59545d727f389fdcc54daef668a0447c6a1fabe066272c1e21a9153a8122c79e2a6b4da6518c6
   languageName: node
   linkType: hard
 

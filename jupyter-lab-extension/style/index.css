@@ -5,4 +5,32 @@
 .jp-simple-extension-icon {
   background-size: 16px;
   margin-right: 8px;
+}
+
+.simple-sidebar-content {
+  padding: 10px;
+}
+
+.simple-sidebar-content h2 {
+  margin-top: 0;
+  color: var(--jp-ui-font-color1);
+}
+
+.simple-sidebar-content p {
+  color: var(--jp-ui-font-color2);
+  margin-bottom: 20px;
+}
+
+.simple-sidebar-content button {
+  width: 100%;
+  padding: 8px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.simple-sidebar-content button:hover {
+  background-color: var(--jp-brand-color0);
 } 

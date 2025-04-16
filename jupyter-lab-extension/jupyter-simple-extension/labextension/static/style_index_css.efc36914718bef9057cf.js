@@ -27,7 +27,35 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/*
 .jp-simple-extension-icon {
   background-size: 16px;
   margin-right: 8px;
-} `, "",{"version":3,"sources":["webpack://./style/index.css"],"names":[],"mappings":"AAAA;;EAEE;;AAEF;EACE,qBAAqB;EACrB,iBAAiB;AACnB","sourcesContent":["/* \r\n * Styles for the simple JupyterLab extension\r\n */\r\n\r\n.jp-simple-extension-icon {\r\n  background-size: 16px;\r\n  margin-right: 8px;\r\n} "],"sourceRoot":""}]);
+}
+
+.simple-sidebar-content {
+  padding: 10px;
+}
+
+.simple-sidebar-content h2 {
+  margin-top: 0;
+  color: var(--jp-ui-font-color1);
+}
+
+.simple-sidebar-content p {
+  color: var(--jp-ui-font-color2);
+  margin-bottom: 20px;
+}
+
+.simple-sidebar-content button {
+  width: 100%;
+  padding: 8px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.simple-sidebar-content button:hover {
+  background-color: var(--jp-brand-color0);
+} `, "",{"version":3,"sources":["webpack://./style/index.css"],"names":[],"mappings":"AAAA;;EAEE;;AAEF;EACE,qBAAqB;EACrB,iBAAiB;AACnB;;AAEA;EACE,aAAa;AACf;;AAEA;EACE,aAAa;EACb,+BAA+B;AACjC;;AAEA;EACE,+BAA+B;EAC/B,mBAAmB;AACrB;;AAEA;EACE,WAAW;EACX,YAAY;EACZ,wCAAwC;EACxC,YAAY;EACZ,YAAY;EACZ,kBAAkB;EAClB,eAAe;AACjB;;AAEA;EACE,wCAAwC;AAC1C","sourcesContent":["/* \r\n * Styles for the simple JupyterLab extension\r\n */\r\n\r\n.jp-simple-extension-icon {\r\n  background-size: 16px;\r\n  margin-right: 8px;\r\n}\r\n\r\n.simple-sidebar-content {\r\n  padding: 10px;\r\n}\r\n\r\n.simple-sidebar-content h2 {\r\n  margin-top: 0;\r\n  color: var(--jp-ui-font-color1);\r\n}\r\n\r\n.simple-sidebar-content p {\r\n  color: var(--jp-ui-font-color2);\r\n  margin-bottom: 20px;\r\n}\r\n\r\n.simple-sidebar-content button {\r\n  width: 100%;\r\n  padding: 8px;\r\n  background-color: var(--jp-brand-color1);\r\n  color: white;\r\n  border: none;\r\n  border-radius: 2px;\r\n  cursor: pointer;\r\n}\r\n\r\n.simple-sidebar-content button:hover {\r\n  background-color: var(--jp-brand-color0);\r\n} "],"sourceRoot":""}]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 
@@ -475,4 +503,4 @@ var update = _node_modules_style_loader_dist_runtime_injectStylesIntoStyleTag_js
 /***/ })
 
 }]);
-//# sourceMappingURL=style_index_css.3d220af82b03adcaf6a9.js.map
+//# sourceMappingURL=style_index_css.efc36914718bef9057cf.js.map

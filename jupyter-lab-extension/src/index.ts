@@ -4,8 +4,9 @@ import {
 } from '@jupyterlab/application';
 
 import { ILauncher } from '@jupyterlab/launcher';
-
 import { LabIcon } from '@jupyterlab/ui-components';
+import { Widget } from '@lumino/widgets';
+import { ICommandPalette } from '@jupyterlab/apputils';
 
 // Example icon string (base64-encoded SVG)
 const iconSvgStr = 
@@ -20,29 +21,144 @@ const extensionIcon = new LabIcon({
   svgstr: iconSvgStr
 });
 
+// Create a widget for the sidebar
+class SimpleSidebarWidget extends Widget {
+  private messageContainer: HTMLDivElement;
+  private inputField: HTMLInputElement;
+
+  constructor() {
+    super();
+    this.id = 'simple-sidebar';
+    this.title.label = 'Chat Interface';
+    this.title.caption = 'Chat Interface';
+    this.title.icon = extensionIcon;
+    this.title.closable = true;
+
+    // Create the main container
+    const content = document.createElement('div');
+    content.className = 'simple-sidebar-content';
+    content.style.display = 'flex';
+    content.style.flexDirection = 'column';
+    content.style.height = '100%';
+
+    // Create message container
+    this.messageContainer = document.createElement('div');
+    this.messageContainer.className = 'message-container';
+    this.messageContainer.style.flexGrow = '1';
+    this.messageContainer.style.overflowY = 'auto';
+    this.messageContainer.style.padding = '10px';
+    this.messageContainer.style.borderBottom = '1px solid #e0e0e0';
+
+    // Create input container
+    const inputContainer = document.createElement('div');
+    inputContainer.style.display = 'flex';
+    inputContainer.style.padding = '10px';
+    inputContainer.style.gap = '5px';
+
+    // Create input field
+    this.inputField = document.createElement('input');
+    this.inputField.type = 'text';
+    this.inputField.placeholder = 'Type your message...';
+    this.inputField.style.flexGrow = '1';
+    this.inputField.style.padding = '5px';
+    this.inputField.style.border = '1px solid #ccc';
+    this.inputField.style.borderRadius = '3px';
+
+    // Create send button
+    const sendButton = document.createElement('button');
+    sendButton.className = 'jp-Button';
+    sendButton.textContent = 'Send';
+    sendButton.style.padding = '5px 10px';
+
+    // Add event listeners
+    sendButton.addEventListener('click', () => this.handleSendMessage());
+    this.inputField.addEventListener('keypress', (event) => {
+      if (event.key === 'Enter') {
+        this.handleSendMessage();
+      }
+    });
+
+    // Assemble the components
+    inputContainer.appendChild(this.inputField);
+    inputContainer.appendChild(sendButton);
+    content.appendChild(this.messageContainer);
+    content.appendChild(inputContainer);
+    this.node.appendChild(content);
+  }
+
+  private handleSendMessage(): void {
+    const message = this.inputField.value.trim();
+    if (message) {
+      this.addMessage(message, 'user');
+      this.inputField.value = '';
+      // Here you can add logic to handle the message and get a response
+      // For now, we'll just echo the message
+      setTimeout(() => {
+        this.addMessage(`Echo: ${message}`, 'bot');
+      }, 500);
+    }
+  }
+
+  private addMessage(text: string, sender: 'user' | 'bot'): void {
+    const messageDiv = document.createElement('div');
+    messageDiv.style.marginBottom = '10px';
+    messageDiv.style.padding = '8px';
+    messageDiv.style.borderRadius = '5px';
+    messageDiv.style.maxWidth = '80%';
+    messageDiv.style.wordWrap = 'break-word';
+
+    if (sender === 'user') {
+      messageDiv.style.backgroundColor = '#e3f2fd';
+      messageDiv.style.marginLeft = 'auto';
+    } else {
+      messageDiv.style.backgroundColor = '#f5f5f5';
+      messageDiv.style.marginRight = 'auto';
+    }
+
+    messageDiv.textContent = text;
+    this.messageContainer.appendChild(messageDiv);
+    this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+  }
+}
+
 /**
  * Initialization data for the jupyter-simple-extension extension.
  */
 const plugin: JupyterFrontEndPlugin<void> = {
   id: 'jupyter-simple-extension:plugin',
   autoStart: true,
-  requires: [ILauncher],
-  activate: (app: JupyterFrontEnd, launcher: ILauncher) => {
+  requires: [ILauncher, ICommandPalette],
+  activate: (app: JupyterFrontEnd, launcher: ILauncher, palette: ICommandPalette) => {
     console.log('JupyterLab extension jupyter-simple-extension is activated!');
 
-    // Add a command to show a dialog
-    app.commands.addCommand('simple-extension:open-dialog', {
-      label: 'Show Simple Dialog',
+    // Create the sidebar widget
+    const sidebarWidget = new SimpleSidebarWidget();
+
+    // Add the sidebar widget to the left area on startup
+    app.shell.add(sidebarWidget, 'left', { rank: 100 });
+
+    // Add a command to toggle the sidebar
+    app.commands.addCommand('simple-extension:toggle-sidebar', {
+      label: 'Toggle Simple Sidebar',
       icon: extensionIcon,
       execute: () => {
-        window.alert('Hello from the simple JupyterLab extension!');
-        return null;
+        if (sidebarWidget.isAttached) {
+          sidebarWidget.parent = null;
+        } else {
+          app.shell.add(sidebarWidget, 'left', { rank: 100 });
+        }
       }
     });
 
-    // Add a launcher item that shows an alert when clicked
+    // Add the command to the command palette
+    palette.addItem({
+      command: 'simple-extension:toggle-sidebar',
+      category: 'Extension'
+    });
+
+    // Add a launcher item
     launcher.add({
-      command: 'simple-extension:open-dialog',
+      command: 'simple-extension:toggle-sidebar',
       category: 'Other',
       rank: 1
     });
