@@ -1,0 +1,8 @@
+/* 
+ * Styles for the simple JupyterLab extension
+ */
+
+.jp-simple-extension-icon {
+  background-size: 16px;
+  margin-right: 8px;
+} 
