@@ -99,4 +99,3 @@ jupyter-llm-ext/
 ├── PROJECT.md       # English project documentation
 └── README.md        # Chinese documentation
 ```
-
