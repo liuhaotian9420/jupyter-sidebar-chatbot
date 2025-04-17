@@ -66,16 +66,17 @@ Notebook communicates via HTTP (or WebSocket for advanced features).
 # Project Todo List
 
 ## Core Infrastructure
-- [ ] Define purpose and high-level architecture
+- [x] Define purpose and high-level architecture
 - [ ] Scaffold the backend FastAPI sidecar service
 - [ ] Package sidecar app with script to launch it alongside JupyterLab
 
 ## Jupyter Extension Development
-- [ ] Build Jupyter Notebook extension (Classic) with:
-  - [ ] Toolbar button
-  - [ ] Selected cell access
-  - [ ] Modal feedback
-- [ ] Support both Jupyter Notebook and JupyterLab UIs
+- [x] Build Jupyter Notebook extension (Classic) with:
+  - [x] Toolbar button
+  - [x] Selected cell access
+  - [x] Modal feedback
+- [x] Support both Jupyter Notebook and JupyterLab UIs
+- [x] Implement basic chat interface in sidebar
 
 ## Backend Implementation
 - [ ] Manage sidecar IPython kernel using jupyter_client
@@ -85,4 +86,17 @@ Notebook communicates via HTTP (or WebSocket for advanced features).
 ## Advanced Features
 - [ ] Integrate optional LLM (OpenAI, Ollama, etc.)
 - [ ] (Optional) Enable persistent variable sessions across executions
+
+# Current Project Structure
+```
+jupyter-llm-ext/
+├── backend/         # Backend service code (in progress)
+│   └── src/         # Source code directory
+├── jupyter-lab-extension/  # Frontend extension
+│   ├── src/         # TypeScript source code
+│   ├── style/       # CSS styles
+│   └── package.json # Node.js dependencies
+├── PROJECT.md       # English project documentation
+└── README.md        # Chinese documentation
+```
 
