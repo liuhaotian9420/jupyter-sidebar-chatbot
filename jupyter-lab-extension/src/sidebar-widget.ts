@@ -133,13 +133,13 @@ export class SimpleSidebarWidget extends Widget {
         const from = selection.main.from;
         const to = selection.main.to;
         const selectedText = state.doc.sliceString(from, to);
-        this.inputField.value = `@code\n${selectedText}`;
+        this.appendToInput(`@code\n${selectedText}`);
         this.showKeyboardShortcutIndicator('Selected code inserted');
       } else {
         // If no selection, use @cell
         const cellContext = globals.cellContextTracker?.getCurrentCellContext();
         if (cellContext) {
-          this.inputField.value = `@cell\n${cellContext.text}`;
+          this.appendToInput(`@cell\n${cellContext.text}`);
           this.showKeyboardShortcutIndicator('Cell content inserted');
         }
       }
@@ -803,12 +803,12 @@ export class SimpleSidebarWidget extends Widget {
   private handleCodeCommand(): void {
     const selectedText = this.getSelectedText();
     if (selectedText) {
-      this.inputField.value = `@code\n${selectedText}`;
+      this.appendToInput(`@code\n${selectedText}`);
     } else {
       // If no selection, get the entire cell content
       const cellContext = globals.cellContextTracker?.getCurrentCellContext();
       if (cellContext) {
-        this.inputField.value = `@code\n${cellContext.text}`;
+        this.appendToInput(`@code\n${cellContext.text}`);
       }
     }
   }
@@ -819,8 +819,23 @@ export class SimpleSidebarWidget extends Widget {
   private handleCellCommand(): void {
     const cellContext = globals.cellContextTracker?.getCurrentCellContext();
     if (cellContext) {
-      this.inputField.value = `@cell\n${cellContext.text}`;
+      this.appendToInput(`@cell\n${cellContext.text}`);
     }
+  }
+
+  /**
+   * Appends text to the input field with proper spacing
+   */
+  private appendToInput(text: string): void {
+    const currentValue = this.inputField.value;
+    if (currentValue) {
+      // If there's existing content, add a newline before appending
+      this.inputField.value = `${currentValue}\n\n${text}`;
+    } else {
+      this.inputField.value = text;
+    }
+    // Focus the input field
+    this.inputField.focus();
   }
 
   /**

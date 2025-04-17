@@ -32,8 +32,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
          */
         this.handleKeyDown = (event) => {
             var _a, _b;
-            // Check for Ctrl+I
-            if (event.ctrlKey && event.key === 'i') {
+            // Check for Ctrl+L (for selected code)
+            if (event.ctrlKey && event.key === 'l') {
                 event.preventDefault();
                 // Get the current active cell
                 const cell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
@@ -55,12 +55,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                     const to = selection.main.to;
                     const selectedText = state.doc.sliceString(from, to);
                     this.inputField.value = `@code\n${selectedText}`;
+                    this.showKeyboardShortcutIndicator('Selected code inserted');
                 }
                 else {
                     // If no selection, use @cell
                     const cellContext = (_b = globals_1.globals.cellContextTracker) === null || _b === void 0 ? void 0 : _b.getCurrentCellContext();
                     if (cellContext) {
                         this.inputField.value = `@cell\n${cellContext.text}`;
+                        this.showKeyboardShortcutIndicator('Cell content inserted');
                     }
                 }
             }
@@ -90,6 +92,10 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.commandMenuContainer = document.createElement('div');
         this.commandMenuContainer.className = 'command-menu-container';
         this.commandMenuContainer.style.display = 'none';
+        // Create keyboard shortcut indicator
+        this.keyboardShortcutIndicator = document.createElement('div');
+        this.keyboardShortcutIndicator.className = 'keyboard-shortcut-indicator';
+        document.body.appendChild(this.keyboardShortcutIndicator);
         // Create a new chat on start
         this.createNewChat();
         this.node.appendChild(this.createLayout());
@@ -98,11 +104,26 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         document.addEventListener('keydown', this.handleKeyDown);
     }
     /**
+     * Shows a visual indicator for keyboard shortcuts
+     */
+    showKeyboardShortcutIndicator(text) {
+        this.keyboardShortcutIndicator.textContent = text;
+        this.keyboardShortcutIndicator.classList.add('visible');
+        // Hide after 1 second
+        setTimeout(() => {
+            this.keyboardShortcutIndicator.classList.remove('visible');
+        }, 1000);
+    }
+    /**
      * Disposes all resources
      */
     dispose() {
         // Remove keyboard shortcut listener
         document.removeEventListener('keydown', this.handleKeyDown);
+        // Remove keyboard shortcut indicator
+        if (this.keyboardShortcutIndicator.parentNode) {
+            this.keyboardShortcutIndicator.parentNode.removeChild(this.keyboardShortcutIndicator);
+        }
         super.dispose();
     }
     /**

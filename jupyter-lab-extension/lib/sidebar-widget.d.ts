@@ -17,7 +17,12 @@ export declare class SimpleSidebarWidget extends Widget {
     private historyContainer;
     private apiClient;
     private commandMenuContainer;
+    private keyboardShortcutIndicator;
     constructor(docManager: IDocumentManager);
+    /**
+     * Shows a visual indicator for keyboard shortcuts
+     */
+    private showKeyboardShortcutIndicator;
     /**
      * Handles keyboard shortcuts
      */
