@@ -33,37 +33,49 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.handleKeyDown = (event) => {
             var _a, _b;
             // Check for Ctrl+L (for selected code)
-            if (event.ctrlKey && event.key === 'l') {
+            if (event.ctrlKey && event.key.toLowerCase() === 'l') {
+                // Prevent default browser behavior
                 event.preventDefault();
+                event.stopPropagation();
                 // Get the current active cell
                 const cell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
                 if (!cell || !cell.editor) {
                     return;
                 }
-                // Get the CodeMirror editor instance
-                const editor = cell.editor;
-                const view = editor.editor;
-                if (!view) {
-                    return;
-                }
-                // Check if there's a selection
-                const state = view.state;
-                const selection = state.selection;
-                if (!selection.main.empty) {
-                    // If there's a selection, use @code
-                    const from = selection.main.from;
-                    const to = selection.main.to;
-                    const selectedText = state.doc.sliceString(from, to);
-                    this.inputField.value = `@code\n${selectedText}`;
-                    this.showKeyboardShortcutIndicator('Selected code inserted');
-                }
-                else {
-                    // If no selection, use @cell
-                    const cellContext = (_b = globals_1.globals.cellContextTracker) === null || _b === void 0 ? void 0 : _b.getCurrentCellContext();
-                    if (cellContext) {
-                        this.inputField.value = `@cell\n${cellContext.text}`;
-                        this.showKeyboardShortcutIndicator('Cell content inserted');
+                try {
+                    // Get the CodeMirror editor instance
+                    const editor = cell.editor;
+                    const view = editor.editor;
+                    if (!view) {
+                        return;
                     }
+                    // Check if there's a selection
+                    const state = view.state;
+                    const selection = state.selection;
+                    if (!selection.main.empty) {
+                        // If there's a selection, use @code
+                        const from = selection.main.from;
+                        const to = selection.main.to;
+                        const selectedText = state.doc.sliceString(from, to);
+                        this.appendToInput(`@code\n${selectedText}`);
+                        this.showKeyboardShortcutIndicator('Selected code inserted');
+                    }
+                    else {
+                        // If no selection, use @cell
+                        const cellContext = (_b = globals_1.globals.cellContextTracker) === null || _b === void 0 ? void 0 : _b.getCurrentCellContext();
+                        if (cellContext) {
+                            this.appendToInput(`@cell\n${cellContext.text}`);
+                            this.showKeyboardShortcutIndicator('Cell content inserted');
+                        }
+                    }
+                    // Ensure the sidebar is visible and focused
+                    if (this.isHidden) {
+                        this.show();
+                    }
+                    this.inputField.focus();
+                }
+                catch (error) {
+                    console.error('Error handling keyboard shortcut:', error);
                 }
             }
         };
@@ -673,13 +685,13 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         var _a;
         const selectedText = this.getSelectedText();
         if (selectedText) {
-            this.inputField.value = `@code\n${selectedText}`;
+            this.appendToInput(`@code\n${selectedText}`);
         }
         else {
             // If no selection, get the entire cell content
             const cellContext = (_a = globals_1.globals.cellContextTracker) === null || _a === void 0 ? void 0 : _a.getCurrentCellContext();
             if (cellContext) {
-                this.inputField.value = `@code\n${cellContext.text}`;
+                this.appendToInput(`@code\n${cellContext.text}`);
             }
         }
     }
@@ -690,7 +702,28 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         var _a;
         const cellContext = (_a = globals_1.globals.cellContextTracker) === null || _a === void 0 ? void 0 : _a.getCurrentCellContext();
         if (cellContext) {
-            this.inputField.value = `@cell\n${cellContext.text}`;
+            this.appendToInput(`@cell\n${cellContext.text}`);
+        }
+    }
+    /**
+     * Appends text to the input field with proper spacing
+     */
+    appendToInput(text) {
+        try {
+            const currentValue = this.inputField.value;
+            if (currentValue) {
+                // If there's existing content, add a newline before appending
+                this.inputField.value = `${currentValue}\n\n${text}`;
+            }
+            else {
+                this.inputField.value = text;
+            }
+            // Focus the input field and move cursor to end
+            this.inputField.focus();
+            this.inputField.setSelectionRange(this.inputField.value.length, this.inputField.value.length);
+        }
+        catch (error) {
+            console.error('Error appending to input:', error);
         }
     }
     /**

@@ -100,6 +100,10 @@ export declare class SimpleSidebarWidget extends Widget {
      */
     private handleCellCommand;
     /**
+     * Appends text to the input field with proper spacing
+     */
+    private appendToInput;
+    /**
      * Gets the selected text from cell context
      */
     private getSelectedText;
