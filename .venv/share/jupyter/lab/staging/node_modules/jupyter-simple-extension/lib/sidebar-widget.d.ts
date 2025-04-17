@@ -19,6 +19,14 @@ export declare class SimpleSidebarWidget extends Widget {
     private commandMenuContainer;
     constructor(docManager: IDocumentManager);
     /**
+     * Handles keyboard shortcuts
+     */
+    private handleKeyDown;
+    /**
+     * Disposes all resources
+     */
+    dispose(): void;
+    /**
      * Creates the main layout for the sidebar
      */
     private createLayout;

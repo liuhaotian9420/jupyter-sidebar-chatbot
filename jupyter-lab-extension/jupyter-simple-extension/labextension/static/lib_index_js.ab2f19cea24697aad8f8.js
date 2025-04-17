@@ -447,6 +447,7 @@ const globals_1 = __webpack_require__(/*! ./globals */ "./lib/globals.js");
 const api_client_1 = __webpack_require__(/*! ./api-client */ "./lib/api-client.js");
 const markdown_config_1 = __webpack_require__(/*! ./markdown-config */ "./lib/markdown-config.js");
 // import { ICellContext } from './types';
+// import { ICellContext } from './types';
 // Configure marked with our settings
 (0, markdown_config_1.configureMarked)();
 /**
@@ -460,6 +461,44 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.chatHistory = [];
         this.currentChatId = '';
         this.isHistoryViewActive = false;
+        /**
+         * Handles keyboard shortcuts
+         */
+        this.handleKeyDown = (event) => {
+            var _a, _b;
+            // Check for Ctrl+I
+            if (event.ctrlKey && event.key === 'i') {
+                event.preventDefault();
+                // Get the current active cell
+                const cell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
+                if (!cell || !cell.editor) {
+                    return;
+                }
+                // Get the CodeMirror editor instance
+                const editor = cell.editor;
+                const view = editor.editor;
+                if (!view) {
+                    return;
+                }
+                // Check if there's a selection
+                const state = view.state;
+                const selection = state.selection;
+                if (!selection.main.empty) {
+                    // If there's a selection, use @code
+                    const from = selection.main.from;
+                    const to = selection.main.to;
+                    const selectedText = state.doc.sliceString(from, to);
+                    this.inputField.value = `@code\n${selectedText}`;
+                }
+                else {
+                    // If no selection, use @cell
+                    const cellContext = (_b = globals_1.globals.cellContextTracker) === null || _b === void 0 ? void 0 : _b.getCurrentCellContext();
+                    if (cellContext) {
+                        this.inputField.value = `@cell\n${cellContext.text}`;
+                    }
+                }
+            }
+        };
         /**
          * Handles clicks outside the command menu
          */
@@ -489,6 +528,16 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.createNewChat();
         this.node.appendChild(this.createLayout());
         this.node.appendChild(this.commandMenuContainer);
+        // Add keyboard shortcut listener
+        document.addEventListener('keydown', this.handleKeyDown);
+    }
+    /**
+     * Disposes all resources
+     */
+    dispose() {
+        // Remove keyboard shortcut listener
+        document.removeEventListener('keydown', this.handleKeyDown);
+        super.dispose();
     }
     /**
      * Creates the main layout for the sidebar
@@ -1092,4 +1141,4 @@ exports.SimpleSidebarWidget = SimpleSidebarWidget;
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.179468e47aabc3aa59a2.js.map
+//# sourceMappingURL=lib_index_js.ab2f19cea24697aad8f8.js.map

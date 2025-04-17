@@ -447,4 +447,25 @@
 .command-description {
   font-size: 0.9em;
   color: var(--jp-ui-font-color2);
+}
+
+/* Keyboard shortcut visual indicator */
+.keyboard-shortcut-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--jp-brand-color1);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.keyboard-shortcut-indicator.visible {
+  opacity: 1;
 } 
