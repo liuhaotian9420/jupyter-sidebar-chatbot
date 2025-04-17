@@ -6,6 +6,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { extensionIcon } from './icons';
 import { globals } from './globals';
+import { ApiClient } from './api-client';
 
 /**
  * Chat history item interface
@@ -35,6 +36,7 @@ export class SimpleSidebarWidget extends Widget {
   private titleInput: HTMLInputElement;
   private isHistoryViewActive: boolean = false;
   private historyContainer: HTMLDivElement;
+  private apiClient: ApiClient;
 
   constructor(docManager: IDocumentManager) {
     super();
@@ -44,6 +46,9 @@ export class SimpleSidebarWidget extends Widget {
     this.title.caption = 'AI Chat Interface';
     this.title.icon = extensionIcon;
     this.title.closable = true;
+    
+    // Initialize API client
+    this.apiClient = new ApiClient();
 
     // Initialize container elements before creating layout
     this.messageContainer = document.createElement('div');
@@ -395,7 +400,7 @@ export class SimpleSidebarWidget extends Widget {
   private handleSendMessage(): void {
     const message = this.inputField.value.trim();
     if (message) {
-      // Add to UI
+      // Add user message to UI
       this.addMessage(message, 'user', this.isMarkdownMode);
       this.inputField.value = '';
       
@@ -407,10 +412,68 @@ export class SimpleSidebarWidget extends Widget {
         this.inputField.rows = 1;
       }
 
-      // In the future, this will call the backend sidecar service
-      setTimeout(() => {
-        this.addMessage(`Echo: ${message}`, 'bot', true);
-      }, 500);
+      // Create a temporary message container for the bot's streaming response
+      const botMessageDiv = document.createElement('div');
+      botMessageDiv.className = 'bot-message';
+      
+      const markdownIndicator = document.createElement('div');
+      markdownIndicator.textContent = "MD";
+      markdownIndicator.className = 'markdown-indicator';
+      botMessageDiv.appendChild(markdownIndicator);
+      
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'markdown-content';
+      contentDiv.textContent = ''; // Start empty
+      botMessageDiv.appendChild(contentDiv);
+      
+      this.messageContainer.appendChild(botMessageDiv);
+      
+      // Variable to collect the complete response
+      let completeResponse = '';
+      
+      // Get cell context if available
+      const cellContext = globals.cellContextTracker ? 
+        globals.cellContextTracker.getCurrentCellContext() : null;
+      
+      // Stream response from API
+      this.apiClient.streamChat(
+        message,
+        { cellContext },
+        // On each chunk received
+        (chunk: string) => {
+          completeResponse += chunk;
+          contentDiv.textContent = completeResponse;
+          this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+        },
+        // On complete
+        () => {
+          // Replace plain text with rendered markdown
+          try {
+            const rawHtml = marked.parse(completeResponse) as string;
+            const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+            contentDiv.innerHTML = sanitizedHtml;
+          } catch (error) {
+            console.error('Failed to render markdown:', error);
+          }
+          
+          // Save to chat history
+          const chat = this.chatHistory.find(c => c.id === this.currentChatId);
+          if (chat) {
+            chat.messages.push({ 
+              text: completeResponse, 
+              sender: 'bot', 
+              isMarkdown: true
+            });
+          }
+          
+          this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+        },
+        // On error
+        (error: Error) => {
+          contentDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+          console.error('API Error:', error);
+        }
+      );
     }
   }
 
