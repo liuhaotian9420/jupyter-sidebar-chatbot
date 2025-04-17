@@ -627,6 +627,9 @@
             "mathjax-full": {
               "requiredVersion": "^3.2.2"
             },
+            "dompurify": {
+              "requiredVersion": "^3.2.5"
+            },
             "react-highlight-words": {
               "requiredVersion": "^0.20.0"
             },

@@ -33,4 +33,90 @@
 
 .simple-sidebar-content button:hover {
   background-color: var(--jp-brand-color0);
+}
+
+/* Markdown styling */
+.markdown-content {
+  font-family: var(--jp-ui-font-family);
+  line-height: 1.5;
+}
+
+.markdown-content h1, 
+.markdown-content h2, 
+.markdown-content h3, 
+.markdown-content h4, 
+.markdown-content h5, 
+.markdown-content h6 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: bold;
+  color: var(--jp-ui-font-color0);
+}
+
+.markdown-content h1 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--jp-border-color2);
+  padding-bottom: 0.3em;
+}
+
+.markdown-content h2 {
+  font-size: 1.3em;
+}
+
+.markdown-content h3 {
+  font-size: 1.1em;
+}
+
+.markdown-content p {
+  margin: 0.5em 0;
+}
+
+.markdown-content ul, 
+.markdown-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.markdown-content li {
+  margin: 0.25em 0;
+}
+
+.markdown-content a {
+  color: var(--jp-content-link-color);
+  text-decoration: none;
+}
+
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+
+.markdown-content blockquote {
+  padding-left: 1em;
+  margin-left: 0;
+  border-left: 3px solid var(--jp-border-color2);
+  color: var(--jp-ui-font-color2);
+}
+
+.markdown-content pre {
+  background-color: var(--jp-cell-editor-background);
+  padding: 0.75em;
+  border-radius: 3px;
+  overflow-x: auto;
+}
+
+.markdown-content code {
+  font-family: var(--jp-code-font-family);
+  background-color: var(--jp-cell-editor-background);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.markdown-content pre code {
+  padding: 0;
+  background-color: transparent;
+}
+
+.markdown-content img {
+  max-width: 100%;
 } 

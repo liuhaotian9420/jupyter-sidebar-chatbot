@@ -1,15 +1,46 @@
 [build-system]
-requires = ["jupyter_packaging~=0.10,<2", "jupyterlab~=4.0"]
-build-backend = "jupyter_packaging.build_api"
+requires = ["hatchling>=1.5.0", "jupyterlab>=4.0.0,<5", "hatch-nodejs-version"]
+build-backend = "hatchling.build"
 
-[tool.jupyter-packaging.options]
-skip-if-exists = ["jupyter-simple-extension/labextension/package.json"]
-ensured-targets = ["jupyter-simple-extension/labextension/package.json"]
+[project]
+name = "jupyter_simple_extension"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+classifiers = [
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Framework :: Jupyter :: JupyterLab :: 4",
+    "Framework :: Jupyter :: JupyterLab :: Extensions",
+    "Framework :: Jupyter :: JupyterLab :: Extensions :: Prebuilt",
+]
+dynamic = ["version", "description", "authors", "urls", "keywords"]
 
-[tool.jupyter-packaging.builder]
-factory = "jupyter_packaging.npm_builder"
+[tool.hatch.version]
+source = "nodejs"
 
-[tool.jupyter-packaging.build-args]
+[tool.hatch.metadata.hooks.nodejs]
+fields = ["description", "authors", "urls"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"jupyter-simple-extension/labextension" = "share/jupyter/labextensions/jupyter-simple-extension"
+"install.json" = "share/jupyter/labextensions/jupyter-simple-extension/install.json"
+
+[tool.hatch.build.targets.wheel.force-include]
+"./package.json" = "jupyter-simple-extension/package.json"
+
+[tool.hatch.build.hooks.version]
+path = "jupyter-simple-extension/_version.py"
+
+[tool.hatch.build.hooks.jupyter-builder]
+dependencies = ["hatch-jupyter-builder>=0.5"]
+build-function = "hatch_jupyter_builder.npm_builder"
+ensured-targets = [
+    "jupyter-simple-extension/labextension/package.json",
+]
+skip-if-exists = ["jupyter-simple-extension/labextension/static/style.js"]
+
+[tool.hatch.build.hooks.jupyter-builder.build-kwargs]
 build_cmd = "build:prod"
 npm = ["jlpm"]
 

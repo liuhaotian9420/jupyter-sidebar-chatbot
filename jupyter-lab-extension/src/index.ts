@@ -7,6 +7,16 @@ import { ILauncher } from '@jupyterlab/launcher';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { Widget } from '@lumino/widgets';
 import { ICommandPalette } from '@jupyterlab/apputils';
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
+import { Cell } from '@jupyterlab/cells';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import { IDocumentManager } from '@jupyterlab/docmanager';
+import { Contents } from '@jupyterlab/services';
+import { CodeEditor } from '@jupyterlab/codeeditor';
+import { EditorView, ViewUpdate } from '@codemirror/view';
+import { Transaction } from '@codemirror/state';
+// import { IDisposable } from '@lumino/disposable';
 
 // Example icon string (base64-encoded SVG)
 const iconSvgStr = 
@@ -24,13 +34,19 @@ const extensionIcon = new LabIcon({
 // Create a widget for the sidebar
 class SimpleSidebarWidget extends Widget {
   private messageContainer: HTMLDivElement;
-  private inputField: HTMLInputElement;
+  private inputField: HTMLTextAreaElement;
+  private isMarkdownMode: boolean = false;
+  private inputContainer: HTMLDivElement;
+  private isInputExpanded: boolean = false;
+  private docManager: IDocumentManager;
 
-  constructor() {
+  constructor(docManager: IDocumentManager) {
+    console.log('[SimpleSidebarWidget] Constructor start'); // Log 1
     super();
+    this.docManager = docManager;
     this.id = 'simple-sidebar';
-    this.title.label = 'Chat Interface';
-    this.title.caption = 'Chat Interface';
+    this.title.label = '';
+    this.title.caption = 'AI Chat Interface';
     this.title.icon = extensionIcon;
     this.title.closable = true;
 
@@ -49,20 +65,129 @@ class SimpleSidebarWidget extends Widget {
     this.messageContainer.style.padding = '10px';
     this.messageContainer.style.borderBottom = '1px solid #e0e0e0';
 
-    // Create input container
-    const inputContainer = document.createElement('div');
-    inputContainer.style.display = 'flex';
-    inputContainer.style.padding = '10px';
-    inputContainer.style.gap = '5px';
+    // Create input container (will hold controls, input field, and send button)
+    this.inputContainer = document.createElement('div');
+    this.inputContainer.style.display = 'flex';
+    this.inputContainer.style.flexDirection = 'column';
+    this.inputContainer.style.padding = '10px';
+    this.inputContainer.style.gap = '5px';
 
-    // Create input field
-    this.inputField = document.createElement('input');
-    this.inputField.type = 'text';
-    this.inputField.placeholder = 'Type your message...';
+    // Create controls container (for toggle and action buttons on one line)
+    const controlsContainer = document.createElement('div');
+    controlsContainer.style.display = 'flex';
+    controlsContainer.style.justifyContent = 'space-between';
+    controlsContainer.style.alignItems = 'center';
+    controlsContainer.style.marginBottom = '5px';
+
+    // Create markdown toggle container (left side of controls)
+    const toggleContainer = document.createElement('div');
+    toggleContainer.style.display = 'flex';
+    toggleContainer.style.alignItems = 'center';
+
+    // Create markdown toggle
+    const markdownToggle = document.createElement('input');
+    markdownToggle.type = 'checkbox';
+    markdownToggle.id = 'markdown-toggle';
+    markdownToggle.style.marginRight = '5px';
+
+    // Create toggle label
+    const toggleLabel = document.createElement('label');
+    toggleLabel.htmlFor = 'markdown-toggle';
+    toggleLabel.textContent = 'Markdown mode';
+    toggleLabel.style.fontSize = '12px';
+
+    // Add toggle event
+    markdownToggle.addEventListener('change', (e) => {
+      const target = e.target as HTMLInputElement;
+      this.isMarkdownMode = target.checked;
+      this.inputField.placeholder = this.isMarkdownMode ? 
+        'Write markdown here...\\n\\n# Example heading\\n- List item\\n\\n```code block```' :
+        'Ask me anything...';
+    });
+
+    // Add toggle elements to container
+    toggleContainer.appendChild(markdownToggle);
+    toggleContainer.appendChild(toggleLabel);
+
+    // Create action buttons container (right side of controls)
+    console.log('[SimpleSidebarWidget] Creating action buttons container'); // Log 2
+    const actionButtonsContainer = document.createElement('div');
+    actionButtonsContainer.style.display = 'flex';
+    actionButtonsContainer.style.gap = '2px';
+
+    // Create command button
+    const commandButton = this.createButton('@', 'Command list');
+    commandButton.addEventListener('click', () => {
+      // Command list logic will be implemented later
+    });
+
+    // Create attachment button
+    const attachmentButton = this.createButton('📎', 'Upload file');
+    attachmentButton.addEventListener('click', () => {
+      // File upload logic will be implemented later
+    });
+
+    // Create file search button
+    const fileSearchButton = this.createButton('🔍', 'Browse files');
+    fileSearchButton.addEventListener('click', () => {
+      // File browse logic will be implemented later
+    });
+
+    // Create expand input button
+    const expandButton = this.createButton('⤢', 'Expand input');
+    expandButton.addEventListener('click', () => {
+      this.isInputExpanded = !this.isInputExpanded;
+      if (this.isInputExpanded) {
+        this.inputField.style.height = '100px';
+        this.inputField.style.resize = 'vertical';
+        expandButton.textContent = '⤡';
+        expandButton.title = 'Collapse input';
+      } else {
+        this.inputField.style.height = 'auto';
+        this.inputField.style.resize = 'none';
+        expandButton.textContent = '⤢';
+        expandButton.title = 'Expand input';
+      }
+    });
+
+    // Create settings button
+    const settingsButton = this.createButton('⚙️', 'Settings');
+    settingsButton.addEventListener('click', () => {
+      // Settings logic will be implemented later
+    });
+
+    // Create List Contents button
+    const listDirButton = this.createButton('📁', 'List Directory Contents');
+    listDirButton.addEventListener('click', () => this.listCurrentDirectoryContents());
+
+    // Add buttons to container
+    actionButtonsContainer.appendChild(commandButton);
+    actionButtonsContainer.appendChild(attachmentButton);
+    actionButtonsContainer.appendChild(fileSearchButton);
+    actionButtonsContainer.appendChild(expandButton);
+    actionButtonsContainer.appendChild(settingsButton);
+    actionButtonsContainer.appendChild(listDirButton);
+
+    // Add toggle and action buttons to the controls container
+    controlsContainer.appendChild(toggleContainer);
+    controlsContainer.appendChild(actionButtonsContainer);
+
+    // Create input field (changed to textarea)
+    this.inputField = document.createElement('textarea');
+    this.inputField.placeholder = 'Ask me anything...';
     this.inputField.style.flexGrow = '1';
     this.inputField.style.padding = '5px';
     this.inputField.style.border = '1px solid #ccc';
     this.inputField.style.borderRadius = '3px';
+    this.inputField.style.resize = 'none';
+    this.inputField.rows = 1;
+    this.inputField.style.overflowY = 'auto';
+
+    // Create input actions container (for send button)
+    const inputActionsContainer = document.createElement('div');
+    inputActionsContainer.style.display = 'flex';
+    inputActionsContainer.style.justifyContent = 'flex-end';
+    inputActionsContainer.style.marginTop = '5px';
 
     // Create send button
     const sendButton = document.createElement('button');
@@ -73,33 +198,61 @@ class SimpleSidebarWidget extends Widget {
     // Add event listeners
     sendButton.addEventListener('click', () => this.handleSendMessage());
     this.inputField.addEventListener('keypress', (event) => {
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
         this.handleSendMessage();
       }
     });
 
-    // Assemble the components
-    inputContainer.appendChild(this.inputField);
-    inputContainer.appendChild(sendButton);
+    // Add button to actions container
+    inputActionsContainer.appendChild(sendButton);
+
+    // Assemble the input components
+    this.inputContainer.appendChild(controlsContainer);
+    console.log('[SimpleSidebarWidget] Controls container appended to input container'); // Log 6
+    this.inputContainer.appendChild(this.inputField);
+    this.inputContainer.appendChild(inputActionsContainer);
+
+    // Assemble all components
     content.appendChild(this.messageContainer);
-    content.appendChild(inputContainer);
+    content.appendChild(this.inputContainer);
     this.node.appendChild(content);
+    console.log('[SimpleSidebarWidget] Constructor end'); // Log 7
+  }
+
+  private createButton(text: string, tooltip: string): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.textContent = text;
+    button.title = tooltip;
+    button.className = 'jp-Button';
+    button.style.margin = '0 2px';
+    button.style.padding = '2px 8px';
+    return button;
   }
 
   private handleSendMessage(): void {
     const message = this.inputField.value.trim();
     if (message) {
-      this.addMessage(message, 'user');
+      // Add metadata about markdown mode to the message
+      this.addMessage(message, 'user', this.isMarkdownMode);
       this.inputField.value = '';
-      // Here you can add logic to handle the message and get a response
-      // For now, we'll just echo the message
+      
+      // Reset expanded state if needed after sending
+      if (this.isInputExpanded) {
+        this.inputField.style.height = '100px';
+      } else {
+        this.inputField.style.height = 'auto';
+        this.inputField.rows = 1;
+      }
+
+      // Echo response for demonstration
       setTimeout(() => {
-        this.addMessage(`Echo: ${message}`, 'bot');
+        this.addMessage(`Echo: ${message}`, 'bot', false);
       }, 500);
     }
   }
 
-  private addMessage(text: string, sender: 'user' | 'bot'): void {
+  private addMessage(text: string, sender: 'user' | 'bot', isMarkdown: boolean = false): void {
     const messageDiv = document.createElement('div');
     messageDiv.style.marginBottom = '10px';
     messageDiv.style.padding = '8px';
@@ -115,11 +268,99 @@ class SimpleSidebarWidget extends Widget {
       messageDiv.style.marginRight = 'auto';
     }
 
-    messageDiv.textContent = text;
+    // Add message content
+    if (isMarkdown) {
+      const markdownIndicator = document.createElement('div');
+      markdownIndicator.textContent = "MD";
+      markdownIndicator.style.fontSize = '9px';
+      markdownIndicator.style.color = '#666';
+      markdownIndicator.style.textAlign = 'right';
+      messageDiv.appendChild(markdownIndicator);
+      
+      // Create a container for the rendered markdown
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'markdown-content';
+      
+      // Convert markdown to HTML and sanitize it
+      try {
+        // Parse markdown to HTML
+        const rawHtml = marked.parse(text) as string;
+        // Sanitize the HTML to prevent XSS attacks
+        const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+        // Set the sanitized HTML
+        contentDiv.innerHTML = sanitizedHtml;
+      } catch (error) {
+        // Fallback if markdown parsing fails
+        contentDiv.textContent = text;
+        console.error('Failed to render markdown:', error);
+      }
+      
+      messageDiv.appendChild(contentDiv);
+    } else {
+      messageDiv.textContent = text;
+    }
+
     this.messageContainer.appendChild(messageDiv);
     this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
   }
+
+  private async listCurrentDirectoryContents(): Promise<void> {
+    let dirPath: string | null = null;
+    let source: string | null = null;
+
+    // 1. Determine the directory path
+    const currentShellWidget = app.shell.currentWidget;
+    if (currentShellWidget) {
+      const widgetContext = this.docManager.contextForWidget(currentShellWidget);
+      if (widgetContext) {
+        const path = widgetContext.path;
+        const lastSlash = path.lastIndexOf('/');
+        dirPath = lastSlash === -1 ? '' : path.substring(0, lastSlash); // Use '' for root
+        source = 'widget context';
+      }
+    }
+
+    // Fallback to notebook tracker if no context from widget
+    if (dirPath === null) {
+      const currentNotebookPanel = notebookTracker?.currentWidget;
+      if (currentNotebookPanel instanceof NotebookPanel) {
+          const nbPath = currentNotebookPanel.context.path;
+          const lastSlash = nbPath.lastIndexOf('/');
+          dirPath = lastSlash === -1 ? '' : nbPath.substring(0, lastSlash);
+          source = 'active notebook';
+      }
+    }
+
+    // 2. List contents if path was found
+    if (dirPath !== null) {
+      console.log(`Listing contents for directory: "${dirPath || '/'}" (from ${source})`);
+      try {
+        const contents = await this.docManager.services.contents.get(dirPath);
+        console.log('Directory Contents:');
+        if (contents.content && contents.content.length > 0) {
+          contents.content.forEach((item: Contents.IModel) => {
+            console.log(`- ${item.name} (${item.type})`);
+          });
+        } else {
+          console.log('(Directory is empty)');
+        }
+      } catch (error) {
+        console.error(`Error listing directory contents for "${dirPath}":`, error);
+      }
+    } else {
+      console.log('Could not determine current directory context to list.');
+    }
+  }
 }
+
+// --- Need app and notebookTracker accessible globally or passed differently ---
+// This is a simplification for now. Proper architecture might involve signals/services.
+let app: JupyterFrontEnd;
+let notebookTracker: INotebookTracker;
+
+// --- Store the original update method and the view it belongs to ---
+let originalCmUpdate: ((transactions: readonly Transaction[], view: EditorView) => void) | null = null;
+let patchedCmView: EditorView | null = null;
 
 /**
  * Initialization data for the jupyter-simple-extension extension.
@@ -127,15 +368,19 @@ class SimpleSidebarWidget extends Widget {
 const plugin: JupyterFrontEndPlugin<void> = {
   id: 'jupyter-simple-extension:plugin',
   autoStart: true,
-  requires: [ILauncher, ICommandPalette],
-  activate: (app: JupyterFrontEnd, launcher: ILauncher, palette: ICommandPalette) => {
+  requires: [ILauncher, ICommandPalette, INotebookTracker, IDocumentManager],
+  activate: (
+    _app: JupyterFrontEnd,
+    launcher: ILauncher,
+    palette: ICommandPalette,
+    _notebookTracker: INotebookTracker,
+    docManager: IDocumentManager
+  ) => {
     console.log('JupyterLab extension jupyter-simple-extension is activated!');
-
-    // Create the sidebar widget
-    const sidebarWidget = new SimpleSidebarWidget();
-
-    // Add the sidebar widget to the left area on startup
-    app.shell.add(sidebarWidget, 'left', { rank: 100 });
+    app = _app;
+    notebookTracker = _notebookTracker;
+    const sidebarWidget = new SimpleSidebarWidget(docManager);
+    app.shell.add(sidebarWidget, 'left', { rank: 9999 });
 
     // Add a command to toggle the sidebar
     app.commands.addCommand('simple-extension:toggle-sidebar', {
@@ -145,7 +390,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
         if (sidebarWidget.isAttached) {
           sidebarWidget.parent = null;
         } else {
-          app.shell.add(sidebarWidget, 'left', { rank: 100 });
+          app.shell.add(sidebarWidget, 'left', { rank: 9999 });
         }
       }
     });
@@ -160,9 +405,134 @@ const plugin: JupyterFrontEndPlugin<void> = {
     launcher.add({
       command: 'simple-extension:toggle-sidebar',
       category: 'Other',
-      rank: 1
+      rank: 9999
     });
-  }
-};
+
+    // --- Function to log cursor context from CodeMirror EditorView ---
+    const logCmContext = (view: EditorView) => {
+      try {
+          const state = view.state;
+          const offset = state.selection.main.head;
+          const fullText = state.doc.toString();
+          const line = state.doc.lineAt(offset);
+          const position = { line: line.number -1, column: offset - line.from }; // Calculate approx line/col
+
+          const contextRadius = 100;
+          const start = Math.max(0, offset - contextRadius);
+          const end = Math.min(fullText.length, offset + contextRadius);
+
+          const contextBefore = fullText.substring(start, offset);
+          const contextAfter = fullText.substring(offset, end);
+
+          console.log('--- CM Cursor Context ---');
+          console.log('Position (approx):', position);
+          console.log('Offset:', offset);
+          console.log('Before:', contextBefore);
+          console.log('After:', contextAfter);
+          console.log('-----------------------');
+      } catch (error) {
+          console.error("Error in logCmContext:", error);
+          console.log("EditorView object during error:", view); 
+      }
+    };
+
+    // --- Minimal listener for active cell changes (for logging) ---
+    notebookTracker.activeCellChanged.connect((tracker: INotebookTracker, cell: Cell | null) => {
+      if (cell) {
+        console.log(`Active cell changed to: Cell Type = ${cell.model.type}, Editor = ${cell.editor ? 'Exists' : 'None'}`);
+      } else {
+        console.log("Active cell changed to: None");
+      }
+       // We no longer try to attach listeners here
+    });
+
+    app.started.then(() => {
+      console.log("App started, connecting notebookTracker.currentChanged listener.");
+
+      // --- Listener for current notebook changes (for inspection and attaching CM listener via patching) ---
+      notebookTracker.currentChanged.connect((tracker: INotebookTracker, panel: NotebookPanel | null) => {
+        console.log("Notebook current widget changed.");
+
+        // --- Restore original update method if a view was previously patched ---
+        if (patchedCmView && originalCmUpdate) {
+          console.log("Restoring original update method for previous EditorView.");
+          // Restore the correct signature - likely view.update takes transactions
+          (patchedCmView as any).update = originalCmUpdate; 
+        }
+        originalCmUpdate = null;
+        patchedCmView = null;
+        // --- End Cleanup ---
+
+        if (panel && panel.content) {
+           const cell = panel.content.activeCell;
+
+            if (cell && cell.editor) {
+              const editor = cell.editor; // This is the CodeMirrorEditor wrapper
+              console.log("Current notebook changed, active cell has editor.");
+
+              // Access the inner EditorView
+              if ((editor as any).editor) {
+                  const view: EditorView = (editor as any).editor;
+                  console.log("Found inner EditorView:", view);
+
+                  // --- Monkey-patching the update method --- 
+                  if (!originalCmUpdate && typeof view.update === 'function') {
+                      console.log("Attempting to monkey-patch EditorView.update...");
+                      // Store the original method, assuming the signature expects transactions
+                      originalCmUpdate = view.update as (transactions: readonly Transaction[], view: EditorView) => void;
+                      patchedCmView = view;
+
+                      // Define the new update method
+                      (view as any).update = (transactions: readonly Transaction[], updatedView: EditorView) => {
+                          // Check if any transaction changed the doc or selection
+                          let changed = transactions.some(tr => !tr.changes.empty || !!tr.selection);
+
+                          if (changed) {
+                              try {
+                                  console.log("Patched Update (Doc or Selection Change)");
+                                  logCmContext(updatedView); // Use the view passed to update
+                              } catch (patchError) {
+                                  console.error("Error inside patched update listener:", patchError);
+                              }
+                          }
+                          
+                          // Call the original update method if it exists
+                          if (originalCmUpdate) {
+                             originalCmUpdate.call(view, transactions, updatedView);
+                          } else {
+                              console.error("Original update method lost during patch!");
+                          }
+                      };
+                      console.log("EditorView.update patched successfully.");
+                  } else if (originalCmUpdate) {
+                      console.warn("EditorView already appears to be patched. Skipping.");
+                  } else {
+                      console.error("Could not patch: view.update is not a function?");
+                  }
+                  // --- End Monkey-patching ---
+                  
+                  // Try immediate log again (using the view)
+                  if ((editor as any).editor) {
+                    console.log("Attempting immediate context log in currentChanged using inner editor:");
+                    logCmContext((editor as any).editor);
+                  } else {
+                    console.warn("Could not call immediate logCmContext: inner editor not found.");
+                  }
+
+              } else {
+                   console.log("No inner 'editor' (EditorView) property found.");
+              }
+            } else if (cell) {
+               console.log("Current notebook changed, active cell found but no editor.");
+            } else {
+               console.log("Current notebook changed, but no active cell found in the panel.");
+            }
+          } else {
+              console.log("Current notebook changed to null or panel has no content.");
+          }
+      }); // End currentChanged.connect
+    }); // End app.started.then
+  } // End activate function
+}; // End plugin object definition
 
 export default plugin; 
