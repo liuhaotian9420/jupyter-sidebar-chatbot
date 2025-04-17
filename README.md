@@ -1,3 +1,4 @@
+<<<<<<< README.md
 # Jupyter LLM 扩展
 
 Jupyter LLM 扩展是一个为 Jupyter Notebook 和 JupyterLab 开发的辅助应用程序，可以提供 AI 辅助的代码分析和执行功能。
