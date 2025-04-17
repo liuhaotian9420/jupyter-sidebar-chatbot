@@ -1,4 +1,7 @@
-import { LabIcon } from '@jupyterlab/ui-components';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.extensionIcon = void 0;
+const ui_components_1 = require("@jupyterlab/ui-components");
 // ===============================
 // Icon Definition
 // ===============================
@@ -9,7 +12,7 @@ const iconSvgStr = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="1
 /**
  * Icon for the AI Assistant extension
  */
-export const extensionIcon = new LabIcon({
+exports.extensionIcon = new ui_components_1.LabIcon({
     name: 'simple:icon',
     svgstr: iconSvgStr
 });

@@ -5,12 +5,11 @@
 /*!***************************!*\
   !*** ./lib/api-client.js ***!
   \***************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+/***/ ((__unused_webpack_module, exports) => {
 
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   ApiClient: () => (/* binding */ ApiClient)
-/* harmony export */ });
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ApiClient = void 0;
 /**
  * API client for interacting with the backend LLM service
  */
@@ -77,6 +76,7 @@ class ApiClient {
         }
     }
 }
+exports.ApiClient = ApiClient;
 
 
 /***/ }),
@@ -85,12 +85,11 @@ class ApiClient {
 /*!*************************************!*\
   !*** ./lib/cell-context-tracker.js ***!
   \*************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+/***/ ((__unused_webpack_module, exports) => {
 
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   CellContextTracker: () => (/* binding */ CellContextTracker)
-/* harmony export */ });
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CellContextTracker = void 0;
 /**
  * Tracks cell context and cursor position within Jupyter notebooks
  */
@@ -229,6 +228,7 @@ class CellContextTracker {
         this.notebookTracker.currentChanged.disconnect(this.handleNotebookChange, this);
     }
 }
+exports.CellContextTracker = CellContextTracker;
 
 
 /***/ }),
@@ -237,14 +237,12 @@ class CellContextTracker {
 /*!*************************!*\
   !*** ./lib/commands.js ***!
   \*************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   registerCommands: () => (/* binding */ registerCommands)
-/* harmony export */ });
-/* harmony import */ var _icons__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./icons */ "./lib/icons.js");
 
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.registerCommands = registerCommands;
+const icons_1 = __webpack_require__(/*! ./icons */ "./lib/icons.js");
 /**
  * Registers commands for the extension
  */
@@ -252,7 +250,7 @@ function registerCommands(app, palette, launcher, sidebarWidget) {
     // Add command to toggle the sidebar
     app.commands.addCommand('simple-extension:toggle-sidebar', {
         label: 'Toggle AI Assistant Sidebar',
-        icon: _icons__WEBPACK_IMPORTED_MODULE_0__.extensionIcon,
+        icon: icons_1.extensionIcon,
         execute: () => {
             if (sidebarWidget.isAttached) {
                 sidebarWidget.parent = null;
@@ -282,23 +280,22 @@ function registerCommands(app, palette, launcher, sidebarWidget) {
 /*!************************!*\
   !*** ./lib/globals.js ***!
   \************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+/***/ ((__unused_webpack_module, exports) => {
 
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   globals: () => (/* binding */ globals),
-/* harmony export */   initGlobals: () => (/* binding */ initGlobals)
-/* harmony export */ });
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.globals = void 0;
+exports.initGlobals = initGlobals;
 /**
  * Global references to key components in the application
  */
-const globals = {};
+exports.globals = {};
 /**
  * Initialize global references
  */
 function initGlobals(app, notebookTracker) {
-    globals.app = app;
-    globals.notebookTracker = notebookTracker;
+    exports.globals.app = app;
+    exports.globals.notebookTracker = notebookTracker;
 }
 
 
@@ -308,15 +305,12 @@ function initGlobals(app, notebookTracker) {
 /*!**********************!*\
   !*** ./lib/icons.js ***!
   \**********************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   extensionIcon: () => (/* binding */ extensionIcon)
-/* harmony export */ });
-/* harmony import */ var _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @jupyterlab/ui-components */ "webpack/sharing/consume/default/@jupyterlab/ui-components");
-/* harmony import */ var _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_0__);
 
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.extensionIcon = void 0;
+const ui_components_1 = __webpack_require__(/*! @jupyterlab/ui-components */ "webpack/sharing/consume/default/@jupyterlab/ui-components");
 // ===============================
 // Icon Definition
 // ===============================
@@ -327,7 +321,7 @@ const iconSvgStr = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="1
 /**
  * Icon for the AI Assistant extension
  */
-const extensionIcon = new _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_0__.LabIcon({
+exports.extensionIcon = new ui_components_1.LabIcon({
     name: 'simple:icon',
     svgstr: iconSvgStr
 });
@@ -339,58 +333,95 @@ const extensionIcon = new _jupyterlab_ui_components__WEBPACK_IMPORTED_MODULE_0__
 /*!**********************!*\
   !*** ./lib/index.js ***!
   \**********************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   ApiClient: () => (/* reexport safe */ _api_client__WEBPACK_IMPORTED_MODULE_8__.ApiClient),
-/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
-/* harmony export */ });
-/* harmony import */ var _jupyterlab_launcher__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @jupyterlab/launcher */ "webpack/sharing/consume/default/@jupyterlab/launcher");
-/* harmony import */ var _jupyterlab_launcher__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_jupyterlab_launcher__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _jupyterlab_apputils__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @jupyterlab/apputils */ "webpack/sharing/consume/default/@jupyterlab/apputils");
-/* harmony import */ var _jupyterlab_apputils__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_jupyterlab_apputils__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @jupyterlab/notebook */ "webpack/sharing/consume/default/@jupyterlab/notebook");
-/* harmony import */ var _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var _jupyterlab_docmanager__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @jupyterlab/docmanager */ "webpack/sharing/consume/default/@jupyterlab/docmanager");
-/* harmony import */ var _jupyterlab_docmanager__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_jupyterlab_docmanager__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _sidebar_widget__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./sidebar-widget */ "./lib/sidebar-widget.js");
-/* harmony import */ var _globals__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./globals */ "./lib/globals.js");
-/* harmony import */ var _commands__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./commands */ "./lib/commands.js");
-/* harmony import */ var _cell_context_tracker__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./cell-context-tracker */ "./lib/cell-context-tracker.js");
-/* harmony import */ var _api_client__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./api-client */ "./lib/api-client.js");
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 
-
-
-
-
-
-
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ApiClient = void 0;
+const launcher_1 = __webpack_require__(/*! @jupyterlab/launcher */ "webpack/sharing/consume/default/@jupyterlab/launcher");
+const apputils_1 = __webpack_require__(/*! @jupyterlab/apputils */ "webpack/sharing/consume/default/@jupyterlab/apputils");
+const notebook_1 = __webpack_require__(/*! @jupyterlab/notebook */ "webpack/sharing/consume/default/@jupyterlab/notebook");
+const docmanager_1 = __webpack_require__(/*! @jupyterlab/docmanager */ "webpack/sharing/consume/default/@jupyterlab/docmanager");
+const sidebar_widget_1 = __webpack_require__(/*! ./sidebar-widget */ "./lib/sidebar-widget.js");
+const globals_1 = __webpack_require__(/*! ./globals */ "./lib/globals.js");
+const commands_1 = __webpack_require__(/*! ./commands */ "./lib/commands.js");
+const cell_context_tracker_1 = __webpack_require__(/*! ./cell-context-tracker */ "./lib/cell-context-tracker.js");
 // import { ApiClient } from './api-client';
 // Export ApiClient for use by other components
-
+var api_client_1 = __webpack_require__(/*! ./api-client */ "./lib/api-client.js");
+Object.defineProperty(exports, "ApiClient", ({ enumerable: true, get: function () { return api_client_1.ApiClient; } }));
 /**
  * Initialization data for the jupyter-simple-extension extension.
  */
 const plugin = {
     id: 'jupyter-simple-extension:plugin',
     autoStart: true,
-    requires: [_jupyterlab_launcher__WEBPACK_IMPORTED_MODULE_0__.ILauncher, _jupyterlab_apputils__WEBPACK_IMPORTED_MODULE_1__.ICommandPalette, _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_2__.INotebookTracker, _jupyterlab_docmanager__WEBPACK_IMPORTED_MODULE_3__.IDocumentManager],
+    requires: [launcher_1.ILauncher, apputils_1.ICommandPalette, notebook_1.INotebookTracker, docmanager_1.IDocumentManager],
     activate: (jupyterApp, launcher, palette, tracker, docManager) => {
         console.log('JupyterLab extension jupyter-simple-extension is activated!');
         // Initialize global references
-        (0,_globals__WEBPACK_IMPORTED_MODULE_5__.initGlobals)(jupyterApp, tracker);
+        (0, globals_1.initGlobals)(jupyterApp, tracker);
         // Initialize cell context tracker
-        _globals__WEBPACK_IMPORTED_MODULE_5__.globals.cellContextTracker = new _cell_context_tracker__WEBPACK_IMPORTED_MODULE_7__.CellContextTracker(jupyterApp, tracker);
+        globals_1.globals.cellContextTracker = new cell_context_tracker_1.CellContextTracker(jupyterApp, tracker);
         // Create and add sidebar widget
-        const sidebarWidget = new _sidebar_widget__WEBPACK_IMPORTED_MODULE_4__.SimpleSidebarWidget(docManager);
+        const sidebarWidget = new sidebar_widget_1.SimpleSidebarWidget(docManager);
         jupyterApp.shell.add(sidebarWidget, 'left', { rank: 9999 });
         // Register commands
-        (0,_commands__WEBPACK_IMPORTED_MODULE_6__.registerCommands)(jupyterApp, palette, launcher, sidebarWidget);
+        (0, commands_1.registerCommands)(jupyterApp, palette, launcher, sidebarWidget);
     }
 };
-/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (plugin);
+exports["default"] = plugin;
+
+
+/***/ }),
+
+/***/ "./lib/markdown-config.js":
+/*!********************************!*\
+  !*** ./lib/markdown-config.js ***!
+  \********************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.configureMarked = configureMarked;
+exports.preprocessMarkdown = preprocessMarkdown;
+const marked_1 = __webpack_require__(/*! marked */ "webpack/sharing/consume/default/marked/marked");
+/**
+ * Configure marked with better rendering options for code blocks
+ */
+function configureMarked() {
+    // Configure marked options
+    marked_1.marked.setOptions({
+        gfm: true, // Enable GitHub Flavored Markdown
+        breaks: true, // Add <br> on single line breaks
+        pedantic: false, // Conform to original markdown spec
+        async: false, // Disable async rendering
+        silent: false // Enable error reporting
+    });
+}
+/**
+ * Pre-process markdown text to fix common issues with streaming content
+ */
+function preprocessMarkdown(text) {
+    // Handle code blocks first
+    let inCodeBlock = false;
+    const lines = text.split('\n');
+    const processedLines = lines.map((line, i) => {
+        // Check for code block markers
+        if (line.trim().startsWith('```')) {
+            inCodeBlock = !inCodeBlock;
+            // Preserve language specification
+            return line.trim();
+        }
+        // If we're in a code block, preserve the line as is
+        if (inCodeBlock) {
+            return line;
+        }
+        // Outside code blocks, handle list items
+        return line.replace(/([^\n\s])-\s/g, '$1\n- ');
+    });
+    return processedLines.join('\n');
+}
 
 
 /***/ }),
@@ -399,34 +430,29 @@ const plugin = {
 /*!*******************************!*\
   !*** ./lib/sidebar-widget.js ***!
   \*******************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   SimpleSidebarWidget: () => (/* binding */ SimpleSidebarWidget)
-/* harmony export */ });
-/* harmony import */ var _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @lumino/widgets */ "webpack/sharing/consume/default/@lumino/widgets");
-/* harmony import */ var _lumino_widgets__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_lumino_widgets__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @jupyterlab/notebook */ "webpack/sharing/consume/default/@jupyterlab/notebook");
-/* harmony import */ var _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var marked__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! marked */ "webpack/sharing/consume/default/marked/marked");
-/* harmony import */ var marked__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(marked__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var dompurify__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! dompurify */ "webpack/sharing/consume/default/dompurify/dompurify");
-/* harmony import */ var dompurify__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(dompurify__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _icons__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./icons */ "./lib/icons.js");
-/* harmony import */ var _globals__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./globals */ "./lib/globals.js");
-/* harmony import */ var _api_client__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./api-client */ "./lib/api-client.js");
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
-
-
-
-
-
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SimpleSidebarWidget = void 0;
+const widgets_1 = __webpack_require__(/*! @lumino/widgets */ "webpack/sharing/consume/default/@lumino/widgets");
+const notebook_1 = __webpack_require__(/*! @jupyterlab/notebook */ "webpack/sharing/consume/default/@jupyterlab/notebook");
+const marked_1 = __webpack_require__(/*! marked */ "webpack/sharing/consume/default/marked/marked");
+const dompurify_1 = __importDefault(__webpack_require__(/*! dompurify */ "webpack/sharing/consume/default/dompurify/dompurify"));
+const icons_1 = __webpack_require__(/*! ./icons */ "./lib/icons.js");
+const globals_1 = __webpack_require__(/*! ./globals */ "./lib/globals.js");
+const api_client_1 = __webpack_require__(/*! ./api-client */ "./lib/api-client.js");
+const markdown_config_1 = __webpack_require__(/*! ./markdown-config */ "./lib/markdown-config.js");
+// import { ICellContext } from './types';
+// Configure marked with our settings
+(0, markdown_config_1.configureMarked)();
 /**
  * Main sidebar widget for the AI chat interface
  */
-class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.Widget {
+class SimpleSidebarWidget extends widgets_1.Widget {
     constructor(docManager) {
         super();
         this.isMarkdownMode = false;
@@ -434,23 +460,35 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
         this.chatHistory = [];
         this.currentChatId = '';
         this.isHistoryViewActive = false;
+        /**
+         * Handles clicks outside the command menu
+         */
+        this.handleClickOutside = (event) => {
+            if (!this.commandMenuContainer.contains(event.target)) {
+                this.hideCommandMenu();
+            }
+        };
         this.docManager = docManager;
         this.id = 'simple-sidebar';
         this.title.label = '';
         this.title.caption = 'AI Chat Interface';
-        this.title.icon = _icons__WEBPACK_IMPORTED_MODULE_4__.extensionIcon;
+        this.title.icon = icons_1.extensionIcon;
         this.title.closable = true;
         // Initialize API client
-        this.apiClient = new _api_client__WEBPACK_IMPORTED_MODULE_6__.ApiClient();
+        this.apiClient = new api_client_1.ApiClient();
         // Initialize container elements before creating layout
         this.messageContainer = document.createElement('div');
         this.inputContainer = document.createElement('div');
         this.inputField = document.createElement('textarea');
         this.titleInput = document.createElement('input');
         this.historyContainer = document.createElement('div');
+        this.commandMenuContainer = document.createElement('div');
+        this.commandMenuContainer.className = 'command-menu-container';
+        this.commandMenuContainer.style.display = 'none';
         // Create a new chat on start
         this.createNewChat();
         this.node.appendChild(this.createLayout());
+        this.node.appendChild(this.commandMenuContainer);
     }
     /**
      * Creates the main layout for the sidebar
@@ -681,7 +719,16 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
         actionButtonsContainer.className = 'action-buttons-container';
         // Create all action buttons
         const buttons = [
-            { text: '@', title: 'Command list', action: () => { } },
+            {
+                text: '@',
+                title: 'Command list',
+                action: (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    this.showCommandMenu(rect.left, rect.bottom);
+                }
+            },
             { text: '📎', title: 'Upload file', action: () => { } },
             { text: '🔍', title: 'Browse files', action: () => { } },
             {
@@ -695,7 +742,7 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
         // Add all buttons to the container
         buttons.forEach(button => {
             const btn = this.createButton(button.text, button.title);
-            btn.addEventListener('click', button.action);
+            btn.addEventListener('click', (e) => button.action(e));
             actionButtonsContainer.appendChild(btn);
         });
         // Add toggle and action buttons to the controls container
@@ -755,33 +802,55 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
             markdownIndicator.textContent = "MD";
             markdownIndicator.className = 'markdown-indicator';
             botMessageDiv.appendChild(markdownIndicator);
+            // Create separate divs for streaming text and final markdown
+            const streamingDiv = document.createElement('div');
+            streamingDiv.className = 'streaming-content';
+            streamingDiv.style.whiteSpace = 'pre-wrap';
+            streamingDiv.style.fontFamily = 'monospace';
+            streamingDiv.style.fontSize = '0.9em';
+            botMessageDiv.appendChild(streamingDiv);
             const contentDiv = document.createElement('div');
             contentDiv.className = 'markdown-content';
-            contentDiv.textContent = ''; // Start empty
+            contentDiv.style.display = 'none'; // Initially hidden
             botMessageDiv.appendChild(contentDiv);
             this.messageContainer.appendChild(botMessageDiv);
             // Variable to collect the complete response
             let completeResponse = '';
             // Get cell context if available
-            const cellContext = _globals__WEBPACK_IMPORTED_MODULE_5__.globals.cellContextTracker ?
-                _globals__WEBPACK_IMPORTED_MODULE_5__.globals.cellContextTracker.getCurrentCellContext() : null;
+            const cellContext = globals_1.globals.cellContextTracker ?
+                globals_1.globals.cellContextTracker.getCurrentCellContext() : null;
             // Stream response from API
             this.apiClient.streamChat(message, { cellContext }, 
             // On each chunk received
             (chunk) => {
                 completeResponse += chunk;
-                contentDiv.textContent = completeResponse;
+                streamingDiv.textContent = completeResponse;
                 this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
             }, 
             // On complete
             () => {
-                // Replace plain text with rendered markdown
+                // Hide streaming div, show markdown div
+                streamingDiv.style.display = 'none';
+                contentDiv.style.display = 'block';
+                // Pre-process and render markdown
                 try {
-                    const rawHtml = marked__WEBPACK_IMPORTED_MODULE_2__.marked.parse(completeResponse);
-                    const sanitizedHtml = dompurify__WEBPACK_IMPORTED_MODULE_3___default().sanitize(rawHtml);
+                    // Pre-process the markdown to fix any issues with code blocks
+                    const processedMarkdown = (0, markdown_config_1.preprocessMarkdown)(completeResponse);
+                    // Parse and sanitize
+                    const rawHtml = marked_1.marked.parse(processedMarkdown);
+                    const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
+                    // Apply the HTML with proper code block styling
                     contentDiv.innerHTML = sanitizedHtml;
+                    // Add syntax highlighting classes to code blocks
+                    const codeBlocks = contentDiv.querySelectorAll('pre code');
+                    codeBlocks.forEach(block => {
+                        var _a;
+                        block.classList.add('jp-RenderedText');
+                        (_a = block.parentElement) === null || _a === void 0 ? void 0 : _a.classList.add('jp-RenderedHTMLCommon');
+                    });
                 }
                 catch (error) {
+                    contentDiv.textContent = completeResponse;
                     console.error('Failed to render markdown:', error);
                 }
                 // Save to chat history
@@ -797,6 +866,8 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
             }, 
             // On error
             (error) => {
+                streamingDiv.style.display = 'none';
+                contentDiv.style.display = 'block';
                 contentDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
                 console.error('API Error:', error);
             });
@@ -819,9 +890,19 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
             const contentDiv = document.createElement('div');
             contentDiv.className = 'markdown-content';
             try {
-                const rawHtml = marked__WEBPACK_IMPORTED_MODULE_2__.marked.parse(text);
-                const sanitizedHtml = dompurify__WEBPACK_IMPORTED_MODULE_3___default().sanitize(rawHtml);
+                // Pre-process the markdown text
+                const processedText = (0, markdown_config_1.preprocessMarkdown)(text);
+                // Parse and render markdown
+                const rawHtml = marked_1.marked.parse(processedText);
+                const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
                 contentDiv.innerHTML = sanitizedHtml;
+                // Add syntax highlighting classes to code blocks
+                const codeBlocks = contentDiv.querySelectorAll('pre code');
+                codeBlocks.forEach(block => {
+                    var _a;
+                    block.classList.add('jp-RenderedText');
+                    (_a = block.parentElement) === null || _a === void 0 ? void 0 : _a.classList.add('jp-RenderedHTMLCommon');
+                });
             }
             catch (error) {
                 contentDiv.textContent = text;
@@ -853,7 +934,7 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
         let dirPath = null;
         let source = null;
         // Try to get directory path from current widget
-        const app = _globals__WEBPACK_IMPORTED_MODULE_5__.globals.app;
+        const app = globals_1.globals.app;
         if (!app) {
             this.addMessage('Error: Application reference not available', 'bot', false);
             return;
@@ -869,9 +950,9 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
             }
         }
         // Fallback to notebook tracker if no context from widget
-        if (dirPath === null && _globals__WEBPACK_IMPORTED_MODULE_5__.globals.notebookTracker) {
-            const currentNotebookPanel = _globals__WEBPACK_IMPORTED_MODULE_5__.globals.notebookTracker.currentWidget;
-            if (currentNotebookPanel instanceof _jupyterlab_notebook__WEBPACK_IMPORTED_MODULE_1__.NotebookPanel) {
+        if (dirPath === null && globals_1.globals.notebookTracker) {
+            const currentNotebookPanel = globals_1.globals.notebookTracker.currentWidget;
+            if (currentNotebookPanel instanceof notebook_1.NotebookPanel) {
                 const nbPath = currentNotebookPanel.context.path;
                 const lastSlash = nbPath.lastIndexOf('/');
                 dirPath = lastSlash === -1 ? '' : nbPath.substring(0, lastSlash);
@@ -898,10 +979,117 @@ class SimpleSidebarWidget extends _lumino_widgets__WEBPACK_IMPORTED_MODULE_0__.W
             this.addMessage('Could not determine current directory context.', 'bot', true);
         }
     }
+    /**
+     * Shows the command menu at the specified position
+     */
+    showCommandMenu(x, y) {
+        const commands = [
+            {
+                label: 'code',
+                description: 'Insert selected code',
+                action: () => this.handleCodeCommand()
+            },
+            {
+                label: 'cell',
+                description: 'Insert entire cell content',
+                action: () => this.handleCellCommand()
+            }
+        ];
+        // Clear existing content
+        this.commandMenuContainer.innerHTML = '';
+        // Create menu items
+        commands.forEach(cmd => {
+            const item = document.createElement('div');
+            item.className = 'command-menu-item';
+            const label = document.createElement('div');
+            label.className = 'command-label';
+            label.textContent = cmd.label;
+            const desc = document.createElement('div');
+            desc.className = 'command-description';
+            desc.textContent = cmd.description;
+            item.appendChild(label);
+            item.appendChild(desc);
+            item.addEventListener('click', () => {
+                cmd.action();
+                this.hideCommandMenu();
+            });
+            this.commandMenuContainer.appendChild(item);
+        });
+        // Position and show menu
+        this.commandMenuContainer.style.position = 'absolute';
+        this.commandMenuContainer.style.left = `${x}px`;
+        this.commandMenuContainer.style.top = `${y}px`;
+        this.commandMenuContainer.style.display = 'block';
+        // Add click outside listener
+        document.addEventListener('click', this.handleClickOutside);
+    }
+    /**
+     * Hides the command menu
+     */
+    hideCommandMenu() {
+        this.commandMenuContainer.style.display = 'none';
+        document.removeEventListener('click', this.handleClickOutside);
+    }
+    /**
+     * Handles the code command - inserts selected code
+     */
+    handleCodeCommand() {
+        var _a;
+        const selectedText = this.getSelectedText();
+        if (selectedText) {
+            this.inputField.value = `@code\n${selectedText}`;
+        }
+        else {
+            // If no selection, get the entire cell content
+            const cellContext = (_a = globals_1.globals.cellContextTracker) === null || _a === void 0 ? void 0 : _a.getCurrentCellContext();
+            if (cellContext) {
+                this.inputField.value = `@code\n${cellContext.text}`;
+            }
+        }
+    }
+    /**
+     * Handles the cell command - inserts entire cell content
+     */
+    handleCellCommand() {
+        var _a;
+        const cellContext = (_a = globals_1.globals.cellContextTracker) === null || _a === void 0 ? void 0 : _a.getCurrentCellContext();
+        if (cellContext) {
+            this.inputField.value = `@cell\n${cellContext.text}`;
+        }
+    }
+    /**
+     * Gets the selected text from cell context
+     */
+    getSelectedText() {
+        var _a;
+        // Get the current active cell from the tracker
+        const cell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
+        if (!cell || !cell.editor) {
+            return '';
+        }
+        // Get the CodeMirror editor instance
+        const editor = cell.editor;
+        const view = editor.editor;
+        if (!view) {
+            return '';
+        }
+        // Get the selection from CodeMirror
+        const state = view.state;
+        const selection = state.selection;
+        // If there's no selection, return empty string
+        if (selection.main.empty) {
+            return '';
+        }
+        // Get the selected text
+        const from = selection.main.from;
+        const to = selection.main.to;
+        return state.doc.sliceString(from, to);
+    }
 }
+exports.SimpleSidebarWidget = SimpleSidebarWidget;
 
 
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.78b8a323389309c90879.js.map
+//# sourceMappingURL=lib_index_js.179468e47aabc3aa59a2.js.map

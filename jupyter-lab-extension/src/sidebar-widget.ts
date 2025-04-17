@@ -7,6 +7,11 @@ import DOMPurify from 'dompurify';
 import { extensionIcon } from './icons';
 import { globals } from './globals';
 import { ApiClient } from './api-client';
+import { configureMarked, preprocessMarkdown } from './markdown-config';
+// import { ICellContext } from './types';
+
+// Configure marked with our settings
+configureMarked();
 
 /**
  * Chat history item interface
@@ -19,6 +24,13 @@ interface ChatHistoryItem {
     sender: 'user' | 'bot';
     isMarkdown: boolean;
   }[];
+}
+
+// Add new interface for command menu items
+interface CommandMenuItem {
+  label: string;
+  description: string;
+  action: () => void;
 }
 
 /**
@@ -37,6 +49,7 @@ export class SimpleSidebarWidget extends Widget {
   private isHistoryViewActive: boolean = false;
   private historyContainer: HTMLDivElement;
   private apiClient: ApiClient;
+  private commandMenuContainer: HTMLDivElement;
 
   constructor(docManager: IDocumentManager) {
     super();
@@ -56,11 +69,15 @@ export class SimpleSidebarWidget extends Widget {
     this.inputField = document.createElement('textarea');
     this.titleInput = document.createElement('input');
     this.historyContainer = document.createElement('div');
+    this.commandMenuContainer = document.createElement('div');
+    this.commandMenuContainer.className = 'command-menu-container';
+    this.commandMenuContainer.style.display = 'none';
 
     // Create a new chat on start
     this.createNewChat();
 
     this.node.appendChild(this.createLayout());
+    this.node.appendChild(this.commandMenuContainer);
   }
 
   /**
@@ -339,7 +356,16 @@ export class SimpleSidebarWidget extends Widget {
 
     // Create all action buttons
     const buttons = [
-      { text: '@', title: 'Command list', action: () => {} },
+      { 
+        text: '@', 
+        title: 'Command list', 
+        action: (event: MouseEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+          this.showCommandMenu(rect.left, rect.bottom);
+        }
+      },
       { text: '📎', title: 'Upload file', action: () => {} },
       { text: '🔍', title: 'Browse files', action: () => {} },
       { 
@@ -354,7 +380,7 @@ export class SimpleSidebarWidget extends Widget {
     // Add all buttons to the container
     buttons.forEach(button => {
       const btn = this.createButton(button.text, button.title);
-      btn.addEventListener('click', button.action);
+      btn.addEventListener('click', (e) => button.action(e));
       actionButtonsContainer.appendChild(btn);
     });
 
@@ -421,9 +447,17 @@ export class SimpleSidebarWidget extends Widget {
       markdownIndicator.className = 'markdown-indicator';
       botMessageDiv.appendChild(markdownIndicator);
       
+      // Create separate divs for streaming text and final markdown
+      const streamingDiv = document.createElement('div');
+      streamingDiv.className = 'streaming-content';
+      streamingDiv.style.whiteSpace = 'pre-wrap';
+      streamingDiv.style.fontFamily = 'monospace';
+      streamingDiv.style.fontSize = '0.9em';
+      botMessageDiv.appendChild(streamingDiv);
+      
       const contentDiv = document.createElement('div');
       contentDiv.className = 'markdown-content';
-      contentDiv.textContent = ''; // Start empty
+      contentDiv.style.display = 'none'; // Initially hidden
       botMessageDiv.appendChild(contentDiv);
       
       this.messageContainer.appendChild(botMessageDiv);
@@ -442,17 +476,35 @@ export class SimpleSidebarWidget extends Widget {
         // On each chunk received
         (chunk: string) => {
           completeResponse += chunk;
-          contentDiv.textContent = completeResponse;
+          streamingDiv.textContent = completeResponse;
           this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
         },
         // On complete
         () => {
-          // Replace plain text with rendered markdown
+          // Hide streaming div, show markdown div
+          streamingDiv.style.display = 'none';
+          contentDiv.style.display = 'block';
+          
+          // Pre-process and render markdown
           try {
-            const rawHtml = marked.parse(completeResponse) as string;
+            // Pre-process the markdown to fix any issues with code blocks
+            const processedMarkdown = preprocessMarkdown(completeResponse);
+            
+            // Parse and sanitize
+            const rawHtml = marked.parse(processedMarkdown) as string;
             const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+            
+            // Apply the HTML with proper code block styling
             contentDiv.innerHTML = sanitizedHtml;
+            
+            // Add syntax highlighting classes to code blocks
+            const codeBlocks = contentDiv.querySelectorAll('pre code');
+            codeBlocks.forEach(block => {
+              block.classList.add('jp-RenderedText');
+              block.parentElement?.classList.add('jp-RenderedHTMLCommon');
+            });
           } catch (error) {
+            contentDiv.textContent = completeResponse;
             console.error('Failed to render markdown:', error);
           }
           
@@ -470,6 +522,8 @@ export class SimpleSidebarWidget extends Widget {
         },
         // On error
         (error: Error) => {
+          streamingDiv.style.display = 'none';
+          contentDiv.style.display = 'block';
           contentDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
           console.error('API Error:', error);
         }
@@ -497,9 +551,20 @@ export class SimpleSidebarWidget extends Widget {
       contentDiv.className = 'markdown-content';
       
       try {
-        const rawHtml = marked.parse(text) as string;
+        // Pre-process the markdown text
+        const processedText = preprocessMarkdown(text);
+        
+        // Parse and render markdown
+        const rawHtml = marked.parse(processedText) as string;
         const sanitizedHtml = DOMPurify.sanitize(rawHtml);
         contentDiv.innerHTML = sanitizedHtml;
+        
+        // Add syntax highlighting classes to code blocks
+        const codeBlocks = contentDiv.querySelectorAll('pre code');
+        codeBlocks.forEach(block => {
+          block.classList.add('jp-RenderedText');
+          block.parentElement?.classList.add('jp-RenderedHTMLCommon');
+        });
       } catch (error) {
         contentDiv.textContent = text;
         console.error('Failed to render markdown:', error);
@@ -580,5 +645,134 @@ export class SimpleSidebarWidget extends Widget {
     } else {
       this.addMessage('Could not determine current directory context.', 'bot', true);
     }
+  }
+
+  /**
+   * Shows the command menu at the specified position
+   */
+  private showCommandMenu(x: number, y: number): void {
+    const commands: CommandMenuItem[] = [
+      {
+        label: 'code',
+        description: 'Insert selected code',
+        action: () => this.handleCodeCommand()
+      },
+      {
+        label: 'cell',
+        description: 'Insert entire cell content',
+        action: () => this.handleCellCommand()
+      }
+    ];
+
+    // Clear existing content
+    this.commandMenuContainer.innerHTML = '';
+    
+    // Create menu items
+    commands.forEach(cmd => {
+      const item = document.createElement('div');
+      item.className = 'command-menu-item';
+      
+      const label = document.createElement('div');
+      label.className = 'command-label';
+      label.textContent = cmd.label;
+      
+      const desc = document.createElement('div');
+      desc.className = 'command-description';
+      desc.textContent = cmd.description;
+      
+      item.appendChild(label);
+      item.appendChild(desc);
+      
+      item.addEventListener('click', () => {
+        cmd.action();
+        this.hideCommandMenu();
+      });
+      
+      this.commandMenuContainer.appendChild(item);
+    });
+
+    // Position and show menu
+    this.commandMenuContainer.style.position = 'absolute';
+    this.commandMenuContainer.style.left = `${x}px`;
+    this.commandMenuContainer.style.top = `${y}px`;
+    this.commandMenuContainer.style.display = 'block';
+
+    // Add click outside listener
+    document.addEventListener('click', this.handleClickOutside);
+  }
+
+  /**
+   * Hides the command menu
+   */
+  private hideCommandMenu(): void {
+    this.commandMenuContainer.style.display = 'none';
+    document.removeEventListener('click', this.handleClickOutside);
+  }
+
+  /**
+   * Handles clicks outside the command menu
+   */
+  private handleClickOutside = (event: MouseEvent) => {
+    if (!this.commandMenuContainer.contains(event.target as Node)) {
+      this.hideCommandMenu();
+    }
+  };
+
+  /**
+   * Handles the code command - inserts selected code
+   */
+  private handleCodeCommand(): void {
+    const selectedText = this.getSelectedText();
+    if (selectedText) {
+      this.inputField.value = `@code\n${selectedText}`;
+    } else {
+      // If no selection, get the entire cell content
+      const cellContext = globals.cellContextTracker?.getCurrentCellContext();
+      if (cellContext) {
+        this.inputField.value = `@code\n${cellContext.text}`;
+      }
+    }
+  }
+
+  /**
+   * Handles the cell command - inserts entire cell content
+   */
+  private handleCellCommand(): void {
+    const cellContext = globals.cellContextTracker?.getCurrentCellContext();
+    if (cellContext) {
+      this.inputField.value = `@cell\n${cellContext.text}`;
+    }
+  }
+
+  /**
+   * Gets the selected text from cell context
+   */
+  private getSelectedText(): string {
+    // Get the current active cell from the tracker
+    const cell = globals.notebookTracker?.activeCell;
+    if (!cell || !cell.editor) {
+      return '';
+    }
+
+    // Get the CodeMirror editor instance
+    const editor = cell.editor;
+    const view = (editor as any).editor;
+    if (!view) {
+      return '';
+    }
+
+    // Get the selection from CodeMirror
+    const state = view.state;
+    const selection = state.selection;
+    
+    // If there's no selection, return empty string
+    if (selection.main.empty) {
+      return '';
+    }
+
+    // Get the selected text
+    const from = selection.main.from;
+    const to = selection.main.to;
+    return state.doc.sliceString(from, to);
   }
 } 

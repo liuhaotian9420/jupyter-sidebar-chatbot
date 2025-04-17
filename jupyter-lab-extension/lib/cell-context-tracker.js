@@ -1,7 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CellContextTracker = void 0;
 /**
  * Tracks cell context and cursor position within Jupyter notebooks
  */
-export class CellContextTracker {
+class CellContextTracker {
     constructor(app, notebookTracker) {
         this.activeCellEditorNode = null;
         this.lastCellContext = null;
@@ -136,3 +139,4 @@ export class CellContextTracker {
         this.notebookTracker.currentChanged.disconnect(this.handleNotebookChange, this);
     }
 }
+exports.CellContextTracker = CellContextTracker;

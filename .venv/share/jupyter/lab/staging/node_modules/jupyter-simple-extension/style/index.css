@@ -295,4 +295,156 @@
   padding: 20px;
   color: var(--jp-ui-font-color2);
   font-style: italic;
+}
+
+/* Add any additional css rules here */
+
+/* Chat message containers */
+.simple-sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.message-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.input-container {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-top: 1px solid var(--jp-border-color1);
+}
+
+/* Message styling */
+.user-message, .bot-message {
+  margin-bottom: 15px;
+  padding: 10px;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.user-message {
+  background-color: var(--jp-layout-color2);
+  color: var(--jp-content-font-color1);
+  align-self: flex-end;
+}
+
+.bot-message {
+  background-color: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color2);
+  color: var(--jp-content-font-color1);
+}
+
+/* Markdown content styling */
+.markdown-indicator {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-size: 10px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  padding: 2px 5px;
+  border-radius: 3px;
+  opacity: 0.7;
+}
+
+.markdown-content {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Code block styling */
+.streaming-content {
+  font-family: var(--jp-code-font-family);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  background-color: var(--jp-layout-color0);
+  padding: 8px;
+}
+
+.markdown-content pre {
+  background-color: var(--jp-cell-editor-background);
+  border-radius: 4px;
+  margin: 8px 0;
+  padding: 10px;
+  overflow-x: auto;
+}
+
+.markdown-content code {
+  font-family: var(--jp-code-font-family);
+  background-color: var(--jp-cell-editor-background);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+  display: block;
+}
+
+/* Table styling */
+.markdown-content table {
+  border-collapse: collapse;
+  margin: 10px 0;
+  width: 100%;
+}
+
+.markdown-content th {
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color2);
+  padding: 5px 10px;
+  text-align: left;
+}
+
+.markdown-content td {
+  border: 1px solid var(--jp-border-color2);
+  padding: 5px 10px;
+  text-align: left;
+}
+
+/* Error message */
+.error-message {
+  color: var(--jp-error-color1);
+  padding: 5px;
+  font-weight: bold;
+}
+
+.command-menu-container {
+  position: absolute;
+  background: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 1000;
+  min-width: 200px;
+}
+
+.command-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.command-menu-item:hover {
+  background: var(--jp-layout-color2);
+}
+
+.command-label {
+  font-weight: bold;
+  color: var(--jp-ui-font-color0);
+}
+
+.command-description {
+  font-size: 0.9em;
+  color: var(--jp-ui-font-color2);
 } 

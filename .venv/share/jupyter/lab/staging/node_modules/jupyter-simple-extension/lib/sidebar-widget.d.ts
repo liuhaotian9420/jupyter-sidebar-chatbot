@@ -16,6 +16,7 @@ export declare class SimpleSidebarWidget extends Widget {
     private isHistoryViewActive;
     private historyContainer;
     private apiClient;
+    private commandMenuContainer;
     constructor(docManager: IDocumentManager);
     /**
      * Creates the main layout for the sidebar
@@ -65,4 +66,28 @@ export declare class SimpleSidebarWidget extends Widget {
      * Lists the contents of the current directory
      */
     private listCurrentDirectoryContents;
+    /**
+     * Shows the command menu at the specified position
+     */
+    private showCommandMenu;
+    /**
+     * Hides the command menu
+     */
+    private hideCommandMenu;
+    /**
+     * Handles clicks outside the command menu
+     */
+    private handleClickOutside;
+    /**
+     * Handles the code command - inserts selected code
+     */
+    private handleCodeCommand;
+    /**
+     * Handles the cell command - inserts entire cell content
+     */
+    private handleCellCommand;
+    /**
+     * Gets the selected text from cell context
+     */
+    private getSelectedText;
 }

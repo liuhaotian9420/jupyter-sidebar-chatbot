@@ -69,7 +69,7 @@ __webpack_require__.d(exports, {
 /******/ 		};
 /******/ 	
 /******/ 		// Execute the module function
-/******/ 		__webpack_modules__[moduleId](module, module.exports, __webpack_require__);
+/******/ 		__webpack_modules__[moduleId].call(module.exports, module, module.exports, __webpack_require__);
 /******/ 	
 /******/ 		// Return the exports of the module
 /******/ 		return module.exports;
@@ -124,7 +124,7 @@ __webpack_require__.d(exports, {
 /******/ 		// This function allow to reference async chunks
 /******/ 		__webpack_require__.u = (chunkId) => {
 /******/ 			// return url for filenames based on template
-/******/ 			return "" + chunkId + "." + {"lib_index_js":"78b8a323389309c90879","style_index_css":"c8b1523d95da2ad6a528","vendors-node_modules_dompurify_dist_purify_es_mjs":"5c9bdb74b76d75afe368","vendors-node_modules_marked_lib_marked_esm_js":"4709d16d20ea1c806191"}[chunkId] + ".js";
+/******/ 			return "" + chunkId + "." + {"lib_index_js":"179468e47aabc3aa59a2","style_index_css":"55b7a33ab16192682a5d","vendors-node_modules_dompurify_dist_purify_es_mjs":"5c9bdb74b76d75afe368","vendors-node_modules_marked_lib_marked_esm_js":"4709d16d20ea1c806191"}[chunkId] + ".js";
 /******/ 		};
 /******/ 	})();
 /******/ 	
@@ -562,4 +562,4 @@ __webpack_require__.d(exports, {
 /******/ 	
 /******/ })()
 ;
-//# sourceMappingURL=remoteEntry.7d0e7ba8e17ab10ac7be.js.map
+//# sourceMappingURL=remoteEntry.3f5e3a04684358e54641.js.map

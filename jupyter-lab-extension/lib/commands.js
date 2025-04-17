@@ -1,12 +1,15 @@
-import { extensionIcon } from './icons';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerCommands = registerCommands;
+const icons_1 = require("./icons");
 /**
  * Registers commands for the extension
  */
-export function registerCommands(app, palette, launcher, sidebarWidget) {
+function registerCommands(app, palette, launcher, sidebarWidget) {
     // Add command to toggle the sidebar
     app.commands.addCommand('simple-extension:toggle-sidebar', {
         label: 'Toggle AI Assistant Sidebar',
-        icon: extensionIcon,
+        icon: icons_1.extensionIcon,
         execute: () => {
             if (sidebarWidget.isAttached) {
                 sidebarWidget.parent = null;

@@ -1,7 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ApiClient = void 0;
 /**
  * API client for interacting with the backend LLM service
  */
-export class ApiClient {
+class ApiClient {
     constructor(baseUrl = 'http://localhost:8000') {
         this.baseUrl = baseUrl;
     }
@@ -64,3 +67,4 @@ export class ApiClient {
         }
     }
 }
+exports.ApiClient = ApiClient;

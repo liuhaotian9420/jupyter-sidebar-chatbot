@@ -1,14 +1,24 @@
-import { Widget } from '@lumino/widgets';
-import { NotebookPanel } from '@jupyterlab/notebook';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
-import { extensionIcon } from './icons';
-import { globals } from './globals';
-import { ApiClient } from './api-client';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SimpleSidebarWidget = void 0;
+const widgets_1 = require("@lumino/widgets");
+const notebook_1 = require("@jupyterlab/notebook");
+const marked_1 = require("marked");
+const dompurify_1 = __importDefault(require("dompurify"));
+const icons_1 = require("./icons");
+const globals_1 = require("./globals");
+const api_client_1 = require("./api-client");
+const markdown_config_1 = require("./markdown-config");
+// import { ICellContext } from './types';
+// Configure marked with our settings
+(0, markdown_config_1.configureMarked)();
 /**
  * Main sidebar widget for the AI chat interface
  */
-export class SimpleSidebarWidget extends Widget {
+class SimpleSidebarWidget extends widgets_1.Widget {
     constructor(docManager) {
         super();
         this.isMarkdownMode = false;
@@ -16,23 +26,35 @@ export class SimpleSidebarWidget extends Widget {
         this.chatHistory = [];
         this.currentChatId = '';
         this.isHistoryViewActive = false;
+        /**
+         * Handles clicks outside the command menu
+         */
+        this.handleClickOutside = (event) => {
+            if (!this.commandMenuContainer.contains(event.target)) {
+                this.hideCommandMenu();
+            }
+        };
         this.docManager = docManager;
         this.id = 'simple-sidebar';
         this.title.label = '';
         this.title.caption = 'AI Chat Interface';
-        this.title.icon = extensionIcon;
+        this.title.icon = icons_1.extensionIcon;
         this.title.closable = true;
         // Initialize API client
-        this.apiClient = new ApiClient();
+        this.apiClient = new api_client_1.ApiClient();
         // Initialize container elements before creating layout
         this.messageContainer = document.createElement('div');
         this.inputContainer = document.createElement('div');
         this.inputField = document.createElement('textarea');
         this.titleInput = document.createElement('input');
         this.historyContainer = document.createElement('div');
+        this.commandMenuContainer = document.createElement('div');
+        this.commandMenuContainer.className = 'command-menu-container';
+        this.commandMenuContainer.style.display = 'none';
         // Create a new chat on start
         this.createNewChat();
         this.node.appendChild(this.createLayout());
+        this.node.appendChild(this.commandMenuContainer);
     }
     /**
      * Creates the main layout for the sidebar
@@ -263,7 +285,16 @@ export class SimpleSidebarWidget extends Widget {
         actionButtonsContainer.className = 'action-buttons-container';
         // Create all action buttons
         const buttons = [
-            { text: '@', title: 'Command list', action: () => { } },
+            {
+                text: '@',
+                title: 'Command list',
+                action: (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    this.showCommandMenu(rect.left, rect.bottom);
+                }
+            },
             { text: '📎', title: 'Upload file', action: () => { } },
             { text: '🔍', title: 'Browse files', action: () => { } },
             {
@@ -277,7 +308,7 @@ export class SimpleSidebarWidget extends Widget {
         // Add all buttons to the container
         buttons.forEach(button => {
             const btn = this.createButton(button.text, button.title);
-            btn.addEventListener('click', button.action);
+            btn.addEventListener('click', (e) => button.action(e));
             actionButtonsContainer.appendChild(btn);
         });
         // Add toggle and action buttons to the controls container
@@ -337,33 +368,55 @@ export class SimpleSidebarWidget extends Widget {
             markdownIndicator.textContent = "MD";
             markdownIndicator.className = 'markdown-indicator';
             botMessageDiv.appendChild(markdownIndicator);
+            // Create separate divs for streaming text and final markdown
+            const streamingDiv = document.createElement('div');
+            streamingDiv.className = 'streaming-content';
+            streamingDiv.style.whiteSpace = 'pre-wrap';
+            streamingDiv.style.fontFamily = 'monospace';
+            streamingDiv.style.fontSize = '0.9em';
+            botMessageDiv.appendChild(streamingDiv);
             const contentDiv = document.createElement('div');
             contentDiv.className = 'markdown-content';
-            contentDiv.textContent = ''; // Start empty
+            contentDiv.style.display = 'none'; // Initially hidden
             botMessageDiv.appendChild(contentDiv);
             this.messageContainer.appendChild(botMessageDiv);
             // Variable to collect the complete response
             let completeResponse = '';
             // Get cell context if available
-            const cellContext = globals.cellContextTracker ?
-                globals.cellContextTracker.getCurrentCellContext() : null;
+            const cellContext = globals_1.globals.cellContextTracker ?
+                globals_1.globals.cellContextTracker.getCurrentCellContext() : null;
             // Stream response from API
             this.apiClient.streamChat(message, { cellContext }, 
             // On each chunk received
             (chunk) => {
                 completeResponse += chunk;
-                contentDiv.textContent = completeResponse;
+                streamingDiv.textContent = completeResponse;
                 this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
             }, 
             // On complete
             () => {
-                // Replace plain text with rendered markdown
+                // Hide streaming div, show markdown div
+                streamingDiv.style.display = 'none';
+                contentDiv.style.display = 'block';
+                // Pre-process and render markdown
                 try {
-                    const rawHtml = marked.parse(completeResponse);
-                    const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+                    // Pre-process the markdown to fix any issues with code blocks
+                    const processedMarkdown = (0, markdown_config_1.preprocessMarkdown)(completeResponse);
+                    // Parse and sanitize
+                    const rawHtml = marked_1.marked.parse(processedMarkdown);
+                    const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
+                    // Apply the HTML with proper code block styling
                     contentDiv.innerHTML = sanitizedHtml;
+                    // Add syntax highlighting classes to code blocks
+                    const codeBlocks = contentDiv.querySelectorAll('pre code');
+                    codeBlocks.forEach(block => {
+                        var _a;
+                        block.classList.add('jp-RenderedText');
+                        (_a = block.parentElement) === null || _a === void 0 ? void 0 : _a.classList.add('jp-RenderedHTMLCommon');
+                    });
                 }
                 catch (error) {
+                    contentDiv.textContent = completeResponse;
                     console.error('Failed to render markdown:', error);
                 }
                 // Save to chat history
@@ -379,6 +432,8 @@ export class SimpleSidebarWidget extends Widget {
             }, 
             // On error
             (error) => {
+                streamingDiv.style.display = 'none';
+                contentDiv.style.display = 'block';
                 contentDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
                 console.error('API Error:', error);
             });
@@ -401,9 +456,19 @@ export class SimpleSidebarWidget extends Widget {
             const contentDiv = document.createElement('div');
             contentDiv.className = 'markdown-content';
             try {
-                const rawHtml = marked.parse(text);
-                const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+                // Pre-process the markdown text
+                const processedText = (0, markdown_config_1.preprocessMarkdown)(text);
+                // Parse and render markdown
+                const rawHtml = marked_1.marked.parse(processedText);
+                const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
                 contentDiv.innerHTML = sanitizedHtml;
+                // Add syntax highlighting classes to code blocks
+                const codeBlocks = contentDiv.querySelectorAll('pre code');
+                codeBlocks.forEach(block => {
+                    var _a;
+                    block.classList.add('jp-RenderedText');
+                    (_a = block.parentElement) === null || _a === void 0 ? void 0 : _a.classList.add('jp-RenderedHTMLCommon');
+                });
             }
             catch (error) {
                 contentDiv.textContent = text;
@@ -435,7 +500,7 @@ export class SimpleSidebarWidget extends Widget {
         let dirPath = null;
         let source = null;
         // Try to get directory path from current widget
-        const app = globals.app;
+        const app = globals_1.globals.app;
         if (!app) {
             this.addMessage('Error: Application reference not available', 'bot', false);
             return;
@@ -451,9 +516,9 @@ export class SimpleSidebarWidget extends Widget {
             }
         }
         // Fallback to notebook tracker if no context from widget
-        if (dirPath === null && globals.notebookTracker) {
-            const currentNotebookPanel = globals.notebookTracker.currentWidget;
-            if (currentNotebookPanel instanceof NotebookPanel) {
+        if (dirPath === null && globals_1.globals.notebookTracker) {
+            const currentNotebookPanel = globals_1.globals.notebookTracker.currentWidget;
+            if (currentNotebookPanel instanceof notebook_1.NotebookPanel) {
                 const nbPath = currentNotebookPanel.context.path;
                 const lastSlash = nbPath.lastIndexOf('/');
                 dirPath = lastSlash === -1 ? '' : nbPath.substring(0, lastSlash);
@@ -480,4 +545,111 @@ export class SimpleSidebarWidget extends Widget {
             this.addMessage('Could not determine current directory context.', 'bot', true);
         }
     }
+    /**
+     * Shows the command menu at the specified position
+     */
+    showCommandMenu(x, y) {
+        const commands = [
+            {
+                label: 'code',
+                description: 'Insert selected code',
+                action: () => this.handleCodeCommand()
+            },
+            {
+                label: 'cell',
+                description: 'Insert entire cell content',
+                action: () => this.handleCellCommand()
+            }
+        ];
+        // Clear existing content
+        this.commandMenuContainer.innerHTML = '';
+        // Create menu items
+        commands.forEach(cmd => {
+            const item = document.createElement('div');
+            item.className = 'command-menu-item';
+            const label = document.createElement('div');
+            label.className = 'command-label';
+            label.textContent = cmd.label;
+            const desc = document.createElement('div');
+            desc.className = 'command-description';
+            desc.textContent = cmd.description;
+            item.appendChild(label);
+            item.appendChild(desc);
+            item.addEventListener('click', () => {
+                cmd.action();
+                this.hideCommandMenu();
+            });
+            this.commandMenuContainer.appendChild(item);
+        });
+        // Position and show menu
+        this.commandMenuContainer.style.position = 'absolute';
+        this.commandMenuContainer.style.left = `${x}px`;
+        this.commandMenuContainer.style.top = `${y}px`;
+        this.commandMenuContainer.style.display = 'block';
+        // Add click outside listener
+        document.addEventListener('click', this.handleClickOutside);
+    }
+    /**
+     * Hides the command menu
+     */
+    hideCommandMenu() {
+        this.commandMenuContainer.style.display = 'none';
+        document.removeEventListener('click', this.handleClickOutside);
+    }
+    /**
+     * Handles the code command - inserts selected code
+     */
+    handleCodeCommand() {
+        var _a;
+        const selectedText = this.getSelectedText();
+        if (selectedText) {
+            this.inputField.value = `@code\n${selectedText}`;
+        }
+        else {
+            // If no selection, get the entire cell content
+            const cellContext = (_a = globals_1.globals.cellContextTracker) === null || _a === void 0 ? void 0 : _a.getCurrentCellContext();
+            if (cellContext) {
+                this.inputField.value = `@code\n${cellContext.text}`;
+            }
+        }
+    }
+    /**
+     * Handles the cell command - inserts entire cell content
+     */
+    handleCellCommand() {
+        var _a;
+        const cellContext = (_a = globals_1.globals.cellContextTracker) === null || _a === void 0 ? void 0 : _a.getCurrentCellContext();
+        if (cellContext) {
+            this.inputField.value = `@cell\n${cellContext.text}`;
+        }
+    }
+    /**
+     * Gets the selected text from cell context
+     */
+    getSelectedText() {
+        var _a;
+        // Get the current active cell from the tracker
+        const cell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
+        if (!cell || !cell.editor) {
+            return '';
+        }
+        // Get the CodeMirror editor instance
+        const editor = cell.editor;
+        const view = editor.editor;
+        if (!view) {
+            return '';
+        }
+        // Get the selection from CodeMirror
+        const state = view.state;
+        const selection = state.selection;
+        // If there's no selection, return empty string
+        if (selection.main.empty) {
+            return '';
+        }
+        // Get the selected text
+        const from = selection.main.from;
+        const to = selection.main.to;
+        return state.doc.sliceString(from, to);
+    }
 }
+exports.SimpleSidebarWidget = SimpleSidebarWidget;
