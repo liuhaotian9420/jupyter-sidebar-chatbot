@@ -124,7 +124,7 @@ __webpack_require__.d(exports, {
 /******/ 		// This function allow to reference async chunks
 /******/ 		__webpack_require__.u = (chunkId) => {
 /******/ 			// return url for filenames based on template
-/******/ 			return "" + chunkId + "." + {"lib_index_js":"2be1bacab8e522fd3788","style_index_css":"389b07624bc0889ce0c0","vendors-node_modules_dompurify_dist_purify_es_mjs":"5c9bdb74b76d75afe368","vendors-node_modules_marked_lib_marked_esm_js":"4709d16d20ea1c806191"}[chunkId] + ".js";
+/******/ 			return "" + chunkId + "." + {"lib_index_js":"ebf2581883b715babbfd","style_index_css":"c8b1523d95da2ad6a528","vendors-node_modules_dompurify_dist_purify_es_mjs":"5c9bdb74b76d75afe368","vendors-node_modules_marked_lib_marked_esm_js":"4709d16d20ea1c806191"}[chunkId] + ".js";
 /******/ 		};
 /******/ 	})();
 /******/ 	
@@ -403,25 +403,25 @@ __webpack_require__.d(exports, {
 /******/ 		var installedModules = {};
 /******/ 		var moduleToHandlerMapping = {
 /******/ 			"webpack/sharing/consume/default/@jupyterlab/launcher": () => (loadSingletonVersion("default", "@jupyterlab/launcher", false, [1,4,4,0])),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/ui-components": () => (loadSingletonVersion("default", "@jupyterlab/ui-components", false, [1,4,4,0])),
-/******/ 			"webpack/sharing/consume/default/@lumino/widgets": () => (loadSingletonVersion("default", "@lumino/widgets", false, [1,2,3,1,,"alpha",0])),
 /******/ 			"webpack/sharing/consume/default/@jupyterlab/apputils": () => (loadSingletonVersion("default", "@jupyterlab/apputils", false, [1,4,5,0])),
 /******/ 			"webpack/sharing/consume/default/@jupyterlab/notebook": () => (loadSingletonVersion("default", "@jupyterlab/notebook", false, [1,4,4,0])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/docmanager": () => (loadSingletonVersion("default", "@jupyterlab/docmanager", false, [1,4,4,0])),
+/******/ 			"webpack/sharing/consume/default/@lumino/widgets": () => (loadSingletonVersion("default", "@lumino/widgets", false, [1,2,3,1,,"alpha",0])),
 /******/ 			"webpack/sharing/consume/default/marked/marked": () => (loadStrictVersion("default", "marked", false, [1,15,0,8], () => (__webpack_require__.e("vendors-node_modules_marked_lib_marked_esm_js").then(() => (() => (__webpack_require__(/*! marked */ "./node_modules/marked/lib/marked.esm.js"))))))),
 /******/ 			"webpack/sharing/consume/default/dompurify/dompurify": () => (loadStrictVersion("default", "dompurify", false, [1,3,2,5], () => (__webpack_require__.e("vendors-node_modules_dompurify_dist_purify_es_mjs").then(() => (() => (__webpack_require__(/*! dompurify */ "./node_modules/dompurify/dist/purify.es.mjs"))))))),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/docmanager": () => (loadSingletonVersion("default", "@jupyterlab/docmanager", false, [1,4,4,0]))
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/ui-components": () => (loadSingletonVersion("default", "@jupyterlab/ui-components", false, [1,4,4,0]))
 /******/ 		};
 /******/ 		// no consumes in initial chunks
 /******/ 		var chunkMapping = {
 /******/ 			"lib_index_js": [
 /******/ 				"webpack/sharing/consume/default/@jupyterlab/launcher",
-/******/ 				"webpack/sharing/consume/default/@jupyterlab/ui-components",
-/******/ 				"webpack/sharing/consume/default/@lumino/widgets",
 /******/ 				"webpack/sharing/consume/default/@jupyterlab/apputils",
 /******/ 				"webpack/sharing/consume/default/@jupyterlab/notebook",
+/******/ 				"webpack/sharing/consume/default/@jupyterlab/docmanager",
+/******/ 				"webpack/sharing/consume/default/@lumino/widgets",
 /******/ 				"webpack/sharing/consume/default/marked/marked",
 /******/ 				"webpack/sharing/consume/default/dompurify/dompurify",
-/******/ 				"webpack/sharing/consume/default/@jupyterlab/docmanager"
+/******/ 				"webpack/sharing/consume/default/@jupyterlab/ui-components"
 /******/ 			]
 /******/ 		};
 /******/ 		var startedInstallModules = {};
@@ -562,4 +562,4 @@ __webpack_require__.d(exports, {
 /******/ 	
 /******/ })()
 ;
-//# sourceMappingURL=remoteEntry.6401edc04d4564e59762.js.map
+//# sourceMappingURL=remoteEntry.00849d2f449664a3a47d.js.map

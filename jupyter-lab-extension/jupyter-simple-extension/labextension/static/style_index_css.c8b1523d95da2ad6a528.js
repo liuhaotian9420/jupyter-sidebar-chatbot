@@ -141,7 +141,183 @@ ___CSS_LOADER_EXPORT___.push([module.id, `/*
 
 .markdown-content img {
   max-width: 100%;
-} `, "",{"version":3,"sources":["webpack://./style/index.css"],"names":[],"mappings":"AAAA;;EAEE;;AAEF;EACE,qBAAqB;EACrB,iBAAiB;AACnB;;AAEA;EACE,aAAa;AACf;;AAEA;EACE,aAAa;EACb,+BAA+B;AACjC;;AAEA;EACE,+BAA+B;EAC/B,mBAAmB;AACrB;;AAEA;EACE,WAAW;EACX,YAAY;EACZ,wCAAwC;EACxC,YAAY;EACZ,YAAY;EACZ,kBAAkB;EAClB,eAAe;AACjB;;AAEA;EACE,wCAAwC;AAC1C;;AAEA,qBAAqB;AACrB;EACE,qCAAqC;EACrC,gBAAgB;AAClB;;AAEA;;;;;;EAME,eAAe;EACf,oBAAoB;EACpB,iBAAiB;EACjB,+BAA+B;AACjC;;AAEA;EACE,gBAAgB;EAChB,gDAAgD;EAChD,qBAAqB;AACvB;;AAEA;EACE,gBAAgB;AAClB;;AAEA;EACE,gBAAgB;AAClB;;AAEA;EACE,eAAe;AACjB;;AAEA;;EAEE,eAAe;EACf,mBAAmB;AACrB;;AAEA;EACE,gBAAgB;AAClB;;AAEA;EACE,mCAAmC;EACnC,qBAAqB;AACvB;;AAEA;EACE,0BAA0B;AAC5B;;AAEA;EACE,iBAAiB;EACjB,cAAc;EACd,8CAA8C;EAC9C,+BAA+B;AACjC;;AAEA;EACE,kDAAkD;EAClD,eAAe;EACf,kBAAkB;EAClB,gBAAgB;AAClB;;AAEA;EACE,uCAAuC;EACvC,kDAAkD;EAClD,oBAAoB;EACpB,kBAAkB;EAClB,gBAAgB;AAClB;;AAEA;EACE,UAAU;EACV,6BAA6B;AAC/B;;AAEA;EACE,eAAe;AACjB","sourcesContent":["/* \r\n * Styles for the simple JupyterLab extension\r\n */\r\n\r\n.jp-simple-extension-icon {\r\n  background-size: 16px;\r\n  margin-right: 8px;\r\n}\r\n\r\n.simple-sidebar-content {\r\n  padding: 10px;\r\n}\r\n\r\n.simple-sidebar-content h2 {\r\n  margin-top: 0;\r\n  color: var(--jp-ui-font-color1);\r\n}\r\n\r\n.simple-sidebar-content p {\r\n  color: var(--jp-ui-font-color2);\r\n  margin-bottom: 20px;\r\n}\r\n\r\n.simple-sidebar-content button {\r\n  width: 100%;\r\n  padding: 8px;\r\n  background-color: var(--jp-brand-color1);\r\n  color: white;\r\n  border: none;\r\n  border-radius: 2px;\r\n  cursor: pointer;\r\n}\r\n\r\n.simple-sidebar-content button:hover {\r\n  background-color: var(--jp-brand-color0);\r\n}\r\n\r\n/* Markdown styling */\r\n.markdown-content {\r\n  font-family: var(--jp-ui-font-family);\r\n  line-height: 1.5;\r\n}\r\n\r\n.markdown-content h1, \r\n.markdown-content h2, \r\n.markdown-content h3, \r\n.markdown-content h4, \r\n.markdown-content h5, \r\n.markdown-content h6 {\r\n  margin-top: 1em;\r\n  margin-bottom: 0.5em;\r\n  font-weight: bold;\r\n  color: var(--jp-ui-font-color0);\r\n}\r\n\r\n.markdown-content h1 {\r\n  font-size: 1.5em;\r\n  border-bottom: 1px solid var(--jp-border-color2);\r\n  padding-bottom: 0.3em;\r\n}\r\n\r\n.markdown-content h2 {\r\n  font-size: 1.3em;\r\n}\r\n\r\n.markdown-content h3 {\r\n  font-size: 1.1em;\r\n}\r\n\r\n.markdown-content p {\r\n  margin: 0.5em 0;\r\n}\r\n\r\n.markdown-content ul, \r\n.markdown-content ol {\r\n  margin: 0.5em 0;\r\n  padding-left: 1.5em;\r\n}\r\n\r\n.markdown-content li {\r\n  margin: 0.25em 0;\r\n}\r\n\r\n.markdown-content a {\r\n  color: var(--jp-content-link-color);\r\n  text-decoration: none;\r\n}\r\n\r\n.markdown-content a:hover {\r\n  text-decoration: underline;\r\n}\r\n\r\n.markdown-content blockquote {\r\n  padding-left: 1em;\r\n  margin-left: 0;\r\n  border-left: 3px solid var(--jp-border-color2);\r\n  color: var(--jp-ui-font-color2);\r\n}\r\n\r\n.markdown-content pre {\r\n  background-color: var(--jp-cell-editor-background);\r\n  padding: 0.75em;\r\n  border-radius: 3px;\r\n  overflow-x: auto;\r\n}\r\n\r\n.markdown-content code {\r\n  font-family: var(--jp-code-font-family);\r\n  background-color: var(--jp-cell-editor-background);\r\n  padding: 0.2em 0.4em;\r\n  border-radius: 3px;\r\n  font-size: 0.9em;\r\n}\r\n\r\n.markdown-content pre code {\r\n  padding: 0;\r\n  background-color: transparent;\r\n}\r\n\r\n.markdown-content img {\r\n  max-width: 100%;\r\n} "],"sourceRoot":""}]);
+}
+
+/* Message container styles */
+.message-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 10px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* User message styles */
+.user-message {
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 5px;
+  max-width: 80%;
+  word-wrap: break-word;
+  background-color: #e3f2fd;
+  margin-left: auto;
+}
+
+/* Bot message styles */
+.bot-message {
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 5px;
+  max-width: 80%;
+  word-wrap: break-word;
+  background-color: #f5f5f5;
+  margin-right: auto;
+}
+
+/* Markdown indicator styles */
+.markdown-indicator {
+  font-size: 9px;
+  color: #666;
+  text-align: right;
+}
+
+/* Simple sidebar content */
+.simple-sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Input container styles */
+.input-container {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 5px;
+}
+
+/* Control container styles */
+.controls-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+/* Toggle container styles */
+.toggle-container {
+  display: flex;
+  align-items: center;
+}
+
+/* Action buttons container */
+.action-buttons-container {
+  display: flex;
+  gap: 2px;
+}
+
+/* Action button styles */
+.action-button {
+  margin: 0 2px;
+  padding: 2px 8px;
+}
+
+/* Input actions container */
+.input-actions-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 5px;
+}
+
+/* Send button styles */
+.send-button {
+  padding: 5px 10px;
+}
+
+/* 
+ * Styles for the JupyterLab AI Assistant extension
+ */
+
+/* Title container styles */
+.title-container {
+  padding: 10px;
+  border-bottom: 1px solid var(--jp-border-color2);
+  margin-bottom: 5px;
+}
+
+/* Chat title input */
+.chat-title-input {
+  width: 100%;
+  padding: 5px;
+  font-weight: bold;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background-color: transparent;
+  color: var(--jp-ui-font-color0);
+}
+
+.chat-title-input:hover, .chat-title-input:focus {
+  border-color: var(--jp-border-color1);
+  background-color: var(--jp-layout-color1);
+  outline: none;
+}
+
+/* Top actions container */
+.top-actions-container {
+  display: flex;
+  padding: 5px 10px;
+  gap: 10px;
+  border-bottom: 1px solid var(--jp-border-color2);
+}
+
+/* History container */
+.history-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+/* History item */
+.history-item {
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  background-color: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color2);
+  transition: all 0.2s ease;
+}
+
+.history-item:hover {
+  background-color: var(--jp-layout-color2);
+}
+
+.history-item.active {
+  border-left: 3px solid var(--jp-brand-color1);
+}
+
+/* History title */
+.history-title {
+  font-weight: bold;
+  margin-bottom: 5px;
+  color: var(--jp-ui-font-color0);
+}
+
+/* History preview */
+.history-preview {
+  font-size: 0.9em;
+  color: var(--jp-ui-font-color2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Empty history message */
+.empty-history-message {
+  text-align: center;
+  padding: 20px;
+  color: var(--jp-ui-font-color2);
+  font-style: italic;
+} `, "",{"version":3,"sources":["webpack://./style/index.css"],"names":[],"mappings":"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","sourcesContent":["/* \r\n * Styles for the simple JupyterLab extension\r\n */\r\n\r\n.jp-simple-extension-icon {\r\n  background-size: 16px;\r\n  margin-right: 8px;\r\n}\r\n\r\n.simple-sidebar-content {\r\n  padding: 10px;\r\n}\r\n\r\n.simple-sidebar-content h2 {\r\n  margin-top: 0;\r\n  color: var(--jp-ui-font-color1);\r\n}\r\n\r\n.simple-sidebar-content p {\r\n  color: var(--jp-ui-font-color2);\r\n  margin-bottom: 20px;\r\n}\r\n\r\n.simple-sidebar-content button {\r\n  width: 100%;\r\n  padding: 8px;\r\n  background-color: var(--jp-brand-color1);\r\n  color: white;\r\n  border: none;\r\n  border-radius: 2px;\r\n  cursor: pointer;\r\n}\r\n\r\n.simple-sidebar-content button:hover {\r\n  background-color: var(--jp-brand-color0);\r\n}\r\n\r\n/* Markdown styling */\r\n.markdown-content {\r\n  font-family: var(--jp-ui-font-family);\r\n  line-height: 1.5;\r\n}\r\n\r\n.markdown-content h1, \r\n.markdown-content h2, \r\n.markdown-content h3, \r\n.markdown-content h4, \r\n.markdown-content h5, \r\n.markdown-content h6 {\r\n  margin-top: 1em;\r\n  margin-bottom: 0.5em;\r\n  font-weight: bold;\r\n  color: var(--jp-ui-font-color0);\r\n}\r\n\r\n.markdown-content h1 {\r\n  font-size: 1.5em;\r\n  border-bottom: 1px solid var(--jp-border-color2);\r\n  padding-bottom: 0.3em;\r\n}\r\n\r\n.markdown-content h2 {\r\n  font-size: 1.3em;\r\n}\r\n\r\n.markdown-content h3 {\r\n  font-size: 1.1em;\r\n}\r\n\r\n.markdown-content p {\r\n  margin: 0.5em 0;\r\n}\r\n\r\n.markdown-content ul, \r\n.markdown-content ol {\r\n  margin: 0.5em 0;\r\n  padding-left: 1.5em;\r\n}\r\n\r\n.markdown-content li {\r\n  margin: 0.25em 0;\r\n}\r\n\r\n.markdown-content a {\r\n  color: var(--jp-content-link-color);\r\n  text-decoration: none;\r\n}\r\n\r\n.markdown-content a:hover {\r\n  text-decoration: underline;\r\n}\r\n\r\n.markdown-content blockquote {\r\n  padding-left: 1em;\r\n  margin-left: 0;\r\n  border-left: 3px solid var(--jp-border-color2);\r\n  color: var(--jp-ui-font-color2);\r\n}\r\n\r\n.markdown-content pre {\r\n  background-color: var(--jp-cell-editor-background);\r\n  padding: 0.75em;\r\n  border-radius: 3px;\r\n  overflow-x: auto;\r\n}\r\n\r\n.markdown-content code {\r\n  font-family: var(--jp-code-font-family);\r\n  background-color: var(--jp-cell-editor-background);\r\n  padding: 0.2em 0.4em;\r\n  border-radius: 3px;\r\n  font-size: 0.9em;\r\n}\r\n\r\n.markdown-content pre code {\r\n  padding: 0;\r\n  background-color: transparent;\r\n}\r\n\r\n.markdown-content img {\r\n  max-width: 100%;\r\n}\r\n\r\n/* Message container styles */\r\n.message-container {\r\n  flex-grow: 1;\r\n  overflow-y: auto;\r\n  padding: 10px;\r\n  border-bottom: 1px solid #e0e0e0;\r\n}\r\n\r\n/* User message styles */\r\n.user-message {\r\n  margin-bottom: 10px;\r\n  padding: 8px;\r\n  border-radius: 5px;\r\n  max-width: 80%;\r\n  word-wrap: break-word;\r\n  background-color: #e3f2fd;\r\n  margin-left: auto;\r\n}\r\n\r\n/* Bot message styles */\r\n.bot-message {\r\n  margin-bottom: 10px;\r\n  padding: 8px;\r\n  border-radius: 5px;\r\n  max-width: 80%;\r\n  word-wrap: break-word;\r\n  background-color: #f5f5f5;\r\n  margin-right: auto;\r\n}\r\n\r\n/* Markdown indicator styles */\r\n.markdown-indicator {\r\n  font-size: 9px;\r\n  color: #666;\r\n  text-align: right;\r\n}\r\n\r\n/* Simple sidebar content */\r\n.simple-sidebar-content {\r\n  display: flex;\r\n  flex-direction: column;\r\n  height: 100%;\r\n}\r\n\r\n/* Input container styles */\r\n.input-container {\r\n  display: flex;\r\n  flex-direction: column;\r\n  padding: 10px;\r\n  gap: 5px;\r\n}\r\n\r\n/* Control container styles */\r\n.controls-container {\r\n  display: flex;\r\n  justify-content: space-between;\r\n  align-items: center;\r\n  margin-bottom: 5px;\r\n}\r\n\r\n/* Toggle container styles */\r\n.toggle-container {\r\n  display: flex;\r\n  align-items: center;\r\n}\r\n\r\n/* Action buttons container */\r\n.action-buttons-container {\r\n  display: flex;\r\n  gap: 2px;\r\n}\r\n\r\n/* Action button styles */\r\n.action-button {\r\n  margin: 0 2px;\r\n  padding: 2px 8px;\r\n}\r\n\r\n/* Input actions container */\r\n.input-actions-container {\r\n  display: flex;\r\n  justify-content: flex-end;\r\n  margin-top: 5px;\r\n}\r\n\r\n/* Send button styles */\r\n.send-button {\r\n  padding: 5px 10px;\r\n}\r\n\r\n/* \r\n * Styles for the JupyterLab AI Assistant extension\r\n */\r\n\r\n/* Title container styles */\r\n.title-container {\r\n  padding: 10px;\r\n  border-bottom: 1px solid var(--jp-border-color2);\r\n  margin-bottom: 5px;\r\n}\r\n\r\n/* Chat title input */\r\n.chat-title-input {\r\n  width: 100%;\r\n  padding: 5px;\r\n  font-weight: bold;\r\n  border: 1px solid transparent;\r\n  border-radius: 3px;\r\n  background-color: transparent;\r\n  color: var(--jp-ui-font-color0);\r\n}\r\n\r\n.chat-title-input:hover, .chat-title-input:focus {\r\n  border-color: var(--jp-border-color1);\r\n  background-color: var(--jp-layout-color1);\r\n  outline: none;\r\n}\r\n\r\n/* Top actions container */\r\n.top-actions-container {\r\n  display: flex;\r\n  padding: 5px 10px;\r\n  gap: 10px;\r\n  border-bottom: 1px solid var(--jp-border-color2);\r\n}\r\n\r\n/* History container */\r\n.history-container {\r\n  flex-grow: 1;\r\n  overflow-y: auto;\r\n  padding: 10px;\r\n}\r\n\r\n/* History item */\r\n.history-item {\r\n  padding: 10px;\r\n  margin-bottom: 8px;\r\n  border-radius: 5px;\r\n  cursor: pointer;\r\n  background-color: var(--jp-layout-color1);\r\n  border: 1px solid var(--jp-border-color2);\r\n  transition: all 0.2s ease;\r\n}\r\n\r\n.history-item:hover {\r\n  background-color: var(--jp-layout-color2);\r\n}\r\n\r\n.history-item.active {\r\n  border-left: 3px solid var(--jp-brand-color1);\r\n}\r\n\r\n/* History title */\r\n.history-title {\r\n  font-weight: bold;\r\n  margin-bottom: 5px;\r\n  color: var(--jp-ui-font-color0);\r\n}\r\n\r\n/* History preview */\r\n.history-preview {\r\n  font-size: 0.9em;\r\n  color: var(--jp-ui-font-color2);\r\n  white-space: nowrap;\r\n  overflow: hidden;\r\n  text-overflow: ellipsis;\r\n}\r\n\r\n/* Empty history message */\r\n.empty-history-message {\r\n  text-align: center;\r\n  padding: 20px;\r\n  color: var(--jp-ui-font-color2);\r\n  font-style: italic;\r\n} "],"sourceRoot":""}]);
 // Exports
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (___CSS_LOADER_EXPORT___);
 
@@ -589,4 +765,4 @@ var update = _node_modules_style_loader_dist_runtime_injectStylesIntoStyleTag_js
 /***/ })
 
 }]);
-//# sourceMappingURL=style_index_css.389b07624bc0889ce0c0.js.map
+//# sourceMappingURL=style_index_css.c8b1523d95da2ad6a528.js.map

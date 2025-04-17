@@ -9,14 +9,12 @@ import { ICellContext } from './types';
  * Tracks cell context and cursor position within Jupyter notebooks
  */
 export class CellContextTracker implements IDisposable {
-  private app: JupyterFrontEnd;
   private notebookTracker: INotebookTracker;
   private activeCellEditorNode: HTMLElement | null = null;
   private lastCellContext: ICellContext | null = null;
   private _isDisposed: boolean = false;
 
   constructor(app: JupyterFrontEnd, notebookTracker: INotebookTracker) {
-    this.app = app;
     this.notebookTracker = notebookTracker;
     this.setupTrackers();
   }
