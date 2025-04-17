@@ -1,93 +1,101 @@
-# jupyter-chatbot-fe
+<<<<<<< README.md
+# Jupyter LLM 扩展
 
+Jupyter LLM 扩展是一个为 Jupyter Notebook 和 JupyterLab 开发的辅助应用程序，可以提供 AI 辅助的代码分析和执行功能。
 
+## 项目简介
 
-## Getting started
+该项目旨在构建一个 AI 代码助手，作为本地 Jupyter 环境的辅助应用程序。它可以独立运行，但能与正在运行的 notebook 实例紧密交互，允许通过 LLM 辅助代码分析，并在专用 IPython 内核中执行代码。
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### 主要功能
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- 请求 AI 助手解释、调试或增强当前选择的代码单元
+- 在辅助内核中执行代码，与用户的 notebook 内核隔离
+- 在 notebook 界面内显示助手反馈、执行结果和建议
+- 提供安全的原型设计环境
 
-## Add your files
+### 架构设计
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+该项目采用辅助微服务架构，包含以下组件：
+
+1. **Jupyter 扩展**：提供用户界面集成
+2. **后端服务**：处理 LLM 调用和代码执行
+3. **IPython 内核**：执行用户代码的隔离环境
+
+## 安装指南
+
+### 使用 uv 安装环境
+
+我们使用 uv 来管理项目环境，它提供了更快的依赖解析和虚拟环境管理。环境设置脚本使用清华大学PyPI镜像源（https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple）来加速包的下载和安装。
+
+#### Windows 用户
+
+```powershell
+# 安装环境
+.\setup_env.ps1
+
+# 激活环境
+.\.venv\Scripts\Activate.ps1
+```
+
+#### Linux/MacOS 用户
+
+```bash
+# 安装环境
+chmod +x setup_env.sh
+./setup_env.sh
+
+# 激活环境
+source .venv/bin/activate
+```
+
+### 启动应用程序
+
+```bash
+# 同时启动 Jupyter 和辅助应用
+python launch.py
+
+# 或者指定 Jupyter 类型和端口
+python launch.py --jupyter lab --jupyter-port 8889 --sidecar-port 8001
+```
+
+## 项目结构
 
 ```
-cd existing_repo
-git remote add origin https://gitlab-a3uxyvfhkudlt7.kesci.com/heywhale_data/jupyter-chatbot-fe.git
-git branch -M main
-git push -uf origin main
+jupyter-llm-ext/
+├── backend/         # 后端服务代码
+│   └── src/         # 源代码
+├── extension/       # Jupyter 扩展代码
+├── examples/        # 示例 notebook
+├── tests/           # 测试代码
+├── requirements.txt # 依赖管理
+├── setup.py         # 安装脚本
+├── setup_env.ps1    # Windows 环境设置脚本
+├── setup_env.sh     # Unix 环境设置脚本
+└── launch.py        # 启动脚本
 ```
 
-## Integrate with your tools
+## 开发指南
 
-- [ ] [Set up project integrations](https://gitlab-a3uxyvfhkudlt7.kesci.com/heywhale_data/jupyter-chatbot-fe/-/settings/integrations)
+### 运行测试
 
-## Collaborate with your team
+```bash
+# 运行所有测试
+pytest
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+# 运行特定测试
+pytest tests/test_kernel_manager.py
+```
 
-## Test and Deploy
+### 贡献代码
 
-Use the built-in continuous integration in GitLab.
+1. Fork 仓库
+2. 创建功能分支
+3. 提交更改
+4. 推送到分支
+5. 创建 Pull Request
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## 许可证
 
-***
+本项目采用 MIT 许可证。详情请参阅 LICENSE 文件。
 
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
