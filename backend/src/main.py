@@ -23,11 +23,30 @@ class ChatRequest(BaseModel):
 
 # Predefined responses for our mock LLM
 MOCK_RESPONSES = [
-    "I'm a mock LLM response. I can simulate streaming text just like a real language model would.",
-    "This is an example of streaming text from a FastAPI backend to your Jupyter extension.",
-    "You can enhance this with more features like context awareness, memory, and other LLM capabilities.",
-    "The streaming approach allows for a more interactive user experience, similar to ChatGPT or other AI assistants.",
-    "In a production environment, you would replace this with calls to a real LLM API or local model."
+    """Mocking a Markdown response: 
+
+# Example Heading
+- List item
+
+```
+code block
+```""",
+
+    """Mocking code-heavy response: 
+
+```python
+print("Hello, world!")
+```
+
+```javascript
+console.log("Hello, world!");
+```
+
+```bash
+ls -l
+```""",
+
+    # ... other responses formatted similarly
 ]
 
 async def stream_response(message: str):
@@ -40,7 +59,7 @@ async def stream_response(message: str):
     # Stream each character with a small random delay
     for char in response:
         yield char
-        await asyncio.sleep(random.uniform(0.01, 0.1))
+        await asyncio.sleep(random.uniform(0.001, 0.04))
 
 @app.post("/chat")
 async def chat(request: ChatRequest):

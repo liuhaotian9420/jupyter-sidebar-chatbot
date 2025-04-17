@@ -6,6 +6,9 @@ import { SimpleSidebarWidget } from './sidebar-widget';
 import { initGlobals, globals } from './globals';
 import { registerCommands } from './commands';
 import { CellContextTracker } from './cell-context-tracker';
+// import { ApiClient } from './api-client';
+// Export ApiClient for use by other components
+export { ApiClient } from './api-client';
 /**
  * Initialization data for the jupyter-simple-extension extension.
  */

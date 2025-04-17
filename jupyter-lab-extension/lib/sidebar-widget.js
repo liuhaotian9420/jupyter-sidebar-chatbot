@@ -4,6 +4,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { extensionIcon } from './icons';
 import { globals } from './globals';
+import { ApiClient } from './api-client';
 /**
  * Main sidebar widget for the AI chat interface
  */
@@ -21,6 +22,8 @@ export class SimpleSidebarWidget extends Widget {
         this.title.caption = 'AI Chat Interface';
         this.title.icon = extensionIcon;
         this.title.closable = true;
+        // Initialize API client
+        this.apiClient = new ApiClient();
         // Initialize container elements before creating layout
         this.messageContainer = document.createElement('div');
         this.inputContainer = document.createElement('div');
@@ -316,7 +319,7 @@ export class SimpleSidebarWidget extends Widget {
     handleSendMessage() {
         const message = this.inputField.value.trim();
         if (message) {
-            // Add to UI
+            // Add user message to UI
             this.addMessage(message, 'user', this.isMarkdownMode);
             this.inputField.value = '';
             // Reset expanded state if needed after sending
@@ -327,10 +330,58 @@ export class SimpleSidebarWidget extends Widget {
                 this.inputField.style.height = 'auto';
                 this.inputField.rows = 1;
             }
-            // In the future, this will call the backend sidecar service
-            setTimeout(() => {
-                this.addMessage(`Echo: ${message}`, 'bot', true);
-            }, 500);
+            // Create a temporary message container for the bot's streaming response
+            const botMessageDiv = document.createElement('div');
+            botMessageDiv.className = 'bot-message';
+            const markdownIndicator = document.createElement('div');
+            markdownIndicator.textContent = "MD";
+            markdownIndicator.className = 'markdown-indicator';
+            botMessageDiv.appendChild(markdownIndicator);
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'markdown-content';
+            contentDiv.textContent = ''; // Start empty
+            botMessageDiv.appendChild(contentDiv);
+            this.messageContainer.appendChild(botMessageDiv);
+            // Variable to collect the complete response
+            let completeResponse = '';
+            // Get cell context if available
+            const cellContext = globals.cellContextTracker ?
+                globals.cellContextTracker.getCurrentCellContext() : null;
+            // Stream response from API
+            this.apiClient.streamChat(message, { cellContext }, 
+            // On each chunk received
+            (chunk) => {
+                completeResponse += chunk;
+                contentDiv.textContent = completeResponse;
+                this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+            }, 
+            // On complete
+            () => {
+                // Replace plain text with rendered markdown
+                try {
+                    const rawHtml = marked.parse(completeResponse);
+                    const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+                    contentDiv.innerHTML = sanitizedHtml;
+                }
+                catch (error) {
+                    console.error('Failed to render markdown:', error);
+                }
+                // Save to chat history
+                const chat = this.chatHistory.find(c => c.id === this.currentChatId);
+                if (chat) {
+                    chat.messages.push({
+                        text: completeResponse,
+                        sender: 'bot',
+                        isMarkdown: true
+                    });
+                }
+                this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+            }, 
+            // On error
+            (error) => {
+                contentDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+                console.error('API Error:', error);
+            });
         }
     }
     /**

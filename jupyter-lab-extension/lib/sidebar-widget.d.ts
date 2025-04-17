@@ -15,6 +15,7 @@ export declare class SimpleSidebarWidget extends Widget {
     private titleInput;
     private isHistoryViewActive;
     private historyContainer;
+    private apiClient;
     constructor(docManager: IDocumentManager);
     /**
      * Creates the main layout for the sidebar
