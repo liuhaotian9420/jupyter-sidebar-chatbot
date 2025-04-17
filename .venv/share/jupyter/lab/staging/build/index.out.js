@@ -759,17 +759,6 @@ export async function main() {
       console.error(e);
     }
   }
-  if (!queuedFederated.includes('jupyter-simple-extension')) {
-    try {
-      let ext = require('jupyter-simple-extension');
-      ext.__scope__ = 'jupyter-simple-extension';
-      for (let plugin of activePlugins(ext)) {
-        register.push(plugin);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
 
   // Add the federated extensions.
   const federatedExtensions = await Promise.allSettled(federatedExtensionPromises);

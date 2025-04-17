@@ -75,9 +75,7 @@
         },
         {
           "test": {},
-          "include": [
-            {}
-          ],
+          "include": [],
           "use": [
             "source-map-loader"
           ],
@@ -591,9 +589,6 @@
               "requiredVersion": "^13.5.40",
               "singleton": true
             },
-            "jupyter-simple-extension": {
-              "requiredVersion": "0.1.0"
-            },
             "react-toastify": {
               "requiredVersion": "^9.0.8"
             },
@@ -670,10 +665,7 @@
     "devtool": "inline-source-map",
     "externals": [
       "ws"
-    ],
-    "snapshot": {
-      "managedPaths": []
-    }
+    ]
   },
   {
     "mode": "production",

@@ -46,4 +46,3 @@ import '@jupyterlab/translation-extension/style/index.js';
 import '@jupyterlab/ui-components-extension/style/index.js';
 import '@jupyterlab/vega5-extension/style/index.js';
 import '@jupyterlab/workspaces-extension/style/index.js';
-import 'jupyter-simple-extension/style/index.css';

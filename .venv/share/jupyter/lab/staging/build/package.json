@@ -143,8 +143,7 @@
         "@microsoft/fast-foundation": "^2.49.2",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
-        "yjs": "^13.5.40",
-        "jupyter-simple-extension": "file:C:\\Users\\11459\\Documents\\GitHub\\jupyter-llm-ext\\.venv\\share\\jupyter\\lab\\extensions\\jupyter-simple-extension-0.1.0-eb126296a758ad60d01ee967a5dd80ee50381dec.tgz"
+        "yjs": "^13.5.40"
     },
     "dependencies": {
         "@jupyterlab/application": "~4.4.0",
@@ -197,8 +196,7 @@
         "@jupyterlab/translation-extension": "~4.4.0",
         "@jupyterlab/ui-components-extension": "~4.4.0",
         "@jupyterlab/vega5-extension": "~4.4.0",
-        "@jupyterlab/workspaces-extension": "~4.4.0",
-        "jupyter-simple-extension": "file:../extensions/jupyter-simple-extension-0.1.0-eb126296a758ad60d01ee967a5dd80ee50381dec.tgz"
+        "@jupyterlab/workspaces-extension": "~4.4.0"
     },
     "devDependencies": {
         "@jupyterlab/builder": "^4.4.0",
@@ -276,8 +274,7 @@
             "@jupyterlab/tooltip-extension": "",
             "@jupyterlab/translation-extension": "",
             "@jupyterlab/ui-components-extension": "",
-            "@jupyterlab/workspaces-extension": "",
-            "jupyter-simple-extension": ""
+            "@jupyterlab/workspaces-extension": ""
         },
         "mimeExtensions": {
             "@jupyterlab/javascript-extension": "",
@@ -357,15 +354,8 @@
             "react-dom",
             "yjs"
         ],
-        "linkedPackages": {
-            "jupyter-simple-extension": "C:\\Users\\11459\\Documents\\GitHub\\jupyter-llm-ext\\jupyter-lab-extension"
-        },
+        "linkedPackages": {},
         "staticDir": "../static",
-        "extensionMetadata": {
-            "jupyter-simple-extension": {
-                "extension": true,
-                "outputDir": "jupyter-simple-extension/labextension"
-            }
-        }
+        "extensionMetadata": {}
     }
 }
