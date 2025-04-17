@@ -594,6 +594,39 @@ export class SimpleSidebarWidget extends Widget {
               block.classList.add('jp-RenderedText');
               block.parentElement?.classList.add('jp-RenderedHTMLCommon');
             });
+
+            // Add action buttons to the bot message
+            console.log('Adding action buttons to streamed bot message');
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            actionsDiv.style.display = 'flex'; // Ensure display is set
+
+            // Copy button with icon
+            const copyButton = document.createElement('button');
+            copyButton.className = 'message-action-button';
+            copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+            copyButton.title = 'Copy message to clipboard';
+            copyButton.addEventListener('click', (event) => {
+              event.stopPropagation();
+              this.copyMessageToClipboard(completeResponse);
+            });
+            actionsDiv.appendChild(copyButton);
+
+            // Add to button with icon
+            const addToButton = document.createElement('button');
+            addToButton.className = 'message-action-button';
+            addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+            addToButton.title = 'Add message to current cell';
+            addToButton.addEventListener('click', (event) => {
+              event.stopPropagation();
+              this.addMessageToCell(completeResponse);
+            });
+            actionsDiv.appendChild(addToButton);
+
+            // Add buttons to message
+            botMessageDiv.appendChild(actionsDiv);
+            console.log('Action buttons added to bot message:', actionsDiv);
+
           } catch (error) {
             contentDiv.textContent = completeResponse;
             console.error('Failed to render markdown:', error);
@@ -626,6 +659,8 @@ export class SimpleSidebarWidget extends Widget {
    * Adds a message to the chat interface
    */
   private addMessage(text: string, sender: 'user' | 'bot', isMarkdown: boolean = false, saveToHistory: boolean = true): void {
+    console.log('Adding message:', { sender, isMarkdown }); // Debug log
+
     const messageDiv = document.createElement('div');
     messageDiv.className = sender === 'user' ? 'user-message' : 'bot-message';
 
@@ -662,6 +697,40 @@ export class SimpleSidebarWidget extends Widget {
       }
       
       messageDiv.appendChild(contentDiv);
+
+      // Add action buttons for bot messages
+      if (sender === 'bot') {
+        console.log('Adding action buttons to bot message'); // Debug log
+        
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+        
+        // Copy button with icon
+        const copyButton = document.createElement('button');
+        copyButton.className = 'message-action-button';
+        copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+        copyButton.title = 'Copy message to clipboard';
+        copyButton.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this.copyMessageToClipboard(text);
+        });
+        actionsDiv.appendChild(copyButton);
+
+        // Add to button with icon
+        const addToButton = document.createElement('button');
+        addToButton.className = 'message-action-button';
+        addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+        addToButton.title = 'Add message to current cell';
+        addToButton.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this.addMessageToCell(text);
+        });
+        actionsDiv.appendChild(addToButton);
+
+        // Add buttons to message
+        messageDiv.appendChild(actionsDiv);
+        console.log('Action buttons added to message:', actionsDiv); // Debug log
+      }
     } else {
       messageDiv.textContent = text;
     }
@@ -679,6 +748,78 @@ export class SimpleSidebarWidget extends Widget {
           isMarkdown: isMarkdown || sender === 'bot' 
         });
       }
+    }
+  }
+
+  /**
+   * Copies message content to clipboard
+   */
+  private copyMessageToClipboard(text: string): void {
+    try {
+      navigator.clipboard.writeText(text).then(() => {
+        console.log('Content copied to clipboard');
+        
+        // Find the button element that was clicked
+        const buttons = document.querySelectorAll('.message-action-button');
+        let clickedButton: HTMLButtonElement | null = null;
+        
+        for (let i = 0; i < buttons.length; i++) {
+          const button = buttons[i] as HTMLButtonElement;
+          if (button.title === 'Copy message to clipboard' && button === document.activeElement) {
+            clickedButton = button;
+            break;
+          }
+        }
+        
+        // Show visual feedback if we found the button
+        if (clickedButton) {
+          const originalHTML = clickedButton.innerHTML;
+          clickedButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>';
+          setTimeout(() => {
+            clickedButton!.innerHTML = originalHTML;
+          }, 2000);
+        }
+      }).catch(err => {
+        console.error('Failed to copy text: ', err);
+      });
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+    }
+  }
+
+  /**
+   * Adds message content to the current cell
+   */
+  private addMessageToCell(text: string): void {
+    const cell = globals.notebookTracker?.activeCell;
+    if (!cell || !cell.editor) {
+      return;
+    }
+
+    try {
+      const editor = cell.editor;
+      const view = (editor as any).editor;
+      if (!view) {
+        return;
+      }
+
+      // Get current cursor position
+      const state = view.state;
+      const selection = state.selection;
+      const cursorPos = selection.main.head;
+
+      // Insert newline and message content at cursor position
+      const transaction = state.update({
+        changes: {
+          from: cursorPos,
+          insert: `\n${text}`
+        },
+        selection: { anchor: cursorPos + text.length + 1 }
+      });
+
+      view.dispatch(transaction);
+    } catch (error) {
+      console.error('Error adding message to cell:', error);
     }
   }
 

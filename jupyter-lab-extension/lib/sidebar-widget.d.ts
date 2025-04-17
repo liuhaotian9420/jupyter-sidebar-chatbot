@@ -76,6 +76,14 @@ export declare class SimpleSidebarWidget extends Widget {
      */
     private addMessage;
     /**
+     * Copies message content to clipboard
+     */
+    private copyMessageToClipboard;
+    /**
+     * Adds message content to the current cell
+     */
+    private addMessageToCell;
+    /**
      * Lists the contents of the current directory
      */
     private listCurrentDirectoryContents;

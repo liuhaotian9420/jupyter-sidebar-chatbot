@@ -930,6 +930,36 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                         block.classList.add('jp-RenderedText');
                         (_a = block.parentElement) === null || _a === void 0 ? void 0 : _a.classList.add('jp-RenderedHTMLCommon');
                     });
+                    // Add action buttons to the bot message
+                    console.log('Adding action buttons to streamed bot message');
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'message-actions';
+                    actionsDiv.style.display = 'flex'; // Ensure display is set
+                    // Copy button
+                    const copyButton = document.createElement('button');
+                    copyButton.className = 'message-action-button';
+                    copyButton.textContent = 'Copy';
+                    copyButton.title = 'Copy message to clipboard';
+                    copyButton.style.display = 'block'; // Ensure button is visible
+                    copyButton.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        this.copyMessageToClipboard(completeResponse);
+                    });
+                    actionsDiv.appendChild(copyButton);
+                    // Add to button
+                    const addToButton = document.createElement('button');
+                    addToButton.className = 'message-action-button';
+                    addToButton.textContent = 'Add to';
+                    addToButton.title = 'Add message to current cell';
+                    addToButton.style.display = 'block'; // Ensure button is visible
+                    addToButton.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        this.addMessageToCell(completeResponse);
+                    });
+                    actionsDiv.appendChild(addToButton);
+                    // Add buttons to message
+                    botMessageDiv.appendChild(actionsDiv);
+                    console.log('Action buttons added to bot message:', actionsDiv);
                 }
                 catch (error) {
                     contentDiv.textContent = completeResponse;
@@ -959,6 +989,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
      * Adds a message to the chat interface
      */
     addMessage(text, sender, isMarkdown = false, saveToHistory = true) {
+        console.log('Adding message:', { sender, isMarkdown }); // Debug log
         const messageDiv = document.createElement('div');
         messageDiv.className = sender === 'user' ? 'user-message' : 'bot-message';
         // Add message content
@@ -991,6 +1022,38 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 console.error('Failed to render markdown:', error);
             }
             messageDiv.appendChild(contentDiv);
+            // Add action buttons for bot messages
+            if (sender === 'bot') {
+                console.log('Adding action buttons to bot message'); // Debug log
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'message-actions';
+                actionsDiv.style.display = 'flex'; // Ensure display is set
+                // Copy button
+                const copyButton = document.createElement('button');
+                copyButton.className = 'message-action-button';
+                copyButton.textContent = 'Copy';
+                copyButton.title = 'Copy message to clipboard';
+                copyButton.style.display = 'block'; // Ensure button is visible
+                copyButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.copyMessageToClipboard(text);
+                });
+                actionsDiv.appendChild(copyButton);
+                // Add to button
+                const addToButton = document.createElement('button');
+                addToButton.className = 'message-action-button';
+                addToButton.textContent = 'Add to';
+                addToButton.title = 'Add message to current cell';
+                addToButton.style.display = 'block'; // Ensure button is visible
+                addToButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.addMessageToCell(text);
+                });
+                actionsDiv.appendChild(addToButton);
+                // Add buttons to message
+                messageDiv.appendChild(actionsDiv);
+                console.log('Action buttons added to message:', actionsDiv); // Debug log
+            }
         }
         else {
             messageDiv.textContent = text;
@@ -1007,6 +1070,74 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                     isMarkdown: isMarkdown || sender === 'bot'
                 });
             }
+        }
+    }
+    /**
+     * Copies message content to clipboard
+     */
+    copyMessageToClipboard(text) {
+        try {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('Content copied to clipboard');
+                // Find the button element that was clicked
+                const buttons = document.querySelectorAll('.message-action-button');
+                let clickedButton = null;
+                for (let i = 0; i < buttons.length; i++) {
+                    const button = buttons[i];
+                    if (button.textContent === 'Copy') {
+                        if (button === document.activeElement) {
+                            clickedButton = button;
+                            break;
+                        }
+                    }
+                }
+                // Show visual feedback if we found the button
+                if (clickedButton) {
+                    const originalText = clickedButton.textContent;
+                    clickedButton.textContent = 'Copied!';
+                    setTimeout(() => {
+                        clickedButton.textContent = originalText;
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        }
+        catch (error) {
+            console.error('Error copying to clipboard:', error);
+        }
+    }
+    /**
+     * Adds message content to the current cell
+     */
+    addMessageToCell(text) {
+        var _a;
+        const cell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
+        if (!cell || !cell.editor) {
+            return;
+        }
+        try {
+            const editor = cell.editor;
+            const view = editor.editor;
+            if (!view) {
+                return;
+            }
+            // Get current cursor position
+            const state = view.state;
+            const selection = state.selection;
+            const cursorPos = selection.main.head;
+            // Insert newline and message content at cursor position
+            const transaction = state.update({
+                changes: {
+                    from: cursorPos,
+                    insert: `\n${text}`
+                },
+                selection: { anchor: cursorPos + text.length + 1 }
+            });
+            view.dispatch(transaction);
+        }
+        catch (error) {
+            console.error('Error adding message to cell:', error);
         }
     }
     /**
@@ -1195,4 +1326,4 @@ exports.SimpleSidebarWidget = SimpleSidebarWidget;
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.d170977952822d4437b3.js.map
+//# sourceMappingURL=lib_index_js.6b84ca5631e0388af0f3.js.map
