@@ -8,6 +8,7 @@ import { extensionIcon } from './icons';
 import { globals } from './globals';
 import { ApiClient } from './api-client';
 import { configureMarked, preprocessMarkdown } from './markdown-config';
+import { ICellContext } from './types';
 // import { ICellContext } from './types';
 
 // Configure marked with our settings
@@ -78,6 +79,59 @@ export class SimpleSidebarWidget extends Widget {
 
     this.node.appendChild(this.createLayout());
     this.node.appendChild(this.commandMenuContainer);
+
+    // Add keyboard shortcut listener
+    document.addEventListener('keydown', this.handleKeyDown);
+  }
+
+  /**
+   * Handles keyboard shortcuts
+   */
+  private handleKeyDown = (event: KeyboardEvent): void => {
+    // Check for Ctrl+I
+    if (event.ctrlKey && event.key === 'i') {
+      event.preventDefault();
+      
+      // Get the current active cell
+      const cell = globals.notebookTracker?.activeCell;
+      if (!cell || !cell.editor) {
+        return;
+      }
+
+      // Get the CodeMirror editor instance
+      const editor = cell.editor;
+      const view = (editor as any).editor;
+      if (!view) {
+        return;
+      }
+
+      // Check if there's a selection
+      const state = view.state;
+      const selection = state.selection;
+      
+      if (!selection.main.empty) {
+        // If there's a selection, use @code
+        const from = selection.main.from;
+        const to = selection.main.to;
+        const selectedText = state.doc.sliceString(from, to);
+        this.inputField.value = `@code\n${selectedText}`;
+      } else {
+        // If no selection, use @cell
+        const cellContext = globals.cellContextTracker?.getCurrentCellContext();
+        if (cellContext) {
+          this.inputField.value = `@cell\n${cellContext.text}`;
+        }
+      }
+    }
+  };
+
+  /**
+   * Disposes all resources
+   */
+  public dispose(): void {
+    // Remove keyboard shortcut listener
+    document.removeEventListener('keydown', this.handleKeyDown);
+    super.dispose();
   }
 
   /**
