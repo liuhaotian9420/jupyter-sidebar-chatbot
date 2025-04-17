@@ -6,6 +6,7 @@ import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { IDocumentManager } from '@jupyterlab/docmanager';
+// import { Transaction } from '@codemirror/state';
 // import { IDisposable } from '@lumino/disposable';
 // Example icon string (base64-encoded SVG)
 const iconSvgStr = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chat-left-text" viewBox="0 0 16 16">' +
@@ -302,9 +303,10 @@ class SimpleSidebarWidget extends Widget {
     }
 }
 // --- Need app and notebookTracker accessible globally or passed differently ---
-// This is a simplification for now. Proper architecture might involve signals/services.
 let app;
 let notebookTracker;
+// --- Track active cell DOM elements with listeners ---
+let activeCellEditorNode = null;
 /**
  * Initialization data for the jupyter-simple-extension extension.
  */
@@ -312,17 +314,11 @@ const plugin = {
     id: 'jupyter-simple-extension:plugin',
     autoStart: true,
     requires: [ILauncher, ICommandPalette, INotebookTracker, IDocumentManager],
-    activate: (_app, // Rename to avoid shadowing global 'app'
-    launcher, palette, _notebookTracker, // Rename to avoid shadowing global
-    docManager // Inject IDocumentManager
-    ) => {
+    activate: (_app, launcher, palette, _notebookTracker, docManager) => {
         console.log('JupyterLab extension jupyter-simple-extension is activated!');
-        // Assign to module-level variables (simplification)
         app = _app;
         notebookTracker = _notebookTracker;
-        // Pass docManager to the widget constructor
         const sidebarWidget = new SimpleSidebarWidget(docManager);
-        // Add the sidebar widget to the left area on startup
         app.shell.add(sidebarWidget, 'left', { rank: 9999 });
         // Add a command to toggle the sidebar
         app.commands.addCommand('simple-extension:toggle-sidebar', {
@@ -348,102 +344,117 @@ const plugin = {
             category: 'Other',
             rank: 9999
         });
-        // --- Variable to hold the disposable listener for cursor activity ---
-        // let cursorListener: IDisposable | null = null; // Remove for now
-        // --- Variable to hold the disposable listener for model changes ---
-        // let modelChangedListener: IDisposable | null = null; // Remove for now
-        // --- Function to log cursor context ---
-        const logCursorContext = (editor) => {
-            // Keep the 'any' cast for now until types are certain
+        // --- Function to log cursor context from CodeMirror EditorView ---
+        const logCmContext = (view) => {
             try {
-                const position = editor.getCursorPosition();
-                const offset = editor.getOffsetAt(position);
-                const fullText = editor.model.value.get();
+                const state = view.state;
+                const offset = state.selection.main.head;
+                const fullText = state.doc.toString();
+                const line = state.doc.lineAt(offset);
+                const position = { line: line.number - 1, column: offset - line.from }; // Calculate approx line/col
                 const contextRadius = 100;
                 const start = Math.max(0, offset - contextRadius);
                 const end = Math.min(fullText.length, offset + contextRadius);
                 const contextBefore = fullText.substring(start, offset);
                 const contextAfter = fullText.substring(offset, end);
-                console.log('--- Cursor Context ---');
-                console.log('Position:', position);
+                console.log('--- CM Cursor Context ---');
+                console.log('Position (approx):', position);
                 console.log('Offset:', offset);
                 console.log('Before:', contextBefore);
                 console.log('After:', contextAfter);
-                console.log('--------------------');
+                console.log('-----------------------');
             }
             catch (error) {
-                console.error("Error in logCursorContext:", error);
-                console.log("Editor object during error:", editor); // Log editor on error
+                console.error("Error in logCmContext:", error);
+                console.log("EditorView object during error:", view);
             }
         };
-        // --- Minimal listener for active cell changes (for logging) ---
-        notebookTracker.activeCellChanged.connect((tracker, cell) => {
-            if (cell) {
-                console.log(`Active cell changed to: Cell Type = ${cell.model.type}, Editor = ${cell.editor ? 'Exists' : 'None'}`);
+        // --- Function to remove event listeners from previous active cell ---
+        const cleanupPreviousListeners = () => {
+            if (activeCellEditorNode) {
+                console.log("Removing event listeners from previous cell editor node.");
+                // Remove both keydown and mouseup listeners
+                activeCellEditorNode.removeEventListener('keydown', handleEditorEvent);
+                activeCellEditorNode.removeEventListener('mouseup', handleEditorEvent);
+                activeCellEditorNode = null;
             }
-            else {
-                console.log("Active cell changed to: None");
+        };
+        // --- Event handler for keypresses and mouse events ---
+        const handleEditorEvent = (event) => {
+            try {
+                console.log(`Editor ${event.type} event detected`);
+                // Get the current active cell from the tracker
+                const cell = notebookTracker.activeCell;
+                if (!cell || !cell.editor)
+                    return;
+                // Find the inner EditorView instance
+                const editor = cell.editor;
+                const view = editor.editor;
+                if (!view) {
+                    console.warn("Could not access inner EditorView in event handler");
+                    return;
+                }
+                // Log the cursor context
+                logCmContext(view);
             }
-            // We no longer try to attach listeners here
-        });
-        // Wait for the application to be started before connecting selectionChanged
-        app.started.then(() => {
-            console.log("App started, connecting notebookTracker.currentChanged listener.");
-            // --- Listener for current notebook changes (for inspection) ---
-            notebookTracker.currentChanged.connect((tracker, panel) => {
-                console.log("Notebook current widget changed.");
-                // --- Clean up previous listeners (placeholder if we add back listeners) ---
-                // --- End Cleanup ---
-                if (panel && panel.content) {
-                    // Get the currently active cell from the current panel
-                    const cell = panel.content.activeCell;
-                    if (cell && cell.editor) {
-                        const editor = cell.editor;
-                        console.log("Current notebook changed, active cell has editor. Logging editor object:");
-                        console.log(editor); // Log the editor object
-                        // --- Attempt direct inspection/interaction (Hypothetical) ---
-                        try {
-                            // Is there an inner 'editor'?
-                            if (editor.editor) {
-                                console.log("Found inner editor property:", editor.editor);
-                                // Try attaching directly if it looks like CodeMirror
-                                if (typeof editor.editor.on === 'function') {
-                                    console.log("Inner editor has .on method (likely CodeMirror). Trying to attach 'cursorActivity'.");
-                                    // Note: We might need to properly manage the detachment of this listener later
-                                    editor.editor.on('cursorActivity', (cmInstance) => {
-                                        console.log("Underlying editor cursorActivity triggered.");
-                                        // For now, just log that it triggered
-                                    });
-                                }
-                                else {
-                                    console.log("Inner editor does not have .on method.");
-                                }
-                            }
-                            else {
-                                console.log("No inner 'editor' property found.");
-                            }
-                            // Can we call logCursorContext immediately? Does it work here?
-                            console.log("Attempting immediate context log in currentChanged:");
-                            logCursorContext(editor);
+            catch (error) {
+                console.error("Error in editor event handler:", error);
+            }
+        };
+        // --- Setup event listeners on active cell ---
+        const setupCellListeners = (cell) => {
+            if (!cell)
+                return;
+            // Clean up previous listeners
+            cleanupPreviousListeners();
+            if (cell.editor) {
+                try {
+                    // Find editor DOM node - typically has class jp-Editor or CodeMirrorEditor
+                    const cellNode = cell.node;
+                    const editorNode = cellNode.querySelector('.jp-Editor') ||
+                        cellNode.querySelector('.jp-InputArea-editor');
+                    if (editorNode) {
+                        console.log("Found editor DOM node, attaching event listeners");
+                        // Store reference to active editor node
+                        activeCellEditorNode = editorNode;
+                        // Add event listeners for key and mouse events
+                        editorNode.addEventListener('keydown', handleEditorEvent);
+                        editorNode.addEventListener('mouseup', handleEditorEvent);
+                        // Try to log immediate context if EditorView available
+                        const view = cell.editor.editor;
+                        if (view) {
+                            console.log("Logging initial context after setting up listeners:");
+                            logCmContext(view);
                         }
-                        catch (e) {
-                            console.error("Error during editor inspection/interaction:", e);
-                        }
-                        // --- End Inspection ---
-                    }
-                    else if (cell) {
-                        console.log("Current notebook changed, active cell found but no editor.");
                     }
                     else {
-                        console.log("Current notebook changed, but no active cell found in the panel.");
+                        console.warn("Could not find editor DOM node in cell");
                     }
                 }
-                else {
-                    console.log("Current notebook changed to null or panel has no content.");
+                catch (error) {
+                    console.error("Error setting up cell listeners:", error);
+                }
+            }
+        };
+        // --- Minimal listener for active cell changes (to attach DOM listeners) ---
+        notebookTracker.activeCellChanged.connect((tracker, cell) => {
+            console.log(`Active cell changed, setting up event listeners...`);
+            setupCellListeners(cell);
+        });
+        // --- Wait for app to start, then handle current notebook changes ---
+        app.started.then(() => {
+            console.log("App started, connecting notebookTracker.currentChanged listener.");
+            notebookTracker.currentChanged.connect((tracker, panel) => {
+                console.log("Notebook current widget changed.");
+                // Clean up previous listeners
+                cleanupPreviousListeners();
+                if (panel && panel.content) {
+                    const cell = panel.content.activeCell;
+                    console.log("Setting up listeners for initial active cell in new notebook");
+                    setupCellListeners(cell);
                 }
             });
-            // --- End listener setup ---
         });
-    }
-};
+    } // End activate function
+}; // End plugin object definition
 export default plugin;

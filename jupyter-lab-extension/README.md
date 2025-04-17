@@ -1,49 +1,75 @@
-# jupyter-simple-extension
+# Jupyter AI Assistant Extension
 
-A simple JupyterLab extension that adds a launcher item. When clicked, it displays a dialog with a greeting message.
+A modular JupyterLab extension that provides an AI chat interface with cell context tracking.
 
-## Prerequisites
+## Features
 
-* JupyterLab >= 4.0.0
+- Chat interface with markdown support
+- Cell context tracking
+- Directory listing
+- Modular architecture for extensibility
 
-## Installation
+## Project Structure
 
-```bash
-pip install jupyter-simple-extension
+The extension is organized into modular components:
+
+```
+jupyter-lab-extension/
+├── src/
+│   ├── index.ts               # Main entry point
+│   ├── icons.ts               # Icon definitions
+│   ├── types.ts               # Type definitions
+│   ├── globals.ts             # Global state management
+│   ├── cell-context-tracker.ts # Cell context tracking
+│   ├── sidebar-widget.ts      # Chat sidebar UI
+│   └── commands.ts            # Command registrations
+├── style/
+│   └── index.css              # Stylesheet
+└── package.json               # Package configuration
 ```
 
 ## Development
 
-### Development install
-
-Note: You will need NodeJS to build the extension package.
+### Installation
 
 ```bash
-# Clone the repo to your local environment
-# Install package in development mode
-pip install -e .
+# Install dependencies
+jlpm
 
-# Link your development version of the extension with JupyterLab
-jupyter labextension develop . --overwrite
+# Build the extension
+jlpm build
 
-# Rebuild extension Typescript source after making changes
-jlpm run build
+# Install the extension for development
+jupyter labextension install . --no-build
+
+# Watch source for changes
+jlpm watch
 ```
 
-You can watch the source directory and run JupyterLab at the same time in different terminals to see your changes reflected in JupyterLab automatically:
+### Building
 
 ```bash
-# Watch the source directory in one terminal, automatically rebuilding when needed
-jlpm run watch
+# Build the extension
+jlpm build
+
+# Rebuild on changes
+jlpm watch
 ```
 
-```bash
-# Run JupyterLab in another terminal
-jupyter lab
-```
+## Extension Points
 
-### Uninstall
+The modular architecture allows for easy extension:
 
-```bash
-pip uninstall jupyter-simple-extension
-``` 
+1. `globals.ts` - Shared state across components
+2. `cell-context-tracker.ts` - Tracks cell content and cursor position
+3. `sidebar-widget.ts` - Main UI component
+
+To add a new feature, create a dedicated module and integrate it with the existing components.
+
+## Backend Integration
+
+This extension is designed to connect to a FastAPI backend service for LLM integration, as described in PROJECT.md. Future work will include:
+
+1. API client module for backend communication
+2. Sidecar kernel execution
+3. LLM-powered code assistance 

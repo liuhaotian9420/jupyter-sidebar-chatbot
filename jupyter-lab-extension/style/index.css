@@ -119,4 +119,94 @@
 
 .markdown-content img {
   max-width: 100%;
+}
+
+/* Message container styles */
+.message-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 10px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* User message styles */
+.user-message {
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 5px;
+  max-width: 80%;
+  word-wrap: break-word;
+  background-color: #e3f2fd;
+  margin-left: auto;
+}
+
+/* Bot message styles */
+.bot-message {
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 5px;
+  max-width: 80%;
+  word-wrap: break-word;
+  background-color: #f5f5f5;
+  margin-right: auto;
+}
+
+/* Markdown indicator styles */
+.markdown-indicator {
+  font-size: 9px;
+  color: #666;
+  text-align: right;
+}
+
+/* Simple sidebar content */
+.simple-sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Input container styles */
+.input-container {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 5px;
+}
+
+/* Control container styles */
+.controls-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+/* Toggle container styles */
+.toggle-container {
+  display: flex;
+  align-items: center;
+}
+
+/* Action buttons container */
+.action-buttons-container {
+  display: flex;
+  gap: 2px;
+}
+
+/* Action button styles */
+.action-button {
+  margin: 0 2px;
+  padding: 2px 8px;
+}
+
+/* Input actions container */
+.input-actions-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 5px;
+}
+
+/* Send button styles */
+.send-button {
+  padding: 5px 10px;
 } 
