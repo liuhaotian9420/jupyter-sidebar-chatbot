@@ -1,4 +1,3 @@
-<<<<<<< README.md
 # Jupyter LLM 扩展
 
 Jupyter LLM 扩展是一个为 Jupyter Notebook 和 JupyterLab 开发的辅助应用程序，可以提供 AI 辅助的代码分析和执行功能。
@@ -22,57 +21,59 @@ Jupyter LLM 扩展是一个为 Jupyter Notebook 和 JupyterLab 开发的辅助�
 2. **后端服务**：处理 LLM 调用和代码执行
 3. **IPython 内核**：执行用户代码的隔离环境
 
-## 安装指南
+## 当前进展
 
-### 使用 uv 安装环境
-
-我们使用 uv 来管理项目环境，它提供了更快的依赖解析和虚拟环境管理。环境设置脚本使用清华大学PyPI镜像源（https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple）来加速包的下载和安装。
-
-#### Windows 用户
-
-```powershell
-# 安装环境
-.\setup_env.ps1
-
-# 激活环境
-.\.venv\Scripts\Activate.ps1
-```
-
-#### Linux/MacOS 用户
-
-```bash
-# 安装环境
-chmod +x setup_env.sh
-./setup_env.sh
-
-# 激活环境
-source .venv/bin/activate
-```
-
-### 启动应用程序
-
-```bash
-# 同时启动 Jupyter 和辅助应用
-python launch.py
-
-# 或者指定 Jupyter 类型和端口
-python launch.py --jupyter lab --jupyter-port 8889 --sidecar-port 8001
-```
+- [x] 完成项目架构设计和文档
+- [x] 实现 JupyterLab 扩展基础框架
+- [x] 添加侧边栏聊天界面
+- [ ] 开发后端服务
+- [ ] 集成 LLM 服务
+- [ ] 实现代码执行功能
 
 ## 项目结构
 
 ```
 jupyter-llm-ext/
-├── backend/         # 后端服务代码
-│   └── src/         # 源代码
-├── extension/       # Jupyter 扩展代码
-├── examples/        # 示例 notebook
-├── tests/           # 测试代码
-├── requirements.txt # 依赖管理
-├── setup.py         # 安装脚本
-├── setup_env.ps1    # Windows 环境设置脚本
-├── setup_env.sh     # Unix 环境设置脚本
-└── launch.py        # 启动脚本
+├── backend/         # 后端服务代码（开发中）
+│   └── src/         # 源代码目录
+├── jupyter-lab-extension/  # 前端扩展
+│   ├── src/         # TypeScript 源代码
+│   ├── style/       # CSS 样式
+│   └── package.json # Node.js 依赖
+├── PROJECT.md       # 英文项目文档
+└── README.md        # 中文文档
+```
+
+## 开发环境设置
+
+### 安装依赖
+
+```bash
+# 安装 Node.js 依赖
+cd jupyter-lab-extension
+npm install
+
+# 安装 Python 依赖
+cd ..
+pip install -r requirements.txt
+```
+
+### 开发 JupyterLab 扩展
+
+```bash
+# 在 jupyter-lab-extension 目录下
+npm run build
+jupyter labextension install .
+```
+
+### 启动开发服务器
+
+```bash
+# 启动 JupyterLab
+jupyter lab
+
+# 启动后端服务（开发中）
+python backend/src/app.py
 ```
 
 ## 开发指南
@@ -98,4 +99,3 @@ pytest tests/test_kernel_manager.py
 ## 许可证
 
 本项目采用 MIT 许可证。详情请参阅 LICENSE 文件。
-
