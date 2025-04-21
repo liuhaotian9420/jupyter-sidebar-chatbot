@@ -609,7 +609,7 @@ __metadata:
     handlebars: ^4.7.8
     html-loader: ~1.3.0
     html-webpack-plugin: ^5.5.0
-    jupyter-simple-extension: "file:../extensions/jupyter-simple-extension-0.1.0-90dc1a5fbcb7ca4fe8a872afc55f17d9658b8a2d.tgz"
+    jupyter-simple-extension: "file:../extensions/jupyter-simple-extension-0.1.0-f871b23bb8ae102be953b098f52fc740d1db4d02.tgz"
     license-webpack-plugin: ^4.0.2
     mini-css-extract-plugin: ^2.7.0
     mini-svg-data-uri: ^1.4.4
@@ -7740,16 +7740,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jupyter-simple-extension@file:C:\\Users\\11459\\Documents\\GitHub\\jupyter-llm-ext\\.venv\\share\\jupyter\\lab\\extensions\\jupyter-simple-extension-0.1.0-90dc1a5fbcb7ca4fe8a872afc55f17d9658b8a2d.tgz::locator=%40jupyterlab%2Fapplication-top%40workspace%3A.":
+"jupyter-simple-extension@file:C:\\Users\\11459\\Documents\\GitHub\\jupyter-llm-ext\\.venv\\share\\jupyter\\lab\\extensions\\jupyter-simple-extension-0.1.0-f871b23bb8ae102be953b098f52fc740d1db4d02.tgz::locator=%40jupyterlab%2Fapplication-top%40workspace%3A.":
   version: 0.1.0
-  resolution: "jupyter-simple-extension@file:/C:/Users/11459/Documents/GitHub/jupyter-llm-ext/.venv/share/jupyter/lab/extensions/jupyter-simple-extension-0.1.0-90dc1a5fbcb7ca4fe8a872afc55f17d9658b8a2d.tgz::locator=%40jupyterlab%2Fapplication-top%40workspace%3A."
+  resolution: "jupyter-simple-extension@file:/C:/Users/11459/Documents/GitHub/jupyter-llm-ext/.venv/share/jupyter/lab/extensions/jupyter-simple-extension-0.1.0-f871b23bb8ae102be953b098f52fc740d1db4d02.tgz::locator=%40jupyterlab%2Fapplication-top%40workspace%3A."
   dependencies:
     "@jupyterlab/application": ^4.4.0
     "@jupyterlab/launcher": ^4.4.0
     "@jupyterlab/ui-components": ^4.4.0
     dompurify: ^3.2.5
     marked: ^15.0.8
-  checksum: 9722212b77d4d726da8386f0a32d48d6fd3e535423094e44d5c3ab4f6b0b8a4de6f5f815886aa7eb8cc292a9f417020b5ef9bc716d3a9159574dc1e3c1c255c7
+  checksum: c89c5f8b59ada2a83d31c5b53f749831c515c302493f08213e9a2e49c4e6931aad0401b8409ea2a15a7b5bea3de1aec933ee24e98df4e61b1071b3c4811ced1e
   languageName: node
   linkType: hard
 

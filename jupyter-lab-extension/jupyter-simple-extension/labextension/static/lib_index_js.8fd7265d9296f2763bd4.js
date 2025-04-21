@@ -935,23 +935,21 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                     const actionsDiv = document.createElement('div');
                     actionsDiv.className = 'message-actions';
                     actionsDiv.style.display = 'flex'; // Ensure display is set
-                    // Copy button
+                    // Copy button with icon
                     const copyButton = document.createElement('button');
                     copyButton.className = 'message-action-button';
-                    copyButton.textContent = 'Copy';
+                    copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
                     copyButton.title = 'Copy message to clipboard';
-                    copyButton.style.display = 'block'; // Ensure button is visible
                     copyButton.addEventListener('click', (event) => {
                         event.stopPropagation();
                         this.copyMessageToClipboard(completeResponse);
                     });
                     actionsDiv.appendChild(copyButton);
-                    // Add to button
+                    // Add to button with icon
                     const addToButton = document.createElement('button');
                     addToButton.className = 'message-action-button';
-                    addToButton.textContent = 'Add to';
+                    addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
                     addToButton.title = 'Add message to current cell';
-                    addToButton.style.display = 'block'; // Ensure button is visible
                     addToButton.addEventListener('click', (event) => {
                         event.stopPropagation();
                         this.addMessageToCell(completeResponse);
@@ -1027,24 +1025,21 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 console.log('Adding action buttons to bot message'); // Debug log
                 const actionsDiv = document.createElement('div');
                 actionsDiv.className = 'message-actions';
-                actionsDiv.style.display = 'flex'; // Ensure display is set
-                // Copy button
+                // Copy button with icon
                 const copyButton = document.createElement('button');
                 copyButton.className = 'message-action-button';
-                copyButton.textContent = 'Copy';
+                copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
                 copyButton.title = 'Copy message to clipboard';
-                copyButton.style.display = 'block'; // Ensure button is visible
                 copyButton.addEventListener('click', (event) => {
                     event.stopPropagation();
                     this.copyMessageToClipboard(text);
                 });
                 actionsDiv.appendChild(copyButton);
-                // Add to button
+                // Add to button with icon
                 const addToButton = document.createElement('button');
                 addToButton.className = 'message-action-button';
-                addToButton.textContent = 'Add to';
+                addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
                 addToButton.title = 'Add message to current cell';
-                addToButton.style.display = 'block'; // Ensure button is visible
                 addToButton.addEventListener('click', (event) => {
                     event.stopPropagation();
                     this.addMessageToCell(text);
@@ -1084,19 +1079,17 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 let clickedButton = null;
                 for (let i = 0; i < buttons.length; i++) {
                     const button = buttons[i];
-                    if (button.textContent === 'Copy') {
-                        if (button === document.activeElement) {
-                            clickedButton = button;
-                            break;
-                        }
+                    if (button.title === 'Copy message to clipboard' && button === document.activeElement) {
+                        clickedButton = button;
+                        break;
                     }
                 }
                 // Show visual feedback if we found the button
                 if (clickedButton) {
-                    const originalText = clickedButton.textContent;
-                    clickedButton.textContent = 'Copied!';
+                    const originalHTML = clickedButton.innerHTML;
+                    clickedButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>';
                     setTimeout(() => {
-                        clickedButton.textContent = originalText;
+                        clickedButton.innerHTML = originalHTML;
                     }, 2000);
                 }
             }).catch(err => {
@@ -1326,4 +1319,4 @@ exports.SimpleSidebarWidget = SimpleSidebarWidget;
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.6b84ca5631e0388af0f3.js.map
+//# sourceMappingURL=lib_index_js.8fd7265d9296f2763bd4.js.map
