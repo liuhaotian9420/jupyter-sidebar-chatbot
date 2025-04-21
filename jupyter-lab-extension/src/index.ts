@@ -14,6 +14,9 @@ import { registerCommands } from './commands';
 import { CellContextTracker } from './cell-context-tracker';
 // import { ApiClient } from './api-client';
 
+// Import the main CSS file
+import '../style/index.css';
+
 // Export ApiClient for use by other components
 export { ApiClient } from './api-client';
 

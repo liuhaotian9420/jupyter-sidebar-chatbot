@@ -1,13 +1,12 @@
 import { Widget } from '@lumino/widgets';
-import { Message } from '@lumino/messaging';
 import { IDocumentManager } from '@jupyterlab/docmanager';
-import { NotebookPanel } from '@jupyterlab/notebook';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { extensionIcon } from './icons';
 import { globals } from './globals';
 import { ApiClient } from './api-client';
 import { configureMarked, preprocessMarkdown } from './markdown-config';
+import { PopupMenuManager } from './popup-menu-manager';
 
 // Configure marked with our settings
 configureMarked();
@@ -41,15 +40,9 @@ export class SimpleSidebarWidget extends Widget {
   private isHistoryViewActive: boolean = false;
   private historyContainer: HTMLDivElement;
   private apiClient: ApiClient;
-  private popupMenuContainer: HTMLDivElement;
   private keyboardShortcutIndicator: HTMLDivElement;
   private settingsModalContainer: HTMLDivElement;
-  private currentNotebook: NotebookPanel | null = null;
-
-  // Menu navigation state
-  private currentMenuLevel: 'top' | 'files' | 'directories' = 'top';
-  private currentMenuPath: string = '';
-  private menuHistory: { level: 'top' | 'files' | 'directories', path: string }[] = [];
+  private popupMenuManager: PopupMenuManager;
 
   constructor(docManager: IDocumentManager) {
     super();
@@ -60,19 +53,11 @@ export class SimpleSidebarWidget extends Widget {
     this.title.icon = extensionIcon;
     this.title.closable = true;
     
+    // Add the main CSS class for styling
+    this.addClass('jp-llm-ext-sidebar');
+
     // Initialize API client
     this.apiClient = new ApiClient();
-
-    // Track the current notebook
-    if (globals.notebookTracker) {
-      // Set initial notebook if one is active
-      this.currentNotebook = globals.notebookTracker.currentWidget;
-      
-      // Update currentNotebook when the active notebook changes
-      globals.notebookTracker.currentChanged.connect((_, notebook) => {
-        this.currentNotebook = notebook;
-      });
-    }
 
     // Initialize container elements before creating layout
     this.messageContainer = document.createElement('div');
@@ -80,18 +65,23 @@ export class SimpleSidebarWidget extends Widget {
     this.inputField = document.createElement('textarea');
     this.titleInput = document.createElement('input');
     this.historyContainer = document.createElement('div');
-    this.popupMenuContainer = document.createElement('div');
-    this.popupMenuContainer.className = 'jp-llm-ext-popup-menu-container'; // Renamed class
-    this.popupMenuContainer.style.display = 'none'; // Hidden by default
-
-    // Create keyboard shortcut indicator
     this.keyboardShortcutIndicator = document.createElement('div');
-    this.keyboardShortcutIndicator.className = 'keyboard-shortcut-indicator';
-    document.body.appendChild(this.keyboardShortcutIndicator);
+    this.keyboardShortcutIndicator.className = 'jp-llm-ext-keyboard-shortcut-indicator';
+    this.node.appendChild(this.keyboardShortcutIndicator);
 
     // Create settings modal
     this.settingsModalContainer = this.createSettingsModal();
     this.node.appendChild(this.settingsModalContainer);
+
+    // Instantiate the PopupMenuManager with callbacks
+    this.popupMenuManager = new PopupMenuManager(this.docManager, this.node, {
+        insertCode: (code: string) => this.appendToInput(`@code\n${code}`),
+        insertCell: (content: string) => this.appendToInput(`@cell\n${content}`),
+        insertFilePath: (path: string) => this.appendToInput(`@file\n${path}`),
+        insertDirectoryPath: (path: string) => this.appendToInput(`@directory\n${path}`), // If needed
+        getSelectedText: () => this.getSelectedText(),
+        getCurrentCellContent: () => this.getCurrentCellContent(),
+    });
 
     // Create a new chat on start
     this.createNewChat();
@@ -181,6 +171,10 @@ export class SimpleSidebarWidget extends Widget {
     if (this.keyboardShortcutIndicator.parentNode) {
       this.keyboardShortcutIndicator.parentNode.removeChild(this.keyboardShortcutIndicator);
     }
+    // Dispose the popup menu manager
+    if (this.popupMenuManager) {
+      this.popupMenuManager.dispose();
+    }
     super.dispose();
   }
 
@@ -189,15 +183,17 @@ export class SimpleSidebarWidget extends Widget {
    */
   private createLayout(): HTMLElement {
     // Create the main container
-    const content = document.createElement('div');
-    content.className = 'simple-sidebar-content';
+    const mainContent = document.createElement('div');
+    // The main class 'jp-llm-ext-sidebar' is added to this.node in the constructor
+    // This container can have its own class if needed for further nesting/styling
+    mainContent.className = 'jp-llm-ext-content-wrapper';
 
     // Create title input container
     const titleContainer = document.createElement('div');
-    titleContainer.className = 'title-container';
+    titleContainer.className = 'jp-llm-ext-title-container';
     
     // Set up title input
-    this.titleInput.className = 'chat-title-input';
+    this.titleInput.className = 'chat-title-input'; // Assuming this is styled correctly in CSS
     this.titleInput.type = 'text';
     this.titleInput.placeholder = 'Chat title';
     this.titleInput.value = 'New Chat';
@@ -207,16 +203,16 @@ export class SimpleSidebarWidget extends Widget {
 
     // Configure top action buttons (New Chat & History)
     const topActionsContainer = document.createElement('div');
-    topActionsContainer.className = 'top-actions-container';
+    topActionsContainer.className = 'jp-llm-ext-top-actions-container';
     
     const newChatButton = document.createElement('button');
-    newChatButton.className = 'jp-Button action-button';
+    newChatButton.className = 'jp-Button jp-llm-ext-action-button';
     newChatButton.textContent = '+ New Chat';
     newChatButton.title = 'Start a new chat';
     newChatButton.addEventListener('click', () => this.createNewChat());
     
     const historyButton = document.createElement('button');
-    historyButton.className = 'jp-Button action-button';
+    historyButton.className = 'jp-Button jp-llm-ext-action-button';
     historyButton.textContent = 'History';
     historyButton.title = 'View chat history';
     historyButton.addEventListener('click', () => this.toggleHistoryView());
@@ -225,14 +221,14 @@ export class SimpleSidebarWidget extends Widget {
     topActionsContainer.appendChild(historyButton);
 
     // Configure message container
-    this.messageContainer.className = 'message-container';
+    this.messageContainer.className = 'jp-llm-ext-message-container';
 
     // Configure history container
-    this.historyContainer.className = 'history-container';
+    this.historyContainer.className = 'jp-llm-ext-history-container';
     this.historyContainer.style.display = 'none'; // Initially hidden
 
     // Configure input container
-    this.inputContainer.className = 'input-container';
+    this.inputContainer.className = 'jp-llm-ext-input-container';
 
     // Create controls container
     const controlsContainer = this.createControlsContainer();
@@ -257,11 +253,11 @@ export class SimpleSidebarWidget extends Widget {
 
     // Create send button container
     const inputActionsContainer = document.createElement('div');
-    inputActionsContainer.className = 'input-actions-container';
+    inputActionsContainer.className = 'jp-llm-ext-input-actions-container';
 
     // Create send button
     const sendButton = document.createElement('button');
-    sendButton.className = 'jp-Button send-button';
+    sendButton.className = 'jp-Button jp-llm-ext-send-button';
     sendButton.textContent = 'Send';
     sendButton.addEventListener('click', () => this.handleSendMessage());
 
@@ -274,13 +270,13 @@ export class SimpleSidebarWidget extends Widget {
     this.inputContainer.appendChild(inputActionsContainer);
 
     // Assemble all components
-    content.appendChild(topActionsContainer);
-    content.appendChild(titleContainer);
-    content.appendChild(this.messageContainer);
-    content.appendChild(this.historyContainer);
-    content.appendChild(this.inputContainer);
+    mainContent.appendChild(topActionsContainer);
+    mainContent.appendChild(titleContainer);
+    mainContent.appendChild(this.messageContainer);
+    mainContent.appendChild(this.historyContainer);
+    mainContent.appendChild(this.inputContainer);
     
-    return content;
+    return mainContent;
   }
 
   /**
@@ -349,7 +345,7 @@ export class SimpleSidebarWidget extends Widget {
     
     if (this.chatHistory.length === 0) {
       const emptyMessage = document.createElement('div');
-      emptyMessage.className = 'empty-history-message';
+      emptyMessage.className = 'jp-llm-ext-empty-history-message';
       emptyMessage.textContent = 'No chat history yet';
       this.historyContainer.appendChild(emptyMessage);
       return;
@@ -358,19 +354,19 @@ export class SimpleSidebarWidget extends Widget {
     // Create a list of chat history items
     this.chatHistory.forEach(chat => {
       const historyItem = document.createElement('div');
-      historyItem.className = 'history-item';
+      historyItem.className = 'jp-llm-ext-history-item';
       if (chat.id === this.currentChatId) {
-        historyItem.classList.add('active');
+        historyItem.classList.add('jp-llm-ext-active');
       }
       
       // Add title
       const title = document.createElement('div');
-      title.className = 'history-title';
+      title.className = 'jp-llm-ext-history-title';
       title.textContent = chat.title;
       
       // Add message preview
       const preview = document.createElement('div');
-      preview.className = 'history-preview';
+      preview.className = 'jp-llm-ext-history-preview';
       const lastMessage = chat.messages[chat.messages.length - 1];
       preview.textContent = lastMessage 
         ? `${lastMessage.text.substring(0, 40)}${lastMessage.text.length > 40 ? '...' : ''}`
@@ -425,11 +421,11 @@ export class SimpleSidebarWidget extends Widget {
    */
   private createControlsContainer(): HTMLElement {
     const controlsContainer = document.createElement('div');
-    controlsContainer.className = 'controls-container';
+    controlsContainer.className = 'jp-llm-ext-controls-container';
 
     // Create markdown toggle container
     const toggleContainer = document.createElement('div');
-    toggleContainer.className = 'toggle-container';
+    toggleContainer.className = 'jp-llm-ext-toggle-container';
 
     // Create markdown toggle
     const markdownToggle = document.createElement('input');
@@ -456,18 +452,21 @@ export class SimpleSidebarWidget extends Widget {
 
     // Create action buttons container
     const actionButtonsContainer = document.createElement('div');
-    actionButtonsContainer.className = 'action-buttons-container';
+    actionButtonsContainer.className = 'jp-llm-ext-action-buttons-container';
 
     // Create all action buttons
     const buttons = [
       { 
         text: '@', 
-        title: 'Command list', 
+        title: 'Insert context (@)', 
         action: (event: MouseEvent) => {
+          // Get the button's position
+          const targetButton = event.currentTarget as HTMLElement;
+          const rect = targetButton.getBoundingClientRect();
+          // Show the popup menu using the manager (now async)
+          this.popupMenuManager.showPopupMenu(rect.left, rect.bottom);
           event.preventDefault();
           event.stopPropagation();
-          const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-          this.showPopupMenu(rect.left, rect.bottom);
         }
       },
       { text: '⤢', title: 'Expand input', action: () => this.toggleInputExpansion(actionButtonsContainer.children[3] as HTMLButtonElement) },
@@ -513,7 +512,7 @@ export class SimpleSidebarWidget extends Widget {
     const button = document.createElement('button');
     button.textContent = text;
     button.title = tooltip;
-    button.className = 'jp-Button action-button';
+    button.className = 'jp-Button jp-llm-ext-action-button';
     return button;
   }
 
@@ -537,7 +536,7 @@ export class SimpleSidebarWidget extends Widget {
 
       // Create a temporary message container for the bot's streaming response
       const botMessageDiv = document.createElement('div');
-      botMessageDiv.className = 'bot-message';
+      botMessageDiv.className = 'jp-llm-ext-bot-message';
       
       const markdownIndicator = document.createElement('div');
       markdownIndicator.textContent = "MD";
@@ -604,12 +603,12 @@ export class SimpleSidebarWidget extends Widget {
             // Add action buttons to the bot message
             console.log('Adding action buttons to streamed bot message');
             const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'message-actions';
+            actionsDiv.className = 'jp-llm-ext-message-actions';
             actionsDiv.style.display = 'flex'; // Ensure display is set
 
             // Copy button with icon
             const copyButton = document.createElement('button');
-            copyButton.className = 'message-action-button';
+            copyButton.className = 'jp-llm-ext-message-action-button';
             copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
             copyButton.title = 'Copy message to clipboard';
             copyButton.addEventListener('click', (event) => {
@@ -620,7 +619,7 @@ export class SimpleSidebarWidget extends Widget {
 
             // Add to button with icon
             const addToButton = document.createElement('button');
-            addToButton.className = 'message-action-button';
+            addToButton.className = 'jp-llm-ext-message-action-button';
             addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
             addToButton.title = 'Add message to current cell';
             addToButton.addEventListener('click', (event) => {
@@ -668,7 +667,7 @@ export class SimpleSidebarWidget extends Widget {
     console.log('Adding message:', { sender, isMarkdown }); // Debug log
 
     const messageDiv = document.createElement('div');
-    messageDiv.className = sender === 'user' ? 'user-message' : 'bot-message';
+    messageDiv.className = sender === 'user' ? 'jp-llm-ext-user-message' : 'jp-llm-ext-bot-message';
 
     // Add message content
     if (isMarkdown || sender === 'bot') {
@@ -709,11 +708,11 @@ export class SimpleSidebarWidget extends Widget {
         console.log('Adding action buttons to bot message'); // Debug log
         
         const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'message-actions';
+        actionsDiv.className = 'jp-llm-ext-message-actions';
         
         // Copy button with icon
         const copyButton = document.createElement('button');
-        copyButton.className = 'message-action-button';
+        copyButton.className = 'jp-llm-ext-message-action-button';
         copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
         copyButton.title = 'Copy message to clipboard';
         copyButton.addEventListener('click', (event) => {
@@ -724,7 +723,7 @@ export class SimpleSidebarWidget extends Widget {
 
         // Add to button with icon
         const addToButton = document.createElement('button');
-        addToButton.className = 'message-action-button';
+        addToButton.className = 'jp-llm-ext-message-action-button';
         addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
         addToButton.title = 'Add message to current cell';
         addToButton.addEventListener('click', (event) => {
@@ -766,7 +765,7 @@ export class SimpleSidebarWidget extends Widget {
         console.log('Content copied to clipboard');
         
         // Find the button element that was clicked
-        const buttons = document.querySelectorAll('.message-action-button');
+        const buttons = document.querySelectorAll('.jp-llm-ext-message-action-button');
         let clickedButton: HTMLButtonElement | null = null;
         
         for (let i = 0; i < buttons.length; i++) {
@@ -830,503 +829,75 @@ export class SimpleSidebarWidget extends Widget {
   }
 
   /**
-   * Lists the contents of the current directory
-   * @param filterType Optional parameter to filter results by type ('all', 'file', or 'directory')
+   * Gets the currently selected text from the active notebook cell.
+   * (Helper for PopupMenuManager callback)
    */
-  async listCurrentDirectoryContents(filterType: 'all' | 'file' | 'directory' = 'all'): Promise<string[] | null> {
-    console.log('LIST DIR: Starting directory listing process...', { filterType });
-    let dirPath: string | null = null;
-    let source = 'unknown';
-
-    const app = globals.app;
-    if (!app) {
-      console.error('LIST DIR: Application reference not available');
-      this.addMessage('Error: Application reference not available', 'bot', false);
-      return null;
-    }
-
-    console.log('LIST DIR: App reference found:', app);
-    console.log('LIST DIR: Current shell widget:', app.shell.currentWidget);
-
-    const currentShellWidget = app.shell.currentWidget;
-    if (currentShellWidget) {
-      console.log('LIST DIR: Current shell widget type:', currentShellWidget.constructor.name);
-      const widgetContext = this.docManager.contextForWidget(currentShellWidget);
-      console.log('LIST DIR: Widget context:', widgetContext);
-      if (widgetContext) {
-        const path = widgetContext.path;
-        console.log('LIST DIR: Widget path:', path);
-        const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-        dirPath = lastSlash === -1 ? '' : path.substring(0, lastSlash);
-        source = 'widget context';
-        console.log(`LIST DIR: Path from widget context: ${dirPath}`);
-      } else {
-        console.log('LIST DIR: Widget context is undefined.');
-      }
-    }
-
-    // Fallback 1: Active Notebook Path
-    if (dirPath === null && this.currentNotebook && this.currentNotebook.context) {
-      console.log('LIST DIR: Trying notebook fallback');
-      const notebookPath = this.currentNotebook.context.path;
-      console.log(`LIST DIR: Raw notebook path: ${notebookPath}`);
-      if (typeof notebookPath === 'string') {
-        // Handle both forward and backslash path separators
-        const lastSlash = Math.max(notebookPath.lastIndexOf('/'), notebookPath.lastIndexOf('\\'));
-        dirPath = lastSlash === -1 ? '' : notebookPath.substring(0, lastSlash);
-        source = 'notebook';
-        console.log(`LIST DIR: Path from notebook context: ${dirPath}`);
-      } else {
-        console.log('LIST DIR: Notebook context path is not a string.');
-      }
-    }
-
-    // Fallback 2: File Browser Current Path
-    if (dirPath === null) {
-      console.log('LIST DIR: Trying file browser fallback');
-      const leftWidgets = Array.from(app.shell.widgets('left'));
-      const fileBrowserWidget = leftWidgets.find(widget => widget.id === 'filebrowser');
-      const fileBrowserModel = (fileBrowserWidget as any)?.model;
-      // Check if the model and path exist
-      if (fileBrowserModel && typeof fileBrowserModel.path === 'string') {
-          const fileBrowserPath = fileBrowserModel.path;
-          dirPath = fileBrowserPath;
-          source = 'file browser';
-          console.log(`LIST DIR: Path from file browser model: ${dirPath}`);
-      } else {
-          console.log('LIST DIR: File browser path not found or model inaccessible.');
-      }
-    }
-
-    // Fallback 3: Server Root
-    if (dirPath === null) {
-      console.log('LIST DIR: Trying server root fallback');
-      // Assuming ContentsManager root is desired. Adjust if needed.
-      dirPath = ''; // Use empty string for server root with ContentsManager
-      source = 'server root';
-    }
-
-    // Final Check and Logging
-    if (dirPath === null) {
-      // This case should ideally not be reached with the server root fallback
-      console.error('LIST DIR: Critical Error - Could not determine directory path after all fallbacks.');
-      // Indicate failure
-      return null;
-    }
-
-    console.log(`LIST DIR: Final directory path: \"${dirPath}\" (Source: ${source})`);
-
-    let normalizedPath = ''; // Declare outside try block
-    try {
-      console.log('LIST DIR: Attempting to list contents for path:', dirPath);
-      normalizedPath = dirPath.replace(/\\/g, '/');
-      console.log('LIST DIR: Normalized path for content manager:', normalizedPath);
-      
-      console.log('LIST DIR: Calling content manager get() with path:', normalizedPath);
-      
-      const contents = await this.docManager.services.contents.get(normalizedPath);
-      console.log('LIST DIR: Contents result:', contents);
-      if (contents.content && Array.isArray(contents.content)) {
-        if (contents.content.length > 0) {
-          const itemNames: string[] = [];
-          contents.content.forEach(item => {
-            // Apply filter based on type
-            if (filterType === 'all' || 
-               (filterType === 'file' && item.type !== 'directory') ||
-               (filterType === 'directory' && item.type === 'directory')) {
-              const icon = item.type === 'directory' ? '📁' : '📄'; // Use icons
-              itemNames.push(`${icon} ${item.name}`); // Collect names with icons
-            }
-          });
-          console.log(`LIST DIR: Successfully listed ${itemNames.length} items (filtered by: ${filterType})`);
-          return itemNames; // Return the list of names
-        } else {
-          console.log('LIST DIR: Directory is empty or not accessible');
-          this.addMessage(`Directory "${normalizedPath || '/'}" is empty or not accessible.`, 'bot', false);
-          return null;
+  private getSelectedText(): string | null {
+    const cell = globals.notebookTracker?.activeCell;
+    if (cell?.editor) {
+      const editor = cell.editor; // IEditor
+      // Access CodeMirror editor instance if possible
+      const cmEditor = (editor as any).editor;
+      if (cmEditor && cmEditor.state) {
+        const state = cmEditor.state;
+        const selection = state.selection.main; // Get the main selection
+        if (selection.empty) {
+          return null; // No text selected
         }
-      } else {
-        // Handle case where contents.content is not as expected
-        console.warn('LIST DIR: Contents received, but content format is unexpected or missing.');
-        this.addMessage(`Could not list contents for "${normalizedPath || '/'}". Unexpected format.`, 'bot', false);
-        return null;
+        return state.doc.sliceString(selection.from, selection.to);
       }
-    } catch (error) {
-      console.error('LIST DIR: Error listing directory contents:', error);
-      console.error('LIST DIR: Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-      this.addMessage(`Error listing directory contents for "${normalizedPath || '/'}": ${error}`, 'bot', false);
+      console.warn("Could not access CodeMirror state to get selection.");
+      // Avoid using getRange as it's confirmed not to exist on IEditor
       return null;
-    }
-  }
-
-  /**
-   * Handles clicks outside the popup menu to close it.
-   */
-  private handleClickOutside = (event: MouseEvent): void => {
-    // Check if the click is outside the popup menu container
-    if (this.popupMenuContainer.style.display !== 'none' && !this.popupMenuContainer.contains(event.target as Node)) {
-      console.log('POPUP: Click detected outside popup menu.');
-      this.hidePopupMenu();
-      document.removeEventListener('click', this.handleClickOutside);
-    }
-  };
-
-  /**
-   * Shows the popup menu at the specified position
-   */
-  private showPopupMenu(x: number, y: number): void {
-    // Clear previous menu items
-    this.popupMenuContainer.innerHTML = '';
-
-    // Ensure menu is not already attached
-    if (this.popupMenuContainer.parentElement) {
-      this.popupMenuContainer.parentElement.removeChild(this.popupMenuContainer);
-    }
-
-    console.log('POPUP: Showing popup menu at:', x, y, { level: this.currentMenuLevel, path: this.currentMenuPath });
-
-    // Handle different menu levels
-    if (this.currentMenuLevel === 'top') {
-      // Define top-level menu items
-      const topLevelCommands: { label: string; description: string; action: () => void }[] = [
-        {
-          label: 'Code',
-          description: 'Insert selected code',
-          action: () => {
-            console.log('POPUP: Code action triggered');
-            this.handleCodeCommand();
-            this.hidePopupMenu();
-          }
-        },
-        {
-          label: 'Cell',
-          description: 'Insert entire cell content',
-          action: () => {
-            console.log('POPUP: Cell action triggered');
-            this.handleCellCommand();
-            this.hidePopupMenu();
-          }
-        },
-        {
-          label: 'File',
-          description: 'Browse and select a file',
-          action: async () => {
-            console.log('POPUP: File action triggered');
-            // Set menu state for file browsing
-            this.menuHistory.push({ level: this.currentMenuLevel, path: this.currentMenuPath });
-            this.currentMenuLevel = 'files';
-            
-            // Try to determine the current path
-            await this.setCurrentDirectoryPath();
-            
-            // Refresh the menu with the new level
-            this.showPopupMenu(x, y);
-          }
-        },
-        {
-          label: 'Directory',
-          description: 'Browse and select a directory',
-          action: async () => {
-            console.log('POPUP: Directory action triggered');
-            // Set menu state for directory browsing
-            this.menuHistory.push({ level: this.currentMenuLevel, path: this.currentMenuPath });
-            this.currentMenuLevel = 'directories';
-            
-            // Try to determine the current path
-            await this.setCurrentDirectoryPath();
-            
-            // Refresh the menu with the new level
-            this.showPopupMenu(x, y);
-          }
-        }
-      ];
-
-      // Create and append menu items
-      this.createMenuItems(topLevelCommands);
-    } else if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-      // Add back button if we're not at the top level
-      const backButton = document.createElement('div');
-      backButton.className = 'jp-llm-ext-popup-menu-item';
-      backButton.innerHTML = '<span style="font-weight: bold">← Back</span>';
-      backButton.onclick = (e) => {
-        e.stopPropagation();
-        // Pop the previous state from history
-        if (this.menuHistory.length > 0) {
-          const prevState = this.menuHistory.pop()!;
-          this.currentMenuLevel = prevState.level;
-          this.currentMenuPath = prevState.path;
-          this.showPopupMenu(x, y);
-        } else {
-          // If no history, go back to top level
-          this.currentMenuLevel = 'top';
-          this.currentMenuPath = '';
-          this.showPopupMenu(x, y);
-        }
-      };
-      this.popupMenuContainer.appendChild(backButton);
-
-      // Add current path indicator
-      const pathIndicator = document.createElement('div');
-      pathIndicator.className = 'jp-llm-ext-popup-menu-path';
-      pathIndicator.textContent = `Path: ${this.currentMenuPath || '/'}`;
-      this.popupMenuContainer.appendChild(pathIndicator);
-
-      // Load and display directory contents based on the current level
-      this.loadDirectoryContents(x, y);
-    }
-
-    // Append to body and set position
-    document.body.appendChild(this.popupMenuContainer);
-    this.popupMenuContainer.style.position = 'absolute'; // Position relative to document body
-    this.popupMenuContainer.style.left = `${x}px`;
-    this.popupMenuContainer.style.top = `${y}px`;
-    this.popupMenuContainer.style.display = 'block';
-    console.log('POPUP: Menu container displayed and attached to body');
-
-    // Add click outside listener (ensure it's not added multiple times)
-    document.removeEventListener('click', this.handleClickOutside);
-    document.addEventListener('click', this.handleClickOutside);
-  }
-
-  /**
-   * Creates menu items from commands and appends them to the popup menu container
-   */
-  private createMenuItems(commands: { label: string; description: string; action: () => void }[]): void {
-    commands.forEach(command => {
-      const item = document.createElement('div');
-      item.className = 'jp-llm-ext-popup-menu-item';
-
-      const labelSpan = document.createElement('span');
-      labelSpan.textContent = command.label;
-      labelSpan.style.fontWeight = 'bold';
-
-      const descSpan = document.createElement('span');
-      descSpan.textContent = command.description;
-      descSpan.style.fontSize = '0.8em'; // Smaller font for description
-      descSpan.style.color = 'var(--jp-ui-font-color2)'; // Dimmer color
-
-      item.appendChild(labelSpan);
-      item.appendChild(descSpan);
-
-      item.onclick = (e) => {
-        e.stopPropagation(); // Prevent click outside listener
-        command.action();
-      };
-
-      this.popupMenuContainer.appendChild(item);
-    });
-  }
-
-  /**
-   * Loads and displays directory contents in the popup menu
-   */
-  private async loadDirectoryContents(x: number, y: number): Promise<void> {
-    // Show loading indicator
-    const loadingItem = document.createElement('div');
-    loadingItem.className = 'jp-llm-ext-popup-menu-item';
-    loadingItem.textContent = 'Loading...';
-    this.popupMenuContainer.appendChild(loadingItem);
-
-    try {
-      // Get directory contents with appropriate filter
-      const filterType = this.currentMenuLevel === 'files' ? 'file' : 'directory';
-      const contents = await this.listCurrentDirectoryContents(filterType);
-
-      // Remove loading indicator
-      this.popupMenuContainer.removeChild(loadingItem);
-
-      if (contents && contents.length > 0) {
-        // Create items for each content item
-        contents.forEach(item => {
-          const contentItem = document.createElement('div');
-          contentItem.className = 'jp-llm-ext-popup-menu-item';
-          contentItem.textContent = item;
-
-          contentItem.onclick = async (e) => {
-            e.stopPropagation();
-            
-            // Extract the name without the icon
-            const name = item.substring(2).trim();
-            
-            if (this.currentMenuLevel === 'directories') {
-              // Handle directory navigation
-              console.log(`POPUP: Selected directory: ${name}`);
-              
-              // Save current state to history
-              this.menuHistory.push({ level: this.currentMenuLevel, path: this.currentMenuPath });
-              
-              // Update path (handle both empty path and paths with trailing slash)
-              if (!this.currentMenuPath || this.currentMenuPath === '/') {
-                this.currentMenuPath = name;
-              } else {
-                this.currentMenuPath = `${this.currentMenuPath}/${name}`;
-              }
-              
-              // Switch to files view to show files in the selected directory
-              this.currentMenuLevel = 'files';
-              
-              // Refresh the menu
-              this.showPopupMenu(x, y);
-            } else if (this.currentMenuLevel === 'files') {
-              // Handle file selection
-              console.log(`POPUP: Selected file: ${name}`);
-              
-              // Construct full path
-              let fullPath;
-              if (!this.currentMenuPath || this.currentMenuPath === '/') {
-                fullPath = name;
-              } else {
-                fullPath = `${this.currentMenuPath}/${name}`;
-              }
-              
-              // Insert the file path into the input
-              this.appendToInput(`@file\n${fullPath}`);
-              
-              // Close the menu
-              this.hidePopupMenu();
-            }
-          };
-          
-          this.popupMenuContainer.appendChild(contentItem);
-        });
-      } else {
-        // Show empty message
-        const emptyItem = document.createElement('div');
-        emptyItem.className = 'jp-llm-ext-popup-menu-item';
-        emptyItem.textContent = `No ${this.currentMenuLevel} found in this directory`;
-        this.popupMenuContainer.appendChild(emptyItem);
-      }
-    } catch (error) {
-      // Remove loading indicator
-      if (loadingItem.parentNode === this.popupMenuContainer) {
-        this.popupMenuContainer.removeChild(loadingItem);
-      }
-      
-      // Show error message
-      const errorItem = document.createElement('div');
-      errorItem.className = 'jp-llm-ext-popup-menu-item';
-      errorItem.textContent = `Error loading contents: ${error}`;
-      this.popupMenuContainer.appendChild(errorItem);
-      
-      console.error('Error loading directory contents:', error);
-    }
-  }
-
-  /**
-   * Sets the current directory path based on context
-   */
-  private async setCurrentDirectoryPath(): Promise<void> {
-    // If we already have a path, keep using it
-    if (this.currentMenuPath) {
-      return;
-    }
-    
-    // Try to determine the current path using the same logic as in listCurrentDirectoryContents
-    let dirPath: string | null = null;
-    const app = globals.app;
-    
-    if (!app) {
-      console.error('POPUP: Application reference not available');
-      return;
-    }
-    
-    // Try to get path from current widget
-    const currentShellWidget = app.shell.currentWidget;
-    if (currentShellWidget) {
-      const widgetContext = this.docManager.contextForWidget(currentShellWidget);
-      if (widgetContext) {
-        const path = widgetContext.path;
-        const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-        dirPath = lastSlash === -1 ? '' : path.substring(0, lastSlash);
-      }
-    }
-    
-    // Fallback 1: Active Notebook Path
-    if (dirPath === null && this.currentNotebook && this.currentNotebook.context) {
-      const notebookPath = this.currentNotebook.context.path;
-      console.log(`POPUP: Raw notebook path: ${notebookPath}`);
-      if (typeof notebookPath === 'string') {
-        const lastSlash = Math.max(notebookPath.lastIndexOf('/'), notebookPath.lastIndexOf('\\'));
-        dirPath = lastSlash === -1 ? '' : notebookPath.substring(0, lastSlash);
-      }
-    }
-    
-    // Fallback 2: File Browser Current Path
-    if (dirPath === null) {
-      const leftWidgets = Array.from(app.shell.widgets('left'));
-      const fileBrowserWidget = leftWidgets.find(widget => widget.id === 'filebrowser');
-      const fileBrowserModel = (fileBrowserWidget as any)?.model;
-      if (fileBrowserModel && typeof fileBrowserModel.path === 'string') {
-        dirPath = fileBrowserModel.path;
-      }
-    }
-    
-    // Fallback 3: Server Root
-    if (dirPath === null) {
-      dirPath = ''; // Use empty string for server root
-    }
-    
-    // Set the current menu path
-    this.currentMenuPath = dirPath;
-    console.log(`POPUP: Set current menu path to: ${this.currentMenuPath}`);
-  }
-
-  /**
-   * Hides the popup menu
-   */
-  private hidePopupMenu(): void {
-    // Only act if the menu is currently displayed
-    if (this.popupMenuContainer.style.display !== 'none') {
-      console.log('POPUP: Hiding popup menu.');
-      this.popupMenuContainer.style.display = 'none';
-      // Remove from body if it's attached
-      if (this.popupMenuContainer.parentElement === document.body) {
-        document.body.removeChild(this.popupMenuContainer);
-        console.log('POPUP: Menu container removed from body');
-      }
-      // Remove listener when menu is hidden
-      document.removeEventListener('click', this.handleClickOutside);
-      
-      // Reset menu state to top level when hiding
-      this.currentMenuLevel = 'top';
-      this.currentMenuPath = '';
-      this.menuHistory = [];
-    }
-  }
-
-  /**
-   * Handle widget detachment.
-   */
-  protected onBeforeDetach(msg: Message): void {
-    // Ensure the popup menu is hidden and removed from the body if the widget is detached
-    this.hidePopupMenu();
-    super.onBeforeDetach(msg);
-  }
-
-  /**
-   * Handles the code command - inserts selected code
-   */
-  private handleCodeCommand(): void {
-    const selectedText = this.getSelectedText();
-    if (selectedText) {
-      this.appendToInput(`@code\n${selectedText}`);
     } else {
-      // If no selection, get the entire cell content
-      const cellContext = globals.cellContextTracker?.getCurrentCellContext();
-      if (cellContext) {
-        this.appendToInput(`@code\n${cellContext.text}`);
-      }
+       // Attempt to get selection from document if no notebook active (e.g., text editor)
+       const activeWidget = globals.app?.shell?.currentWidget;
+       if (activeWidget && 'content' in activeWidget && (activeWidget.content as any).editor) {
+            const editor = (activeWidget.content as any).editor;
+            const cmEditor = (editor as any).editor;
+            if (cmEditor && cmEditor.state) {
+                const state = cmEditor.state;
+                const selection = state.selection.main;
+                if (selection.empty) {
+                    return null;
+                }
+                return state.doc.sliceString(selection.from, selection.to);
+            }
+            console.warn("Could not access CodeMirror state for non-notebook editor selection.");
+            return null; // Avoid getRange
+       }
     }
+    return null;
   }
 
   /**
-   * Handles the cell command - inserts entire cell content
+   * Gets the content of the currently active notebook cell.
+   * (Helper for PopupMenuManager callback)
    */
-  private handleCellCommand(): void {
-    const cellContext = globals.cellContextTracker?.getCurrentCellContext();
-    if (cellContext) {
-      this.appendToInput(`@cell\n${cellContext.text}`);
+  private getCurrentCellContent(): string | null {
+    const activeCell = globals.notebookTracker?.activeCell;
+    if (activeCell?.model) {
+      // Try using sharedModel first (more robust)
+      if (activeCell.model.sharedModel && typeof activeCell.model.sharedModel.getSource === 'function') {
+        return activeCell.model.sharedModel.getSource();
+      }
+      // Fallback: Try using toJSON().source
+      const cellJson = activeCell.model.toJSON();
+      if (typeof cellJson?.source === 'string') {
+        return cellJson.source;
+      } else if (Array.isArray(cellJson?.source)) {
+        // If source is an array of strings, join them
+        return cellJson.source.join('\n');
+      }
+      console.warn("Could not get cell content via model.value.text or toJSON().source");
+      return null;
     }
+    // Fallback for non-notebook editors if needed
+    const activeWidget = globals.app?.shell?.currentWidget;
+    if (activeWidget && 'content' in activeWidget && (activeWidget.content as any).model) {
+        return (activeWidget.content as any).model.value.text;
+    }
+    return null;
   }
 
   /**
@@ -1353,67 +924,31 @@ export class SimpleSidebarWidget extends Widget {
     }
   }
 
-  /**
-   * Gets the selected text from cell context
-   */
-  private getSelectedText(): string {
-    // Get the current active cell from the tracker
-    const cell = globals.notebookTracker?.activeCell;
-    if (!cell || !cell.editor) {
-      return '';
-    }
-
-    // Get the CodeMirror editor instance
-    const editor = cell.editor;
-    const view = (editor as any).editor;
-    if (!view) {
-      return '';
-    }
-
-    // Get the selection from CodeMirror
-    const state = view.state;
-    const selection = state.selection;
-    
-    // If there's no selection, return empty string
-    if (selection.main.empty) {
-      return '';
-    }
-
-    // Get the selected text
-    const from = selection.main.from;
-    const to = selection.main.to;
-    return state.doc.sliceString(from, to);
-  }
-
   // Settings modal methods
   private createSettingsModal(): HTMLDivElement {
     const modal = document.createElement('div');
-    modal.style.position = 'fixed';
-    modal.style.top = '0';
-    modal.style.left = '0';
-    modal.style.width = '100%';
-    modal.style.height = '100%';
-    modal.style.display = 'none';
-    modal.style.justifyContent = 'center';
-    modal.style.alignItems = 'center';
-    modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    modal.className = 'jp-llm-ext-settings-modal';
+    modal.style.display = 'none'; // Keep this inline style for toggling visibility
 
     const content = document.createElement('div');
-    content.style.backgroundColor = '#fff';
-    content.style.padding = '20px';
-    content.style.borderRadius = '5px';
-    content.style.width = '400px';
+    content.className = 'jp-llm-ext-settings-content';
 
-    const title = document.createElement('h3');
+    const title = document.createElement('h2');
+    title.className = 'jp-llm-ext-settings-title';
     title.textContent = 'Settings';
     content.appendChild(title);
 
+    const form = document.createElement('form');
+    form.className = 'jp-llm-ext-settings-form';
+
+    // Provider selection
     const providerLabel = document.createElement('label');
-    providerLabel.htmlFor = 'settings-provider';
-    providerLabel.textContent = 'LLM Provider:';
-    content.appendChild(providerLabel);
+    providerLabel.className = 'jp-llm-ext-settings-label';
+    providerLabel.textContent = 'API Provider:';
+    form.appendChild(providerLabel);
 
     const providerSelect = document.createElement('select');
+    providerSelect.className = 'jp-llm-ext-settings-select';
     providerSelect.id = 'settings-provider';
     ['OpenAI', 'HuggingFace', 'Local'].forEach(opt => {
       const option = document.createElement('option');
@@ -1421,69 +956,69 @@ export class SimpleSidebarWidget extends Widget {
       option.textContent = opt;
       providerSelect.appendChild(option);
     });
-    content.appendChild(providerSelect);
-    content.appendChild(document.createElement('br'));
+    form.appendChild(providerSelect);
 
-    const keyLabel = document.createElement('label');
-    keyLabel.htmlFor = 'settings-api-key';
-    keyLabel.textContent = 'API Key:';
-    content.appendChild(keyLabel);
+    // API Key input
+    const apiKeyLabel = document.createElement('label');
+    apiKeyLabel.className = 'jp-llm-ext-settings-label';
+    apiKeyLabel.textContent = 'API Key:';
+    form.appendChild(apiKeyLabel);
 
-    const keyInput = document.createElement('input');
-    keyInput.id = 'settings-api-key';
-    keyInput.type = 'text';
-    keyInput.style.width = '100%';
-    content.appendChild(keyInput);
-    content.appendChild(document.createElement('br'));
+    const apiKeyInput = document.createElement('input');
+    apiKeyInput.className = 'jp-llm-ext-settings-input';
+    apiKeyInput.type = 'password';
+    apiKeyInput.id = 'settings-api-key';
+    form.appendChild(apiKeyInput);
 
-    const urlLabel = document.createElement('label');
-    urlLabel.htmlFor = 'settings-api-base-url';
-    urlLabel.textContent = 'API Base URL (optional):';
-    content.appendChild(urlLabel);
+    // API URL input
+    const apiUrlLabel = document.createElement('label');
+    apiUrlLabel.className = 'jp-llm-ext-settings-label';
+    apiUrlLabel.textContent = 'API URL (optional):';
+    form.appendChild(apiUrlLabel);
 
-    const urlInput = document.createElement('input');
-    urlInput.id = 'settings-api-base-url';
-    urlInput.type = 'text';
-    urlInput.style.width = '100%';
-    content.appendChild(urlInput);
-    content.appendChild(document.createElement('br'));
+    const apiUrlInput = document.createElement('input');
+    apiUrlInput.className = 'jp-llm-ext-settings-input';
+    apiUrlInput.type = 'text';
+    apiUrlInput.id = 'settings-api-url';
+    form.appendChild(apiUrlInput);
 
+    // Rules input
     const rulesLabel = document.createElement('label');
-    rulesLabel.htmlFor = 'settings-rules';
-    rulesLabel.textContent = 'Rules:';
-    content.appendChild(rulesLabel);
+    rulesLabel.className = 'jp-llm-ext-settings-label';
+    rulesLabel.textContent = 'Custom Rules (optional):';
+    form.appendChild(rulesLabel);
 
-    const rulesTextarea = document.createElement('textarea');
-    rulesTextarea.id = 'settings-rules';
-    rulesTextarea.style.width = '100%';
-    rulesTextarea.style.height = '100px';
-    content.appendChild(rulesTextarea);
-    content.appendChild(document.createElement('br'));
+    const rulesInput = document.createElement('textarea');
+    rulesInput.className = 'jp-llm-ext-settings-textarea';
+    rulesInput.id = 'settings-rules';
+    form.appendChild(rulesInput);
 
+    // Buttons container
     const btnContainer = document.createElement('div');
-    btnContainer.style.textAlign = 'right';
-    btnContainer.style.marginTop = '10px';
+    btnContainer.className = 'jp-llm-ext-settings-buttons';
 
     const saveBtn = document.createElement('button');
+    saveBtn.className = 'jp-llm-ext-settings-button jp-llm-ext-settings-save-button';
     saveBtn.textContent = 'Save';
     saveBtn.addEventListener('click', () => {
       const provider = (document.getElementById('settings-provider') as HTMLSelectElement).value;
       const key = (document.getElementById('settings-api-key') as HTMLInputElement).value;
-      const url = (document.getElementById('settings-api-base-url') as HTMLInputElement).value;
+      const url = (document.getElementById('settings-api-url') as HTMLInputElement).value;
       const rules = (document.getElementById('settings-rules') as HTMLTextAreaElement).value;
       console.log('Settings saved:', { provider, key, url, rules });
       this.hideSettingsModal();
     });
 
     const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'jp-llm-ext-settings-button jp-llm-ext-settings-cancel-button';
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.marginLeft = '10px';
     cancelBtn.addEventListener('click', () => this.hideSettingsModal());
 
     btnContainer.appendChild(saveBtn);
     btnContainer.appendChild(cancelBtn);
-    content.appendChild(btnContainer);
+    form.appendChild(btnContainer);
 
+    content.appendChild(form);
     modal.appendChild(content);
     return modal;
   }

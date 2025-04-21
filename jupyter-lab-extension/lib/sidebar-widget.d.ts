@@ -1,12 +1,7 @@
 import { Widget } from '@lumino/widgets';
-import { Message } from '@lumino/messaging';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 /**
- * Main sidebar widget for the AI chat interface in JupyterLab.
- * This widget provides a comprehensive chat-based interface for interacting with AI assistants,
- * supporting text input, Markdown rendering, file and directory browsing through a multi-level
- * pop-up menu, and chat history management. It integrates with JupyterLab's APIs to interact
- * with notebooks and manage document contexts.
+ * Main sidebar widget for the AI chat interface
  */
 export declare class SimpleSidebarWidget extends Widget {
     private messageContainer;
@@ -21,166 +16,88 @@ export declare class SimpleSidebarWidget extends Widget {
     private isHistoryViewActive;
     private historyContainer;
     private apiClient;
-    private popupMenuContainer;
     private keyboardShortcutIndicator;
     private settingsModalContainer;
-    private currentNotebook;
-    private currentMenuLevel;
-    private currentMenuPath;
-    private menuHistory;
-    /**
-     * Constructor for the SimpleSidebarWidget class.
-     * Initializes the widget with the provided document manager and sets up the basic UI components.
-     * @param docManager The document manager instance for interacting with JupyterLab documents.
-     */
+    private popupMenuManager;
     constructor(docManager: IDocumentManager);
     /**
-     * Shows a visual indicator for keyboard shortcuts.
-     * @param text The text to display in the indicator.
+     * Shows a visual indicator for keyboard shortcuts
      */
     private showKeyboardShortcutIndicator;
     /**
-     * Handles keyboard shortcuts for improved user experience.
-     * Currently supports Ctrl+L for inserting selected code or cell content.
-     * @param event The keyboard event triggered by the user.
+     * Handles keyboard shortcuts
      */
     private handleKeyDown;
     /**
-     * Disposes all resources when the widget is closed.
+     * Disposes all resources
      */
     dispose(): void;
     /**
-     * Creates the main layout for the sidebar widget.
-     * Includes the title input, message container, history container, input field, and controls.
-     * @returns The main content element of the widget.
+     * Creates the main layout for the sidebar
      */
     private createLayout;
     /**
-     * Creates a new chat session.
-     * Generates a unique ID, creates a new chat item, adds it to history, and updates the UI.
+     * Creates a new chat session
      */
     private createNewChat;
     /**
-     * Toggles between chat view and history view.
-     * Updates the UI to show either the chat messages or the chat history list.
+     * Toggles between chat view and history view
      */
     private toggleHistoryView;
     /**
-     * Renders the chat history in the history container.
-     * Creates a list of chat history items and populates the history container.
+     * Renders the chat history in the history container
      */
     private renderChatHistory;
     /**
-     * Loads a chat from history.
-     * Updates the UI to show the selected chat's messages and title.
-     * @param chatId The ID of the chat to load.
+     * Loads a chat from history
      */
     private loadChat;
     /**
-     * Updates the title of the current chat.
-     * Updates the title input field with the new title.
+     * Updates the title of the current chat
      */
     private updateCurrentChatTitle;
     /**
-     * Creates the controls container with toggles and action buttons.
-     * Includes the Markdown toggle, expand input button, settings button, and popup menu button.
-     * @returns The controls container element.
+     * Creates the controls container with toggles and action buttons
      */
     private createControlsContainer;
     /**
-     * Toggles the expansion state of the input field.
-     * Updates the input field's height and resize property based on the expansion state.
-     * @param button The button element that triggered the toggle.
+     * Toggles the expansion state of the input field
      */
     private toggleInputExpansion;
     /**
-     * Helper function to create a button with given text and tooltip.
-     * @param text The text to display on the button.
-     * @param tooltip The tooltip text to display on hover.
-     * @returns The created button element.
+     * Helper function to create a button with given text and tooltip
      */
     private createButton;
     /**
-     * Handles sending a message from the input field.
-     * Sends the message to the API, updates the UI with the response, and saves the message to chat history.
+     * Handles sending a message from the input field
      */
     private handleSendMessage;
     /**
-     * Adds a message to the chat interface.
-     * Creates a new message element and appends it to the message container.
-     * @param text The text content of the message.
-     * @param sender The sender of the message ('user' or 'bot').
-     * @param isMarkdown Whether the message is in Markdown format.
-     * @param saveToHistory Whether to save the message to chat history.
+     * Adds a message to the chat interface
      */
     private addMessage;
     /**
-     * Copies message content to clipboard.
-     * @param text The text content to copy.
+     * Copies message content to clipboard
      */
     private copyMessageToClipboard;
     /**
-     * Adds message content to the current cell.
-     * @param text The text content to add.
+     * Adds message content to the current cell
      */
     private addMessageToCell;
     /**
-     * Lists the contents of the current directory.
-     * @param filterType Optional parameter to filter results by type ('all', 'file', or 'directory').
-     * @returns A promise resolving to an array of item names or null on error.
-     */
-    listCurrentDirectoryContents(filterType?: 'all' | 'file' | 'directory'): Promise<string[] | null>;
-    /**
-     * Handles clicks outside the popup menu to close it.
-     */
-    private handleClickOutside;
-    /**
-     * Shows the popup menu at the specified position.
-     * @param x The x-coordinate of the popup menu.
-     * @param y The y-coordinate of the popup menu.
-     */
-    private showPopupMenu;
-    /**
-     * Creates menu items from commands and appends them to the popup menu container.
-     * @param commands The array of commands to create menu items for.
-     */
-    private createMenuItems;
-    /**
-     * Loads and displays directory contents in the popup menu.
-     * @param x The x-coordinate of the popup menu.
-     * @param y The y-coordinate of the popup menu.
-     */
-    private loadDirectoryContents;
-    /**
-     * Sets the current directory path based on context.
-     */
-    private setCurrentDirectoryPath;
-    /**
-     * Hides the popup menu.
-     */
-    private hidePopupMenu;
-    /**
-     * Handle widget detachment.
-     */
-    protected onBeforeDetach(msg: Message): void;
-    /**
-     * Handles the code command - inserts selected code.
-     */
-    private handleCodeCommand;
-    /**
-     * Handles the cell command - inserts entire cell content.
-     */
-    private handleCellCommand;
-    /**
-     * Appends text to the input field with proper spacing.
-     * @param text The text to append.
-     */
-    private appendToInput;
-    /**
-     * Gets the selected text from cell context.
-     * @returns The selected text or an empty string if no selection.
+     * Gets the currently selected text from the active notebook cell.
+     * (Helper for PopupMenuManager callback)
      */
     private getSelectedText;
+    /**
+     * Gets the content of the currently active notebook cell.
+     * (Helper for PopupMenuManager callback)
+     */
+    private getCurrentCellContent;
+    /**
+     * Appends text to the input field with proper spacing
+     */
+    private appendToInput;
     private createSettingsModal;
     private showSettingsModal;
     private hideSettingsModal;
