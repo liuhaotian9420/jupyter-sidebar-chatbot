@@ -74,10 +74,10 @@ export class SimpleSidebarWidget extends Widget {
 
     // Instantiate the PopupMenuManager with callbacks
     this.popupMenuManager = new PopupMenuManager(this.docManager, this.node, {
-        insertCode: (code: string) => this.appendToInput(`@code\n${code}`),
-        insertCell: (content: string) => this.appendToInput(`@cell\n${content}`),
-        insertFilePath: (path: string) => this.appendToInput(`@file\n${path}`),
-        insertDirectoryPath: (path: string) => this.appendToInput(`@directory\n${path}`), // If needed
+        insertCode: (code: string) => this.appendToInput(`code ${code}`),
+        insertCell: (content: string) => this.appendToInput(`cell ${content}`),
+        insertFilePath: (path: string) => this.appendToInput(`file ${path}`),
+        insertDirectoryPath: (path: string) => this.appendToInput(`directory ${path}`), // If needed
         getSelectedText: () => this.getSelectedText(),
         getCurrentCellContent: () => this.getCurrentCellContent(),
     });
@@ -109,8 +109,58 @@ export class SimpleSidebarWidget extends Widget {
    * Handles keyboard shortcuts
    */
   private handleKeyDown = (event: KeyboardEvent): void => {
+    // Check for @ key (for context menu) - changed from Ctrl+@
+    if (event.key === '@') {
+      // Prevent default browser behavior
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Only show menu if input field is focused
+      if (document.activeElement === this.inputField) {
+        // Get cursor position in input field
+        const cursorPosition = this.inputField.selectionStart || 0;
+        const textBeforeCursor = this.inputField.value.substring(0, cursorPosition);
+        
+        // Calculate position to show menu
+        const inputRect = this.inputField.getBoundingClientRect();
+        const lineHeight = parseInt(window.getComputedStyle(this.inputField).lineHeight) || 20;
+        
+        // Count newlines before cursor to determine vertical position
+        const linesBeforeCursor = (textBeforeCursor.match(/\n/g) || []).length;
+        
+        // Calculate cursor position within current line
+        const lastNewline = textBeforeCursor.lastIndexOf('\n');
+        const charsInCurrentLine = lastNewline === -1 ? cursorPosition : cursorPosition - lastNewline - 1;
+        
+        // Estimate horizontal position (using average character width)
+        const charWidth = 8; // Approximate width of a character in pixels
+        const horizontalOffset = charsInCurrentLine * charWidth;
+        
+        // Calculate positions
+        const left = inputRect.left + horizontalOffset;
+        // Calculate the cursor's vertical position
+        const cursorTop = inputRect.top + (linesBeforeCursor * lineHeight);
+        
+        console.log(`Showing popup at cursor position: (${left}, ${cursorTop})`);
+        
+        // Insert @ symbol at cursor position
+        const newValue = 
+          this.inputField.value.substring(0, cursorPosition) + 
+          '@' + 
+          this.inputField.value.substring(cursorPosition);
+        this.inputField.value = newValue;
+        
+        // Move cursor after the @ symbol
+        this.inputField.selectionStart = cursorPosition + 1;
+        this.inputField.selectionEnd = cursorPosition + 1;
+        
+        // Show the popup menu above the cursor position
+        this.popupMenuManager.showPopupMenu(left + 60, cursorTop -20);
+        this.showKeyboardShortcutIndicator('Context menu opened');
+      }
+    }
     // Check for Ctrl+L (for selected code)
-    if (event.ctrlKey && event.key.toLowerCase() === 'l') {
+    else if (event.ctrlKey && event.key.toLowerCase() === 'l') {
       // Prevent default browser behavior
       event.preventDefault();
       event.stopPropagation();
@@ -138,13 +188,13 @@ export class SimpleSidebarWidget extends Widget {
           const from = selection.main.from;
           const to = selection.main.to;
           const selectedText = state.doc.sliceString(from, to);
-          this.appendToInput(`@code\n${selectedText}`);
+          this.appendToInput(`@code ${selectedText}`);
           this.showKeyboardShortcutIndicator('Selected code inserted');
         } else {
           // If no selection, use @cell
           const cellContext = globals.cellContextTracker?.getCurrentCellContext();
           if (cellContext) {
-            this.appendToInput(`@cell\n${cellContext.text}`);
+            this.appendToInput(`@cell ${cellContext.text}`);
             this.showKeyboardShortcutIndicator('Cell content inserted');
           }
         }
@@ -469,9 +519,9 @@ export class SimpleSidebarWidget extends Widget {
           // Get the button's position
           const targetButton = event.currentTarget as HTMLElement;
           const rect = targetButton.getBoundingClientRect();
-          // Show the popup menu using the manager (now async)
-          this.popupMenuManager.showPopupMenu(rect.left, rect.bottom);
-          event.preventDefault();
+          // Show the popup menu above the button's top edge
+          this.popupMenuManager.showPopupMenu(rect.left + 60, rect.top - 20);
+          event.preventDefault(); 
           event.stopPropagation();
         }
       },
@@ -501,7 +551,7 @@ export class SimpleSidebarWidget extends Widget {
     this.isInputExpanded = !this.isInputExpanded;
     if (this.isInputExpanded) {
       // Adjust height based on a class or CSS variable instead of fixed pixels if possible
-      this.inputField.style.height = '100px'; 
+      this.inputField.style.height = '200px'; 
       this.inputField.style.resize = 'vertical';
       button.textContent = '⤡';
       button.title = 'Collapse input';
@@ -922,8 +972,8 @@ export class SimpleSidebarWidget extends Widget {
     try {
       const currentValue = this.inputField.value;
       if (currentValue) {
-        // If there's existing content, add a newline before appending
-        this.inputField.value = `${currentValue}\n\n${text}`;
+        // add a space between the current value and the new text
+        this.inputField.value = `${currentValue}${text}`;
       } else {
         this.inputField.value = text;
       }
@@ -1015,19 +1065,24 @@ export class SimpleSidebarWidget extends Widget {
     const saveBtn = document.createElement('button');
     saveBtn.className = 'jp-llm-ext-settings-button jp-llm-ext-settings-save-button';
     saveBtn.textContent = 'Save';
-    saveBtn.addEventListener('click', () => {
+    saveBtn.addEventListener('click', (event: MouseEvent) => {
+      event.preventDefault();  // Add this line
       const provider = (document.getElementById('settings-provider') as HTMLSelectElement).value;
       const key = (document.getElementById('settings-api-key') as HTMLInputElement).value;
       const url = (document.getElementById('settings-api-url') as HTMLInputElement).value;
       const rules = (document.getElementById('settings-rules') as HTMLTextAreaElement).value;
       console.log('Settings saved:', { provider, key, url, rules });
       this.hideSettingsModal();
+      this.popSaveSuccess();
     });
 
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'jp-llm-ext-settings-button jp-llm-ext-settings-cancel-button';
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.addEventListener('click', () => this.hideSettingsModal());
+    cancelBtn.addEventListener('click', (event: MouseEvent ) => {
+      event.preventDefault();  // Add this line
+      this.hideSettingsModal();
+    });
 
     btnContainer.appendChild(saveBtn);
     btnContainer.appendChild(cancelBtn);
@@ -1044,5 +1099,14 @@ export class SimpleSidebarWidget extends Widget {
 
   private hideSettingsModal(): void {
     this.settingsModalContainer.style.display = 'none';
+  }
+  private popSaveSuccess(): void {
+    const successMessage = document.createElement('div');
+    successMessage.className = 'jp-llm-ext-settings-success-message';
+    successMessage.textContent = 'Settings saved successfully';
+    this.settingsModalContainer.appendChild(successMessage);
+    setTimeout(() => {
+      successMessage.remove();
+    }, 3000);
   }
 }

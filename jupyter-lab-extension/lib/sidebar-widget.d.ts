@@ -101,4 +101,5 @@ export declare class SimpleSidebarWidget extends Widget {
     private createSettingsModal;
     private showSettingsModal;
     private hideSettingsModal;
+    private popSaveSuccess;
 }
