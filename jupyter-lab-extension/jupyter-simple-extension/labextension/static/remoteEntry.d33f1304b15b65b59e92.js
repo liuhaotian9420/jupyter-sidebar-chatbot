@@ -124,7 +124,7 @@ __webpack_require__.d(exports, {
 /******/ 		// This function allow to reference async chunks
 /******/ 		__webpack_require__.u = (chunkId) => {
 /******/ 			// return url for filenames based on template
-/******/ 			return "" + chunkId + "." + {"lib_index_js":"42dc670a6b909b70a0d3","style_index_css":"70f3d9a12be4d8da8e54","vendors-node_modules_dompurify_dist_purify_es_mjs":"5c9bdb74b76d75afe368","vendors-node_modules_marked_lib_marked_esm_js":"4709d16d20ea1c806191"}[chunkId] + ".js";
+/******/ 			return "" + chunkId + "." + {"lib_index_js":"32dfcef183cf7179f4ca","style_index_css":"70f3d9a12be4d8da8e54","vendors-node_modules_dompurify_dist_purify_es_mjs":"5c9bdb74b76d75afe368","vendors-node_modules_marked_lib_marked_esm_js":"4709d16d20ea1c806191"}[chunkId] + ".js";
 /******/ 		};
 /******/ 	})();
 /******/ 	
@@ -407,9 +407,9 @@ __webpack_require__.d(exports, {
 /******/ 			"webpack/sharing/consume/default/@jupyterlab/notebook": () => (loadSingletonVersion("default", "@jupyterlab/notebook", false, [1,4,4,0])),
 /******/ 			"webpack/sharing/consume/default/@jupyterlab/docmanager": () => (loadSingletonVersion("default", "@jupyterlab/docmanager", false, [1,4,4,0])),
 /******/ 			"webpack/sharing/consume/default/@lumino/widgets": () => (loadSingletonVersion("default", "@lumino/widgets", false, [1,2,3,1,,"alpha",0])),
+/******/ 			"webpack/sharing/consume/default/@jupyterlab/ui-components": () => (loadSingletonVersion("default", "@jupyterlab/ui-components", false, [1,4,4,0])),
 /******/ 			"webpack/sharing/consume/default/marked/marked": () => (loadStrictVersion("default", "marked", false, [1,15,0,8], () => (__webpack_require__.e("vendors-node_modules_marked_lib_marked_esm_js").then(() => (() => (__webpack_require__(/*! marked */ "./node_modules/marked/lib/marked.esm.js"))))))),
-/******/ 			"webpack/sharing/consume/default/dompurify/dompurify": () => (loadStrictVersion("default", "dompurify", false, [1,3,2,5], () => (__webpack_require__.e("vendors-node_modules_dompurify_dist_purify_es_mjs").then(() => (() => (__webpack_require__(/*! dompurify */ "./node_modules/dompurify/dist/purify.es.mjs"))))))),
-/******/ 			"webpack/sharing/consume/default/@jupyterlab/ui-components": () => (loadSingletonVersion("default", "@jupyterlab/ui-components", false, [1,4,4,0]))
+/******/ 			"webpack/sharing/consume/default/dompurify/dompurify": () => (loadStrictVersion("default", "dompurify", false, [1,3,2,5], () => (__webpack_require__.e("vendors-node_modules_dompurify_dist_purify_es_mjs").then(() => (() => (__webpack_require__(/*! dompurify */ "./node_modules/dompurify/dist/purify.es.mjs")))))))
 /******/ 		};
 /******/ 		// no consumes in initial chunks
 /******/ 		var chunkMapping = {
@@ -419,9 +419,9 @@ __webpack_require__.d(exports, {
 /******/ 				"webpack/sharing/consume/default/@jupyterlab/notebook",
 /******/ 				"webpack/sharing/consume/default/@jupyterlab/docmanager",
 /******/ 				"webpack/sharing/consume/default/@lumino/widgets",
+/******/ 				"webpack/sharing/consume/default/@jupyterlab/ui-components",
 /******/ 				"webpack/sharing/consume/default/marked/marked",
-/******/ 				"webpack/sharing/consume/default/dompurify/dompurify",
-/******/ 				"webpack/sharing/consume/default/@jupyterlab/ui-components"
+/******/ 				"webpack/sharing/consume/default/dompurify/dompurify"
 /******/ 			]
 /******/ 		};
 /******/ 		var startedInstallModules = {};
@@ -562,4 +562,4 @@ __webpack_require__.d(exports, {
 /******/ 	
 /******/ })()
 ;
-//# sourceMappingURL=remoteEntry.f90b4e9d60f33a31475e.js.map
+//# sourceMappingURL=remoteEntry.d33f1304b15b65b59e92.js.map

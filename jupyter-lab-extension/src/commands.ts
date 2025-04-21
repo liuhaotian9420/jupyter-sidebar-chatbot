@@ -2,7 +2,7 @@ import { JupyterFrontEnd } from '@jupyterlab/application';
 import { ICommandPalette } from '@jupyterlab/apputils';
 import { ILauncher } from '@jupyterlab/launcher';
 import { extensionIcon } from './icons';
-import { SimpleSidebarWidget } from './sidebar-widget';
+import { SimpleSidebarWidget } from './chat/sidebar-widget';
 
 /**
  * Registers commands for the extension
@@ -38,4 +38,4 @@ export function registerCommands(
     category: 'Other',
     rank: 9999
   });
-} 
+}

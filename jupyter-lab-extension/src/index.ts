@@ -8,17 +8,18 @@ import { ICommandPalette } from '@jupyterlab/apputils';
 import { INotebookTracker } from '@jupyterlab/notebook';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 
-import { SimpleSidebarWidget } from './sidebar-widget';
+// Import the modularized SimpleSidebarWidget from the new location
+import { SimpleSidebarWidget } from './chat/sidebar-widget';
 import { initGlobals, globals } from './globals';
 import { registerCommands } from './commands';
 import { CellContextTracker } from './cell-context-tracker';
-// import { ApiClient } from './api-client';
 
 // Export ApiClient for use by other components
 export { ApiClient } from './api-client';
 
 /**
  * Initialization data for the jupyter-simple-extension extension.
+ * This plugin integrates a custom sidebar with JupyterLab for enhanced functionality.
  */
 const plugin: JupyterFrontEndPlugin<void> = {
   id: 'jupyter-simple-extension:plugin',
@@ -33,19 +34,19 @@ const plugin: JupyterFrontEndPlugin<void> = {
   ) => {
     console.log('JupyterLab extension jupyter-simple-extension is activated!');
     
-    // Initialize global references
+    // Initialize global references for app and notebook tracking
     initGlobals(jupyterApp, tracker);
     
-    // Initialize cell context tracker
+    // Initialize cell context tracker to monitor active cells and contexts
     globals.cellContextTracker = new CellContextTracker(jupyterApp, tracker);
     
-    // Create and add sidebar widget
+    // Create and add sidebar widget for user interaction and context insertion
     const sidebarWidget = new SimpleSidebarWidget(docManager);
     jupyterApp.shell.add(sidebarWidget, 'left', { rank: 9999 });
 
-    // Register commands
+    // Register commands for interacting with the extension via command palette and launcher
     registerCommands(jupyterApp, palette, launcher, sidebarWidget);
   }
 };
 
-export default plugin; 
+export default plugin;

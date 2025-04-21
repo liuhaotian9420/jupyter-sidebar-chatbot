@@ -14,9 +14,18 @@ const markdown_config_1 = require("./markdown-config");
 // Configure marked with our settings
 (0, markdown_config_1.configureMarked)();
 /**
- * Main sidebar widget for the AI chat interface
+ * Main sidebar widget for the AI chat interface in JupyterLab.
+ * This widget provides a comprehensive chat-based interface for interacting with AI assistants,
+ * supporting text input, Markdown rendering, file and directory browsing through a multi-level
+ * pop-up menu, and chat history management. It integrates with JupyterLab's APIs to interact
+ * with notebooks and manage document contexts.
  */
 class SimpleSidebarWidget extends widgets_1.Widget {
+    /**
+     * Constructor for the SimpleSidebarWidget class.
+     * Initializes the widget with the provided document manager and sets up the basic UI components.
+     * @param docManager The document manager instance for interacting with JupyterLab documents.
+     */
     constructor(docManager) {
         super();
         this.isMarkdownMode = false;
@@ -25,12 +34,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.currentChatId = '';
         this.isHistoryViewActive = false;
         this.currentNotebook = null;
-        // Menu navigation state
+        // Menu navigation state for multi-level pop-up menu
         this.currentMenuLevel = 'top';
         this.currentMenuPath = '';
         this.menuHistory = [];
         /**
-         * Handles keyboard shortcuts
+         * Handles keyboard shortcuts for improved user experience.
+         * Currently supports Ctrl+L for inserting selected code or cell content.
+         * @param event The keyboard event triggered by the user.
          */
         this.handleKeyDown = (event) => {
             var _a, _b;
@@ -98,9 +109,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.title.caption = 'AI Chat Interface';
         this.title.icon = icons_1.extensionIcon;
         this.title.closable = true;
-        // Initialize API client
+        // Initialize API client for backend communication
         this.apiClient = new api_client_1.ApiClient();
-        // Track the current notebook
+        // Track the current notebook for cell interaction
         if (globals_1.globals.notebookTracker) {
             // Set initial notebook if one is active
             this.currentNotebook = globals_1.globals.notebookTracker.currentWidget;
@@ -118,22 +129,23 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.popupMenuContainer = document.createElement('div');
         this.popupMenuContainer.className = 'jp-llm-ext-popup-menu-container'; // Renamed class
         this.popupMenuContainer.style.display = 'none'; // Hidden by default
-        // Create keyboard shortcut indicator
+        // Create keyboard shortcut indicator for user feedback
         this.keyboardShortcutIndicator = document.createElement('div');
         this.keyboardShortcutIndicator.className = 'keyboard-shortcut-indicator';
         document.body.appendChild(this.keyboardShortcutIndicator);
-        // Create settings modal
+        // Create settings modal for configuration options
         this.settingsModalContainer = this.createSettingsModal();
         this.node.appendChild(this.settingsModalContainer);
         // Create a new chat on start
         this.createNewChat();
         this.node.appendChild(this.createLayout());
         // Pop-up menu will be attached to document.body when shown
-        // Add keyboard shortcut listener
+        // Add keyboard shortcut listener for improved UX
         document.addEventListener('keydown', this.handleKeyDown);
     }
     /**
-     * Shows a visual indicator for keyboard shortcuts
+     * Shows a visual indicator for keyboard shortcuts.
+     * @param text The text to display in the indicator.
      */
     showKeyboardShortcutIndicator(text) {
         this.keyboardShortcutIndicator.textContent = text;
@@ -144,7 +156,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }, 1000);
     }
     /**
-     * Disposes all resources
+     * Disposes all resources when the widget is closed.
      */
     dispose() {
         // Remove keyboard shortcut listener
@@ -156,7 +168,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         super.dispose();
     }
     /**
-     * Creates the main layout for the sidebar
+     * Creates the main layout for the sidebar widget.
+     * Includes the title input, message container, history container, input field, and controls.
+     * @returns The main content element of the widget.
      */
     createLayout() {
         // Create the main container
@@ -235,7 +249,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         return content;
     }
     /**
-     * Creates a new chat session
+     * Creates a new chat session.
+     * Generates a unique ID, creates a new chat item, adds it to history, and updates the UI.
      */
     createNewChat() {
         // Generate a unique ID for the chat
@@ -262,7 +277,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Toggles between chat view and history view
+     * Toggles between chat view and history view.
+     * Updates the UI to show either the chat messages or the chat history list.
      */
     toggleHistoryView() {
         this.isHistoryViewActive = !this.isHistoryViewActive;
@@ -284,7 +300,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Renders the chat history in the history container
+     * Renders the chat history in the history container.
+     * Creates a list of chat history items and populates the history container.
      */
     renderChatHistory() {
         this.historyContainer.innerHTML = '';
@@ -321,7 +338,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         });
     }
     /**
-     * Loads a chat from history
+     * Loads a chat from history.
+     * Updates the UI to show the selected chat's messages and title.
+     * @param chatId The ID of the chat to load.
      */
     loadChat(chatId) {
         const chat = this.chatHistory.find(c => c.id === chatId);
@@ -342,7 +361,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Updates the title of the current chat
+     * Updates the title of the current chat.
+     * Updates the title input field with the new title.
      */
     updateCurrentChatTitle() {
         const chat = this.chatHistory.find(c => c.id === this.currentChatId);
@@ -351,7 +371,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Creates the controls container with toggles and action buttons
+     * Creates the controls container with toggles and action buttons.
+     * Includes the Markdown toggle, expand input button, settings button, and popup menu button.
+     * @returns The controls container element.
      */
     createControlsContainer() {
         const controlsContainer = document.createElement('div');
@@ -409,7 +431,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         return controlsContainer;
     }
     /**
-     * Toggles the expansion state of the input field
+     * Toggles the expansion state of the input field.
+     * Updates the input field's height and resize property based on the expansion state.
+     * @param button The button element that triggered the toggle.
      */
     toggleInputExpansion(button) {
         this.isInputExpanded = !this.isInputExpanded;
@@ -427,7 +451,10 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Helper function to create a button with given text and tooltip
+     * Helper function to create a button with given text and tooltip.
+     * @param text The text to display on the button.
+     * @param tooltip The tooltip text to display on hover.
+     * @returns The created button element.
      */
     createButton(text, tooltip) {
         const button = document.createElement('button');
@@ -437,7 +464,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         return button;
     }
     /**
-     * Handles sending a message from the input field
+     * Handles sending a message from the input field.
+     * Sends the message to the API, updates the UI with the response, and saves the message to chat history.
      */
     handleSendMessage() {
         const message = this.inputField.value.trim();
@@ -560,7 +588,12 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Adds a message to the chat interface
+     * Adds a message to the chat interface.
+     * Creates a new message element and appends it to the message container.
+     * @param text The text content of the message.
+     * @param sender The sender of the message ('user' or 'bot').
+     * @param isMarkdown Whether the message is in Markdown format.
+     * @param saveToHistory Whether to save the message to chat history.
      */
     addMessage(text, sender, isMarkdown = false, saveToHistory = true) {
         console.log('Adding message:', { sender, isMarkdown }); // Debug log
@@ -644,7 +677,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Copies message content to clipboard
+     * Copies message content to clipboard.
+     * @param text The text content to copy.
      */
     copyMessageToClipboard(text) {
         try {
@@ -677,7 +711,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Adds message content to the current cell
+     * Adds message content to the current cell.
+     * @param text The text content to add.
      */
     addMessageToCell(text) {
         var _a;
@@ -710,8 +745,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Lists the contents of the current directory
-     * @param filterType Optional parameter to filter results by type ('all', 'file', or 'directory')
+     * Lists the contents of the current directory.
+     * @param filterType Optional parameter to filter results by type ('all', 'file', or 'directory').
+     * @returns A promise resolving to an array of item names or null on error.
      */
     async listCurrentDirectoryContents(filterType = 'all') {
         console.log('LIST DIR: Starting directory listing process...', { filterType });
@@ -834,7 +870,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Shows the popup menu at the specified position
+     * Shows the popup menu at the specified position.
+     * @param x The x-coordinate of the popup menu.
+     * @param y The y-coordinate of the popup menu.
      */
     showPopupMenu(x, y) {
         // Clear previous menu items
@@ -940,7 +978,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         document.addEventListener('click', this.handleClickOutside);
     }
     /**
-     * Creates menu items from commands and appends them to the popup menu container
+     * Creates menu items from commands and appends them to the popup menu container.
+     * @param commands The array of commands to create menu items for.
      */
     createMenuItems(commands) {
         commands.forEach(command => {
@@ -963,7 +1002,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         });
     }
     /**
-     * Loads and displays directory contents in the popup menu
+     * Loads and displays directory contents in the popup menu.
+     * @param x The x-coordinate of the popup menu.
+     * @param y The y-coordinate of the popup menu.
      */
     async loadDirectoryContents(x, y) {
         // Show loading indicator
@@ -1046,7 +1087,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Sets the current directory path based on context
+     * Sets the current directory path based on context.
      */
     async setCurrentDirectoryPath() {
         // If we already have a path, keep using it
@@ -1097,7 +1138,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         console.log(`POPUP: Set current menu path to: ${this.currentMenuPath}`);
     }
     /**
-     * Hides the popup menu
+     * Hides the popup menu.
      */
     hidePopupMenu() {
         // Only act if the menu is currently displayed
@@ -1126,7 +1167,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         super.onBeforeDetach(msg);
     }
     /**
-     * Handles the code command - inserts selected code
+     * Handles the code command - inserts selected code.
      */
     handleCodeCommand() {
         var _a;
@@ -1143,7 +1184,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Handles the cell command - inserts entire cell content
+     * Handles the cell command - inserts entire cell content.
      */
     handleCellCommand() {
         var _a;
@@ -1153,7 +1194,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Appends text to the input field with proper spacing
+     * Appends text to the input field with proper spacing.
+     * @param text The text to append.
      */
     appendToInput(text) {
         try {
@@ -1174,7 +1216,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
     }
     /**
-     * Gets the selected text from cell context
+     * Gets the selected text from cell context.
+     * @returns The selected text or an empty string if no selection.
      */
     getSelectedText() {
         var _a;

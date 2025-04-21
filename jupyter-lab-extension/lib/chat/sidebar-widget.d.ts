@@ -1,5 +1,7 @@
+/**
+ * Main sidebar widget for the AI chat interface in JupyterLab
+ */
 import { Widget } from '@lumino/widgets';
-import { Message } from '@lumino/messaging';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 /**
  * Main sidebar widget for the AI chat interface in JupyterLab.
@@ -11,29 +13,28 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 export declare class SimpleSidebarWidget extends Widget {
     private messageContainer;
     private inputField;
-    private isMarkdownMode;
     private inputContainer;
-    private isInputExpanded;
-    private docManager;
-    private chatHistory;
-    private currentChatId;
     private titleInput;
-    private isHistoryViewActive;
     private historyContainer;
-    private apiClient;
-    private popupMenuContainer;
     private keyboardShortcutIndicator;
-    private settingsModalContainer;
-    private currentNotebook;
-    private currentMenuLevel;
-    private currentMenuPath;
-    private menuHistory;
+    private isHistoryViewActive;
+    private docManager;
+    private chatHistoryManager;
+    private fileBrowserManager;
+    private popupMenuManager;
+    private messageRenderer;
+    private settingsManager;
+    private inputHandler;
     /**
      * Constructor for the SimpleSidebarWidget class.
      * Initializes the widget with the provided document manager and sets up the basic UI components.
      * @param docManager The document manager instance for interacting with JupyterLab documents.
      */
     constructor(docManager: IDocumentManager);
+    /**
+     * Initializes all modular components
+     */
+    private initializeModularComponents;
     /**
      * Shows a visual indicator for keyboard shortcuts.
      * @param text The text to display in the indicator.
@@ -56,10 +57,18 @@ export declare class SimpleSidebarWidget extends Widget {
      */
     private createLayout;
     /**
-     * Creates a new chat session.
-     * Generates a unique ID, creates a new chat item, adds it to history, and updates the UI.
+     * Creates the controls container with toggles and action buttons.
+     * Includes the Markdown toggle, expand input button, settings button, and popup menu button.
+     * @returns The controls container element.
      */
-    private createNewChat;
+    private createControlsContainer;
+    /**
+     * Helper function to create a button with given text and tooltip.
+     * @param text The text to display on the button.
+     * @param tooltip The tooltip text to display on hover.
+     * @returns The created button element.
+     */
+    private createButton;
     /**
      * Toggles between chat view and history view.
      * Updates the UI to show either the chat messages or the chat history list.
@@ -70,6 +79,11 @@ export declare class SimpleSidebarWidget extends Widget {
      * Creates a list of chat history items and populates the history container.
      */
     private renderChatHistory;
+    /**
+     * Creates a new chat session.
+     * Generates a unique ID, creates a new chat item, adds it to history, and updates the UI.
+     */
+    private createNewChat;
     /**
      * Loads a chat from history.
      * Updates the UI to show the selected chat's messages and title.
@@ -82,29 +96,16 @@ export declare class SimpleSidebarWidget extends Widget {
      */
     private updateCurrentChatTitle;
     /**
-     * Creates the controls container with toggles and action buttons.
-     * Includes the Markdown toggle, expand input button, settings button, and popup menu button.
-     * @returns The controls container element.
-     */
-    private createControlsContainer;
-    /**
-     * Toggles the expansion state of the input field.
-     * Updates the input field's height and resize property based on the expansion state.
-     * @param button The button element that triggered the toggle.
-     */
-    private toggleInputExpansion;
-    /**
-     * Helper function to create a button with given text and tooltip.
-     * @param text The text to display on the button.
-     * @param tooltip The tooltip text to display on hover.
-     * @returns The created button element.
-     */
-    private createButton;
-    /**
      * Handles sending a message from the input field.
      * Sends the message to the API, updates the UI with the response, and saves the message to chat history.
      */
     private handleSendMessage;
+    /**
+     * Mock implementation of sending a message to the API
+     * @param message The message to send
+     * @returns A promise that resolves to the response
+     */
+    private mockSendMessage;
     /**
      * Adds a message to the chat interface.
      * Creates a new message element and appends it to the message container.
@@ -112,6 +113,7 @@ export declare class SimpleSidebarWidget extends Widget {
      * @param sender The sender of the message ('user' or 'bot').
      * @param isMarkdown Whether the message is in Markdown format.
      * @param saveToHistory Whether to save the message to chat history.
+     * @returns The created message element.
      */
     private addMessage;
     /**
@@ -120,57 +122,15 @@ export declare class SimpleSidebarWidget extends Widget {
      */
     private copyMessageToClipboard;
     /**
+     * Fallback method for copying to clipboard using a temporary textarea element.
+     * @param text The text to copy.
+     */
+    private fallbackCopyToClipboard;
+    /**
      * Adds message content to the current cell.
      * @param text The text content to add.
      */
     private addMessageToCell;
-    /**
-     * Lists the contents of the current directory.
-     * @param filterType Optional parameter to filter results by type ('all', 'file', or 'directory').
-     * @returns A promise resolving to an array of item names or null on error.
-     */
-    listCurrentDirectoryContents(filterType?: 'all' | 'file' | 'directory'): Promise<string[] | null>;
-    /**
-     * Handles clicks outside the popup menu to close it.
-     */
-    private handleClickOutside;
-    /**
-     * Shows the popup menu at the specified position.
-     * @param x The x-coordinate of the popup menu.
-     * @param y The y-coordinate of the popup menu.
-     */
-    private showPopupMenu;
-    /**
-     * Creates menu items from commands and appends them to the popup menu container.
-     * @param commands The array of commands to create menu items for.
-     */
-    private createMenuItems;
-    /**
-     * Loads and displays directory contents in the popup menu.
-     * @param x The x-coordinate of the popup menu.
-     * @param y The y-coordinate of the popup menu.
-     */
-    private loadDirectoryContents;
-    /**
-     * Sets the current directory path based on context.
-     */
-    private setCurrentDirectoryPath;
-    /**
-     * Hides the popup menu.
-     */
-    private hidePopupMenu;
-    /**
-     * Handle widget detachment.
-     */
-    protected onBeforeDetach(msg: Message): void;
-    /**
-     * Handles the code command - inserts selected code.
-     */
-    private handleCodeCommand;
-    /**
-     * Handles the cell command - inserts entire cell content.
-     */
-    private handleCellCommand;
     /**
      * Appends text to the input field with proper spacing.
      * @param text The text to append.
@@ -181,7 +141,8 @@ export declare class SimpleSidebarWidget extends Widget {
      * @returns The selected text or an empty string if no selection.
      */
     private getSelectedText;
-    private createSettingsModal;
-    private showSettingsModal;
-    private hideSettingsModal;
+    /**
+     * Handles the code command - inserts selected code.
+     */
+    private handleCodeCommand;
 }
