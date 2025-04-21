@@ -161,39 +161,28 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.titleInput.value = 'New Chat';
         this.titleInput.addEventListener('change', () => this.updateCurrentChatTitle());
         titleContainer.appendChild(this.titleInput);
-        // Configure top action buttons (New Chat & History)
-        const topActionsContainer = document.createElement('div');
-        topActionsContainer.className = 'jp-llm-ext-top-actions-container';
+        // Create New Chat & History buttons (but don't add them to a top container yet)
         const newChatButton = document.createElement('button');
-        newChatButton.className = 'jp-Button jp-llm-ext-action-button';
+        newChatButton.className = 'jp-Button jp-llm-ext-action-button'; // Re-use existing button style
         newChatButton.textContent = '+ New Chat';
         newChatButton.title = 'Start a new chat';
         newChatButton.addEventListener('click', () => this.createNewChat());
         const historyButton = document.createElement('button');
-        historyButton.className = 'jp-Button jp-llm-ext-action-button';
+        historyButton.className = 'jp-Button jp-llm-ext-action-button'; // Re-use existing button style
         historyButton.textContent = 'History';
         historyButton.title = 'View chat history';
         historyButton.addEventListener('click', () => this.toggleHistoryView());
-        topActionsContainer.appendChild(newChatButton);
-        topActionsContainer.appendChild(historyButton);
         // Configure message container
         this.messageContainer.className = 'jp-llm-ext-message-container';
         // Configure history container
         this.historyContainer.className = 'jp-llm-ext-history-container';
         this.historyContainer.style.display = 'none'; // Initially hidden
-        // Configure input container
-        this.inputContainer.className = 'jp-llm-ext-input-container';
-        // Create controls container
-        const controlsContainer = this.createControlsContainer();
+        // Configure input container (holds input field, send button, and other controls)
+        this.inputContainer.className = 'jp-llm-ext-input-area-container'; // Renamed class for clarity
         // Configure input field
         this.inputField.placeholder = 'Ask me anything...';
-        this.inputField.style.flexGrow = '1';
-        this.inputField.style.padding = '5px';
-        this.inputField.style.border = '1px solid #ccc';
-        this.inputField.style.borderRadius = '3px';
-        this.inputField.style.resize = 'none';
-        this.inputField.rows = 1;
-        this.inputField.style.overflowY = 'auto';
+        // Removed inline styles, should be handled by CSS
+        this.inputField.rows = 1; // Start with 1 row
         // Add keypress listener to input field
         this.inputField.addEventListener('keypress', (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -201,7 +190,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 this.handleSendMessage();
             }
         });
-        // Create send button container
+        // Create send button container (now part of inputContainer structure)
         const inputActionsContainer = document.createElement('div');
         inputActionsContainer.className = 'jp-llm-ext-input-actions-container';
         // Create send button
@@ -209,18 +198,27 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         sendButton.className = 'jp-Button jp-llm-ext-send-button';
         sendButton.textContent = 'Send';
         sendButton.addEventListener('click', () => this.handleSendMessage());
-        // Add button to actions container
         inputActionsContainer.appendChild(sendButton);
-        // Assemble the input components
-        this.inputContainer.appendChild(controlsContainer);
-        this.inputContainer.appendChild(this.inputField);
-        this.inputContainer.appendChild(inputActionsContainer);
-        // Assemble all components
-        mainContent.appendChild(topActionsContainer);
+        // Create controls container (Markdown toggle, @, etc.)
+        const controlsContainer = this.createControlsContainer(); // Contains toggle and action buttons
+        // Assemble the input container's children: controls, input field, send button
+        this.inputContainer.appendChild(controlsContainer); // Controls (markdown, @, etc.)
+        this.inputContainer.appendChild(this.inputField); // Text area
+        this.inputContainer.appendChild(inputActionsContainer); // Send button container
+        // Create the new bottom bar container
+        const bottomBarContainer = document.createElement('div');
+        bottomBarContainer.className = 'jp-llm-ext-bottom-bar-container';
+        // Add the input container (with all its contents) to the bottom bar
+        bottomBarContainer.appendChild(this.inputContainer);
+        // Add New Chat and History buttons to the bottom bar
+        bottomBarContainer.appendChild(newChatButton);
+        bottomBarContainer.appendChild(historyButton);
+        // Assemble all main components
+        // Note: No more topActionsContainer
         mainContent.appendChild(titleContainer);
         mainContent.appendChild(this.messageContainer);
         mainContent.appendChild(this.historyContainer);
-        mainContent.appendChild(this.inputContainer);
+        mainContent.appendChild(bottomBarContainer); // Add the new bottom bar here
         return mainContent;
     }
     /**
@@ -352,7 +350,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         const markdownToggle = document.createElement('input');
         markdownToggle.type = 'checkbox';
         markdownToggle.id = 'markdown-toggle';
-        markdownToggle.style.marginRight = '5px';
+        // markdownToggle.style.marginRight = '5px'; // Style via CSS
         markdownToggle.addEventListener('change', (e) => {
             const target = e.target;
             this.isMarkdownMode = target.checked;
@@ -364,11 +362,11 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         const toggleLabel = document.createElement('label');
         toggleLabel.htmlFor = 'markdown-toggle';
         toggleLabel.textContent = 'Markdown mode';
-        toggleLabel.style.fontSize = '12px';
+        // toggleLabel.style.fontSize = '12px'; // Style via CSS
         // Add toggle elements to container
         toggleContainer.appendChild(markdownToggle);
         toggleContainer.appendChild(toggleLabel);
-        // Create action buttons container
+        // Create action buttons container (@, expand, settings)
         const actionButtonsContainer = document.createElement('div');
         actionButtonsContainer.className = 'jp-llm-ext-action-buttons-container';
         // Create all action buttons
@@ -396,6 +394,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             actionButtonsContainer.appendChild(btn);
         });
         // Add toggle and action buttons to the controls container
+        // controlsContainer is now just for these inline controls, above the input field
         controlsContainer.appendChild(toggleContainer);
         controlsContainer.appendChild(actionButtonsContainer);
         return controlsContainer;
@@ -406,14 +405,16 @@ class SimpleSidebarWidget extends widgets_1.Widget {
     toggleInputExpansion(button) {
         this.isInputExpanded = !this.isInputExpanded;
         if (this.isInputExpanded) {
+            // Adjust height based on a class or CSS variable instead of fixed pixels if possible
             this.inputField.style.height = '100px';
             this.inputField.style.resize = 'vertical';
             button.textContent = '⤡';
             button.title = 'Collapse input';
         }
         else {
-            this.inputField.style.height = 'auto';
+            this.inputField.style.height = ''; // Reset height
             this.inputField.style.resize = 'none';
+            this.inputField.rows = 1; // Ensure it collapses back to 1 row height
             button.textContent = '⤢';
             button.title = 'Expand input';
         }
@@ -437,13 +438,19 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             // Add user message to UI
             this.addMessage(message, 'user', this.isMarkdownMode);
             this.inputField.value = '';
+            this.inputField.rows = 1; // Reset rows after sending
+            this.inputField.style.height = ''; // Reset height after sending
             // Reset expanded state if needed after sending
             if (this.isInputExpanded) {
-                this.inputField.style.height = '100px';
-            }
-            else {
-                this.inputField.style.height = 'auto';
-                this.inputField.rows = 1;
+                // Find the expand button to reset its state if needed (this might need adjustment based on final structure)
+                const expandButton = this.node.querySelector('.jp-llm-ext-action-buttons-container button[title*="Collapse"]');
+                if (expandButton) {
+                    this.toggleInputExpansion(expandButton); // Collapse after sending
+                }
+                else {
+                    this.inputField.style.height = ''; // Fallback reset
+                    this.inputField.rows = 1;
+                }
             }
             // Create a temporary message container for the bot's streaming response
             const botMessageDiv = document.createElement('div');

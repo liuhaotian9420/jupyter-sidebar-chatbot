@@ -1,43 +1,4 @@
-<!--
-  ~ Copyright (c) Jupyter Development Team.
-  ~ Distributed under the terms of the Modified BSD License.
--->
-
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>JupyterLab</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!--
-  ~ Copyright (c) Jupyter Development Team.
-  ~ Distributed under the terms of the Modified BSD License.
--->
-
-{# Copy so we do not modify the page_config with updates. #}
-{% set page_config_full = page_config.copy() %}
-
-{# Set a dummy variable - we just want the side effect of the update. #}
-{% set _ = page_config_full.update(baseUrl=base_url, wsUrl=ws_url) %}
-
-  <script id="jupyter-config-data" type="application/json">
-    {{ page_config_full | tojson }}
-  </script>
-
-  {% block favicon %}
-  <link rel="icon" type="image/x-icon" href="{{ base_url | escape }}static/favicons/favicon.ico" class="idle favicon">
-  <link rel="" type="image/x-icon" href="{{ base_url | escape }}static/favicons/favicon-busy-1.ico" class="busy favicon">
-  {% endblock %}
-
-  {% if custom_css %}
-  <link rel="stylesheet" type="text/css" href="{{ base_url | escape }}custom/custom.css">
-  {% endif %}
-
-<script defer src="{{page_config.fullStaticUrl}}/main.1852b22899f809a75f4e.js"></script></head>
-<body class="jp-ThemedContainer">
-
-<script type="text/javascript">
-  /* Remove token from URL. */
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>JupyterLab</title><meta name="viewport" content="width=device-width,initial-scale=1">{# Copy so we do not modify the page_config with updates. #} {% set page_config_full = page_config.copy() %} {# Set a dummy variable - we just want the side effect of the update. #} {% set _ = page_config_full.update(baseUrl=base_url, wsUrl=ws_url) %}<script id="jupyter-config-data" type="application/json">{{ page_config_full | tojson }}</script>{% block favicon %}<link rel="icon" type="image/x-icon" href="{{ base_url | escape }}static/favicons/favicon.ico" class="idle favicon"><link rel="" type="image/x-icon" href="{{ base_url | escape }}static/favicons/favicon-busy-1.ico" class="busy favicon">{% endblock %} {% if custom_css %}<link rel="stylesheet" href="{{ base_url | escape }}custom/custom.css">{% endif %}<script defer="defer" src="{{page_config.fullStaticUrl}}/main.e0aaf8f442993217116a.js?v=e0aaf8f442993217116a"></script></head><body class="jp-ThemedContainer"><script>/* Remove token from URL. */
   (function () {
     var location = window.location;
     var search = location.search;
@@ -61,8 +22,4 @@
     }
 
     window.history.replaceState({ }, '', url);
-  })();
-</script>
-
-</body>
-</html>
+  })();</script></body></html>

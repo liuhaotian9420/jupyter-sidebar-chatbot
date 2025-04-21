@@ -15,7 +15,13 @@
 }
 
 .jp-llm-ext-title-container {
-  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--jp-border-color2);
+  background-color: var(--jp-layout-color1);
+  height: 50px;
 }
 
 .jp-llm-ext-title-input {
@@ -145,41 +151,43 @@
 
 /* Message container styles */
 .jp-llm-ext-message-container {
-  flex-grow: 1;
+  flex: 1;
   overflow-y: auto;
-  padding: 10px;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 70px;
+  scroll-behavior: smooth;
+  background-color: var(--jp-layout-color1);
 }
 
 /* User message styles */
 .jp-llm-ext-user-message {
-  margin-bottom: 15px;
-  padding: 10px;
-  border-radius: 8px;
-  max-width: 80%;
-  word-wrap: break-word;
-  background-color: #e3f2fd;
-  margin-left: auto;
-  color: var(--jp-content-font-color1);
   align-self: flex-end;
-  position: relative;
-  overflow: hidden;
+  max-width: 85%;
+  padding: 12px 16px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border-radius: 16px 16px 4px 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.3s ease;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* Bot message styles */
 .jp-llm-ext-bot-message {
-  position: relative;
-  background-color: var(--jp-layout-color1);
-  border: 1px solid var(--jp-border-color2);
-  color: var(--jp-content-font-color1);
-  padding: 15px;
-  margin-bottom: 15px;
-  border-radius: 8px;
-  max-width: 80%;
-  word-wrap: break-word;
-  margin-right: auto;
-  min-height: 50px;
-  overflow: hidden;
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 12px 16px;
+  background-color: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color1);
+  border-radius: 16px 16px 16px 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.3s ease;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 /* Message styling */
@@ -257,22 +265,24 @@
 
 /* Popup Menu Styles */
 .jp-llm-ext-popup-menu-container {
-  position: absolute;
+  position: absolute !important;
+  z-index: 100000 !important; /* Highest z-index to ensure visibility */
   background-color: var(--jp-layout-color1);
   border: 1px solid var(--jp-border-color2);
-  box-shadow: var(--jp-elevation-z4);
-  z-index: 10001;
-  padding: 4px;
-  min-width: 250px;
-  max-height: 400px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+  width: 250px !important;
+  max-height: 400px !important;
   overflow-y: auto;
 }
 
 .jp-llm-ext-popup-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
-  padding: 8px 12px;
-  cursor: pointer;
+  gap: 4px;
   border-bottom: 1px solid var(--jp-border-color1);
 }
 
@@ -281,17 +291,15 @@
 }
 
 .jp-llm-ext-popup-menu-item:hover {
-  background: var(--jp-layout-color2);
+  background-color: var(--jp-layout-color2);
 }
 
 .jp-llm-ext-popup-menu-path {
-  padding: 4px 12px;
-  font-size: 0.9em;
+  padding: 8px 16px;
+  font-size: 12px;
   color: var(--jp-ui-font-color2);
   background-color: var(--jp-layout-color2);
   border-bottom: 1px solid var(--jp-border-color2);
-  margin-bottom: 4px;
-  font-style: italic;
 }
 
 /* Keyboard shortcut visual indicator */
@@ -319,15 +327,15 @@
 .jp-llm-ext-message-actions {
   position: absolute;
   top: 5px;
-  right: 45px; /* Positioned right after the MD indicator */
+  right: 30px; /* Positioned after the markdown indicator */
   display: flex;
-  gap: 4px;
-  opacity: 0.7;
+  gap: 8px;
+  opacity: 0;
   transition: opacity 0.2s ease;
-  z-index: 10;
+  z-index: 5;
 }
 
-.jp-llm-ext-message-actions:hover {
+.jp-llm-ext-bot-message:hover .jp-llm-ext-message-actions {
   opacity: 1;
 }
 
@@ -339,17 +347,21 @@
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 3px;
   background-color: var(--jp-layout-color2);
-  color: var(--jp-ui-font-color1);
-  font-size: 14px;
-  cursor: pointer;
+  color: var(--jp-ui-font-color2);
+  border-radius: 4px;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .jp-llm-ext-message-action-button:hover {
   background-color: var(--jp-layout-color3);
   color: var(--jp-brand-color1);
+}
+
+.jp-llm-ext-message-action-button svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Input container styles */
@@ -359,23 +371,27 @@
 }
 
 .jp-llm-ext-input-container {
-  display: flex;
-  flex-direction: column;
+  padding: 16px;
+  padding-bottom: 70px;
+  background-color: var(--jp-layout-color1);
+  border-top: 1px solid var(--jp-border-color2);
 }
 
 /* Input field styles */
 .jp-llm-ext-input-field {
-  min-height: 120px; /* 3x taller than default */
-  max-height: 300px; /* Maximum height before scrolling */
-  resize: vertical;
-  padding: 8px;
-  border: 1px solid var(--jp-border-color1);
-  border-radius: 4px;
-  font-family: var(--jp-code-font-family);
-  font-size: var(--jp-code-font-size);
-  line-height: 1.5;
+  width: 100%;
+  min-height: 80px; /* Increased min height */
+  max-height: 250px;
+  padding: 12px 16px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 10px;
   background-color: var(--jp-layout-color1);
-  color: var(--jp-content-font-color1);
+  color: var(--jp-ui-font-color1);
+  font-size: 14px;
+  resize: vertical;
+  transition: all 0.2s ease;
+  line-height: 1.5;
+  font-family: var(--jp-ui-font-family);
 }
 
 .jp-llm-ext-input-field:focus {
@@ -387,43 +403,150 @@
 /* Control container styles */
 .jp-llm-ext-controls-container {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 5px;
+  padding: 4px 8px;
+  margin-bottom: 8px;
 }
 
 /* Toggle container styles */
-.jp-llm-ext-toggles-container {
+.jp-llm-ext-toggle-container {
   display: flex;
   align-items: center;
-  gap: 4px;
+  flex-shrink: 0;
 }
 
-/* Action buttons container */
-.jp-llm-ext-actions-container {
+/* Markdown toggle checkbox */
+#markdown-toggle {
+  margin-right: 5px;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--jp-brand-color1);
+}
+
+/* Markdown toggle label */
+#markdown-toggle + label {
+  font-size: 13px;
+  color: var(--jp-ui-font-color2);
+  cursor: pointer;
+}
+
+#markdown-toggle + label:hover {
+  color: var(--jp-brand-color1);
+}
+
+/* Action buttons container - Closer to toggle */
+.jp-llm-ext-action-buttons-container {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  align-items: center;
+  margin-left: 8px; /* Reduced margin */
+  flex-shrink: 0;
 }
 
-/* Action button styles */
-.jp-llm-ext-button {
-  width: auto;
+/* Control buttons in the action-buttons-container */
+.jp-Button.jp-llm-ext-action-button {
   min-width: 28px;
-  margin: 0;
-  padding: 2px 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color1);
+  border: 1px solid var(--jp-border-color2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.jp-llm-ext-action-buttons-container .jp-Button.jp-llm-ext-action-button:hover {
+  background-color: var(--jp-layout-color3);
+  color: var(--jp-brand-color1);
+  border-color: var(--jp-brand-color1);
+}
+
+/* Fix for the @ button to make popup visible */
+.jp-llm-ext-action-buttons-container .jp-Button.jp-llm-ext-action-button[title="Insert context (@)"] {
+  position: relative;
+}
+
+/* Style for New Chat and History buttons in top-actions */
+.jp-llm-ext-top-actions-container .jp-Button.jp-llm-ext-action-button {
+  padding: 8px 20px;
+  height: 36px;
+  min-width: 80px;
+  width: auto;
+  flex: 1;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  border-radius: 8px;
+}
+
+.jp-llm-ext-top-actions-container .jp-Button.jp-llm-ext-action-button:hover {
+  background-color: var(--jp-brand-color0);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Send button */
+.jp-Button.jp-llm-ext-send-button {
+  padding: 8px 20px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  height: 36px;
+  min-width: 80px;
+}
+
+/* Input area styles */
+.jp-llm-ext-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 12px;
+  background-color: var(--jp-layout-color2);
+}
+
+/* Input field */
+.jp-llm-ext-input-field {
+  width: 100%;
+  min-height: 60px;
+  max-height: 200px;
+  padding: 12px 16px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 10px;
+  background-color: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  font-size: 14px;
+  resize: none;
+  transition: all 0.2s ease;
+  line-height: 1.5;
+  font-family: var(--jp-ui-font-family);
 }
 
 /* Input actions container */
-.jp-llm-ext-input-actions-container {
+/* .jp-llm-ext-input-actions-container {
   display: flex;
   justify-content: flex-end;
-  margin-top: 5px;
-}
-
-/* Send button styles */
-.jp-llm-ext-send-button {
-  padding: 5px 10px;
-}
+  align-items: center;
+  margin-top: 8px;
+} */
 
 /* Title container styles */
 .title-container {
@@ -432,29 +555,63 @@
   margin-bottom: 5px;
 }
 
-/* Chat title input */
+/* Chat title input - Improved look */
 .chat-title-input {
-  width: 100%;
-  padding: 5px;
-  font-weight: bold;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  background-color: transparent;
+  flex: 1;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid var(--jp-border-color2);
+  border-radius: 0;
+  background-color: var(--jp-layout-color1);
   color: var(--jp-ui-font-color0);
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.2s ease;
 }
 
 .chat-title-input:hover, .chat-title-input:focus {
-  border-color: var(--jp-border-color1);
-  background-color: var(--jp-layout-color1);
+  border-bottom-color: var(--jp-brand-color1);
+  background-color: var(--jp-layout-color2);
   outline: none;
+  box-shadow: none;
 }
 
-/* Top actions container */
-.top-actions-container {
+/* Top actions container - Same style as Send button */
+.jp-llm-ext-top-actions-container {
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+  height: auto;
+}
+
+/* All main buttons should look the same */
+.jp-llm-ext-action-button,
+.jp-llm-ext-send-button,
+.jp-Button.jp-llm-ext-action-button {
+  padding: 8px 20px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
   display: flex;
-  padding: 5px 10px;
-  gap: 10px;
-  border-bottom: 1px solid var(--jp-border-color2);
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  height: 32px;
+  flex: 1;
+}
+
+.jp-llm-ext-action-button:hover,
+.jp-llm-ext-send-button:hover,
+.jp-Button.jp-llm-ext-action-button:hover {
+  background-color: var(--jp-brand-color0);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
 /* History container */
@@ -533,6 +690,7 @@
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--jp-border-color2);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 /* Content wrapper */
@@ -540,120 +698,39 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 16px;
-  gap: 16px;
+  padding: 0;
+  gap: 0;
 }
 
-/* Title container */
+/* Top bar with title and actions */
 .jp-llm-ext-title-container {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 0;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--jp-border-color2);
+  background-color: var(--jp-layout-color1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .chat-title-input {
   flex: 1;
   padding: 8px 12px;
   border: 1px solid var(--jp-border-color2);
-  border-radius: 6px;
+  border-radius: 8px;
   background-color: var(--jp-layout-color1);
   color: var(--jp-ui-font-color1);
   font-size: 14px;
+  font-weight: 500;
   transition: all 0.2s ease;
 }
 
 .chat-title-input:hover, .chat-title-input:focus {
   border-color: var(--jp-brand-color1);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(var(--jp-brand-color1-rgb), 0.2);
-}
-
-/* Top actions container */
-.top-actions-container {
-  display: flex;
-  gap: 8px;
-  padding: 8px 0;
-}
-
-.jp-llm-ext-action-button {
-  padding: 6px 12px;
-  border: 1px solid var(--jp-border-color2);
-  border-radius: 6px;
-  background-color: var(--jp-layout-color1);
-  color: var(--jp-ui-font-color1);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.jp-llm-ext-action-button:hover {
-  background-color: var(--jp-layout-color2);
-  border-color: var(--jp-brand-color1);
-}
-
-/* Message container */
-.jp-llm-ext-message-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  scroll-behavior: smooth;
-}
-
-/* User message */
-.jp-llm-ext-user-message {
-  align-self: flex-end;
-  max-width: 85%;
-  padding: 12px 16px;
-  background-color: var(--jp-brand-color1);
-  color: white;
-  border-radius: 12px 12px 0 12px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  animation: fadeIn 0.3s ease;
-}
-
-/* Bot message */
-.jp-llm-ext-bot-message {
-  align-self: flex-start;
-  max-width: 85%;
-  padding: 12px 16px;
-  background-color: var(--jp-layout-color2);
-  color: var(--jp-ui-font-color1);
-  border-radius: 12px 12px 12px 0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  animation: fadeIn 0.3s ease;
-}
-
-/* Message actions */
-.jp-llm-ext-message-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.jp-llm-ext-bot-message:hover .jp-llm-ext-message-actions {
-  opacity: 1;
-}
-
-.jp-llm-ext-message-action-button {
-  padding: 4px 8px;
-  border: none;
-  background-color: transparent;
-  color: var(--jp-ui-font-color2);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.jp-llm-ext-message-action-button:hover {
-  background-color: rgba(var(--jp-brand-color1-rgb), 0.1);
-  color: var(--jp-brand-color1);
+  box-shadow: 0 0 0 2px rgba(var(--jp-brand-color1-rgb), 0.1);
 }
 
 /* Input container */
@@ -661,32 +738,41 @@
   padding: 16px;
   background-color: var(--jp-layout-color1);
   border-top: 1px solid var(--jp-border-color2);
+  position: sticky;
+  bottom: 0;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .jp-llm-ext-input-area {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 12px;
+  background-color: var(--jp-layout-color2);
 }
 
 .jp-llm-ext-input-field {
   width: 100%;
-  min-height: 40px;
+  min-height: 60px;
   max-height: 200px;
-  padding: 8px 12px;
+  padding: 12px 16px;
   border: 1px solid var(--jp-border-color2);
-  border-radius: 6px;
+  border-radius: 10px;
   background-color: var(--jp-layout-color1);
   color: var(--jp-ui-font-color1);
   font-size: 14px;
   resize: none;
   transition: all 0.2s ease;
+  line-height: 1.5;
+  font-family: var(--jp-ui-font-family);
 }
 
 .jp-llm-ext-input-field:focus {
   border-color: var(--jp-brand-color1);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(var(--jp-brand-color1-rgb), 0.2);
+  box-shadow: 0 0 0 2px rgba(var(--jp-brand-color1-rgb), 0.1);
 }
 
 /* Controls container */
@@ -694,7 +780,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  padding: 4px 8px;
+  margin-top: 8px;
 }
 
 .jp-llm-ext-toggles-container {
@@ -703,72 +790,117 @@
   gap: 12px;
 }
 
+/* Markdown toggle */
+.jp-llm-ext-markdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--jp-ui-font-color2);
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  background-color: transparent;
+  border: none;
+}
+
+.jp-llm-ext-markdown-toggle:hover {
+  background-color: rgba(var(--jp-brand-color1-rgb), 0.1);
+  color: var(--jp-brand-color1);
+}
+
+.jp-llm-ext-markdown-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.jp-llm-ext-markdown-toggle.active {
+  color: var(--jp-brand-color1);
+  background-color: rgba(var(--jp-brand-color1-rgb), 0.1);
+}
+
 /* Send button */
 .jp-llm-ext-send-button {
-  padding: 8px 16px;
+  padding: 8px 20px;
   background-color: var(--jp-brand-color1);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  height: 32px;
+  min-width: 80px;
 }
 
 .jp-llm-ext-send-button:hover {
   background-color: var(--jp-brand-color0);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
-/* Popup menu styles */
-.jp-llm-ext-popup-menu-container {
-  position: absolute;
-  background-color: var(--jp-layout-color1);
-  border: 1px solid var(--jp-border-color2);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  min-width: 200px;
-  z-index: 1000;
-  animation: slideIn 0.2s ease;
+.jp-llm-ext-send-button svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
-.jp-llm-ext-popup-menu-item {
-  padding: 8px 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.jp-llm-ext-popup-menu-item:hover {
-  background-color: var(--jp-layout-color2);
-}
-
-.jp-llm-ext-popup-menu-path {
-  padding: 8px 16px;
-  font-size: 12px;
+.jp-llm-ext-send-button:disabled {
+  background-color: var(--jp-layout-color3);
   color: var(--jp-ui-font-color2);
-  border-bottom: 1px solid var(--jp-border-color2);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
-/* Markdown content */
-.markdown-content {
-  font-family: var(--jp-ui-font-family);
-  line-height: 1.6;
+/* History container */
+.jp-llm-ext-history-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background-color: var(--jp-layout-color1);
 }
 
-.markdown-content pre {
-  background-color: var(--jp-cell-editor-background);
-  padding: 12px;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin: 8px 0;
+.jp-llm-ext-history-item {
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color2);
+  transition: all 0.2s ease;
 }
 
-.markdown-content code {
-  font-family: var(--jp-code-font-family);
-  background-color: var(--jp-cell-editor-background);
-  padding: 2px 4px;
-  border-radius: 4px;
+.jp-llm-ext-history-item:hover {
+  background-color: var(--jp-layout-color3);
+  border-color: var(--jp-brand-color1);
+}
+
+.jp-llm-ext-history-item.active {
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border-color: var(--jp-brand-color1);
+}
+
+.jp-llm-ext-history-title {
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-llm-ext-history-preview {
+  font-size: 13px;
+  color: var(--jp-ui-font-color2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Animations */
@@ -790,12 +922,14 @@
   background-color: var(--jp-brand-color1);
   color: white;
   padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
   opacity: 0;
   transform: translateY(20px);
   transition: all 0.3s ease;
   pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .jp-llm-ext-keyboard-shortcut-indicator.visible {
@@ -814,16 +948,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
 }
 
 .jp-llm-ext-settings-content {
   background-color: var(--jp-layout-color1);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 24px;
   width: 90%;
   max-width: 500px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  animation: slideIn 0.3s ease;
 }
 
 .jp-llm-ext-settings-form {
@@ -837,18 +975,29 @@
   margin-bottom: 4px;
   color: var(--jp-ui-font-color1);
   font-size: 14px;
+  font-weight: 500;
 }
 
 .jp-llm-ext-settings-input,
 .jp-llm-ext-settings-select,
 .jp-llm-ext-settings-textarea {
   width: 100%;
-  padding: 8px 12px;
+  padding: 12px;
   border: 1px solid var(--jp-border-color2);
-  border-radius: 6px;
+  border-radius: 8px;
   background-color: var(--jp-layout-color1);
   color: var(--jp-ui-font-color1);
   font-size: 14px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.jp-llm-ext-settings-input:focus,
+.jp-llm-ext-settings-select:focus,
+.jp-llm-ext-settings-textarea:focus {
+  border-color: var(--jp-brand-color1);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--jp-brand-color1-rgb), 0.1);
 }
 
 .jp-llm-ext-settings-textarea {
@@ -860,13 +1009,14 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 24px;
 }
 
 .jp-llm-ext-settings-button {
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -879,6 +1029,7 @@
 
 .jp-llm-ext-settings-save-button:hover {
   background-color: var(--jp-brand-color0);
+  transform: translateY(-1px);
 }
 
 .jp-llm-ext-settings-cancel-button {
@@ -889,4 +1040,246 @@
 
 .jp-llm-ext-settings-cancel-button:hover {
   background-color: var(--jp-layout-color3);
+  transform: translateY(-1px);
+}
+
+/* Markdown indicator */
+.markdown-indicator {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background-color: var(--jp-brand-color2);
+  color: white;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.8;
+  z-index: 5;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Bottom actions container */
+.jp-llm-ext-bottom-actions-container {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background-color: var(--jp-layout-color1);
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid var(--jp-border-color2);
+  z-index: 100;
+}
+
+/* New Chat and History button styles (match Send button) */
+.jp-Button.jp-llm-ext-action-button {
+  padding: 8px 20px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  height: 32px;
+}
+
+.jp-Button.jp-llm-ext-action-button:hover {
+  background-color: var(--jp-brand-color0);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Fixed position toolbar at bottom */
+.jp-llm-ext-fixed-bottom-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--jp-layout-color1);
+  border-top: 1px solid var(--jp-border-color2);
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Bottom fixed toolbar for all main buttons */
+.jp-llm-ext-bottom-toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  background-color: var(--jp-layout-color1);
+  border-top: 1px solid var(--jp-border-color2);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  z-index: 10000;
+}
+
+/* All main buttons in the bottom toolbar */
+.jp-llm-ext-bottom-toolbar .jp-Button {
+  padding: 8px 20px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  height: 36px;
+  flex: 1;
+  min-width: 80px;
+}
+
+.jp-llm-ext-bottom-toolbar .jp-Button:hover {
+  background-color: var(--jp-brand-color0);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Create spacing at bottom of message container for fixed toolbar */
+.jp-llm-ext-message-container {
+  padding-bottom: 70px !important;
+}
+
+/* Create spacing at bottom of input container for fixed toolbar */
+.jp-llm-ext-input-container {
+  padding-bottom: 70px !important;
+}
+
+/* Move the top actions container to the bottom */
+.jp-llm-ext-top-actions-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  background-color: var(--jp-layout-color1);
+  border-top: 1px solid var(--jp-border-color2);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  padding: 12px 16px;
+}
+
+/* New Bottom Bar Styling */
+.jp-llm-ext-bottom-bar-container {
+  display: flex;
+  align-items: center; /* Vertically align items in the middle */
+  padding: 8px 12px;
+  border-top: 1px solid var(--jp-border-color2);
+  background-color: var(--jp-layout-color1);
+  gap: 8px; /* Consistent spacing between elements */
+  min-height: 46px; /* Ensure a minimum height for the bar */
+}
+
+/* Controls container (Markdown toggle, @ etc.) within the Bottom Bar */
+.jp-llm-ext-bottom-bar-container .jp-llm-ext-controls-container {
+  display: flex; 
+  align-items: center;
+  flex-shrink: 0; /* *** Prevent shrinking *** */
+  gap: 8px; 
+  padding: 0; 
+  margin: 0; 
+}
+
+/* Ensure action buttons inside controls container are spaced and don't shrink */
+.jp-llm-ext-controls-container .jp-llm-ext-action-buttons-container {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  flex-shrink: 0; /* *** Prevent shrinking *** */
+}
+
+/* Input field within the Bottom Bar */
+.jp-llm-ext-bottom-bar-container .jp-llm-ext-input-field {
+  flex-grow: 1; /* *** Allow input field to take available space *** */
+  flex-shrink: 1; /* *** Allow input to shrink if needed *** */
+  min-width: 50px; /* *** Set a minimum width to prevent complete collapse *** */
+  resize: none; 
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 3px;
+  padding: 5px 8px;
+  margin: 0; 
+  height: 30px; /* Fixed height to align with buttons */
+  max-height: 150px; /* Still allow expansion if needed via JS later */
+  overflow-y: auto; 
+  line-height: 1.4;
+}
+
+/* Send button container within the Bottom Bar */
+.jp-llm-ext-bottom-bar-container .jp-llm-ext-input-actions-container {
+  display: flex;
+  align-items: center; 
+  margin: 0; 
+  flex-shrink: 0; /* *** Prevent shrinking *** */
+}
+
+/* Send button itself */
+.jp-llm-ext-bottom-bar-container .jp-llm-ext-send-button {
+  flex-shrink: 0; /* *** Prevent shrinking *** */
+  height: 30px; 
+  padding: 0 12px; 
+  min-width: auto; /* Use intrinsic width */
+}
+
+/* New Chat / History buttons within the Bottom Bar */
+.jp-llm-ext-bottom-bar-container > .jp-Button.jp-llm-ext-action-button {
+  flex-shrink: 0; /* *** Prevent shrinking *** */
+  height: 30px; 
+  padding: 0 12px; 
+  margin: 0; 
+  min-width: auto; /* Use intrinsic width */
+  white-space: nowrap; /* Prevent text wrapping */
+}
+
+/* Style adjustments for toggle label and checkbox */
+.jp-llm-ext-toggle-container {
+  display: flex; /* Needed for vertical-align */
+  align-items: center;
+  flex-shrink: 0; /* *** Prevent shrinking *** */
+}
+
+.jp-llm-ext-toggle-container label {
+  font-size: 12px;
+  color: var(--jp-ui-font-color2);
+  margin-left: 4px;
+  cursor: pointer;
+  white-space: nowrap; 
+}
+
+.jp-llm-ext-toggle-container input[type="checkbox"] {
+  cursor: pointer;
+  vertical-align: middle;
+  flex-shrink: 0; /* *** Prevent shrinking *** */
+}
+
+/* Remove the old input area container styles if still present */
+.jp-llm-ext-input-area-container {
+  display: none; 
+}
+
+.jp-llm-ext-input-container {
+  display: none; 
+}
+
+.jp-llm-ext-input-area {
+  display: none; 
 }
