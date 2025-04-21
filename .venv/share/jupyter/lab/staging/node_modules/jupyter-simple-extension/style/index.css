@@ -523,3 +523,370 @@
   padding: 10px;
   border-top: 1px solid var(--jp-border-color1);
 }
+
+/* Modern Chatbot Interface Styles */
+
+/* Main sidebar container */
+.jp-llm-ext-sidebar {
+  background-color: var(--jp-layout-color1);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--jp-border-color2);
+}
+
+/* Content wrapper */
+.jp-llm-ext-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  gap: 16px;
+}
+
+/* Title container */
+.jp-llm-ext-title-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--jp-border-color2);
+}
+
+.chat-title-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 6px;
+  background-color: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.chat-title-input:hover, .chat-title-input:focus {
+  border-color: var(--jp-brand-color1);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--jp-brand-color1-rgb), 0.2);
+}
+
+/* Top actions container */
+.top-actions-container {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.jp-llm-ext-action-button {
+  padding: 6px 12px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 6px;
+  background-color: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.jp-llm-ext-action-button:hover {
+  background-color: var(--jp-layout-color2);
+  border-color: var(--jp-brand-color1);
+}
+
+/* Message container */
+.jp-llm-ext-message-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-behavior: smooth;
+}
+
+/* User message */
+.jp-llm-ext-user-message {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 12px 16px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border-radius: 12px 12px 0 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.3s ease;
+}
+
+/* Bot message */
+.jp-llm-ext-bot-message {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 12px 16px;
+  background-color: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color1);
+  border-radius: 12px 12px 12px 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.3s ease;
+}
+
+/* Message actions */
+.jp-llm-ext-message-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.jp-llm-ext-bot-message:hover .jp-llm-ext-message-actions {
+  opacity: 1;
+}
+
+.jp-llm-ext-message-action-button {
+  padding: 4px 8px;
+  border: none;
+  background-color: transparent;
+  color: var(--jp-ui-font-color2);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.jp-llm-ext-message-action-button:hover {
+  background-color: rgba(var(--jp-brand-color1-rgb), 0.1);
+  color: var(--jp-brand-color1);
+}
+
+/* Input container */
+.jp-llm-ext-input-container {
+  padding: 16px;
+  background-color: var(--jp-layout-color1);
+  border-top: 1px solid var(--jp-border-color2);
+}
+
+.jp-llm-ext-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.jp-llm-ext-input-field {
+  width: 100%;
+  min-height: 40px;
+  max-height: 200px;
+  padding: 8px 12px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 6px;
+  background-color: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  font-size: 14px;
+  resize: none;
+  transition: all 0.2s ease;
+}
+
+.jp-llm-ext-input-field:focus {
+  border-color: var(--jp-brand-color1);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--jp-brand-color1-rgb), 0.2);
+}
+
+/* Controls container */
+.jp-llm-ext-controls-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.jp-llm-ext-toggles-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Send button */
+.jp-llm-ext-send-button {
+  padding: 8px 16px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.jp-llm-ext-send-button:hover {
+  background-color: var(--jp-brand-color0);
+}
+
+/* Popup menu styles */
+.jp-llm-ext-popup-menu-container {
+  position: absolute;
+  background-color: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  z-index: 1000;
+  animation: slideIn 0.2s ease;
+}
+
+.jp-llm-ext-popup-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.jp-llm-ext-popup-menu-item:hover {
+  background-color: var(--jp-layout-color2);
+}
+
+.jp-llm-ext-popup-menu-path {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--jp-ui-font-color2);
+  border-bottom: 1px solid var(--jp-border-color2);
+}
+
+/* Markdown content */
+.markdown-content {
+  font-family: var(--jp-ui-font-family);
+  line-height: 1.6;
+}
+
+.markdown-content pre {
+  background-color: var(--jp-cell-editor-background);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.markdown-content code {
+  font-family: var(--jp-code-font-family);
+  background-color: var(--jp-cell-editor-background);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Keyboard shortcut indicator */
+.jp-llm-ext-keyboard-shortcut-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: var(--jp-brand-color1);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.jp-llm-ext-keyboard-shortcut-indicator.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Settings modal */
+.jp-llm-ext-settings-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.jp-llm-ext-settings-content {
+  background-color: var(--jp-layout-color1);
+  border-radius: 8px;
+  padding: 24px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.jp-llm-ext-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jp-llm-ext-settings-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--jp-ui-font-color1);
+  font-size: 14px;
+}
+
+.jp-llm-ext-settings-input,
+.jp-llm-ext-settings-select,
+.jp-llm-ext-settings-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 6px;
+  background-color: var(--jp-layout-color1);
+  color: var(--jp-ui-font-color1);
+  font-size: 14px;
+}
+
+.jp-llm-ext-settings-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.jp-llm-ext-settings-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.jp-llm-ext-settings-button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.jp-llm-ext-settings-save-button {
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+}
+
+.jp-llm-ext-settings-save-button:hover {
+  background-color: var(--jp-brand-color0);
+}
+
+.jp-llm-ext-settings-cancel-button {
+  background-color: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color1);
+  border: 1px solid var(--jp-border-color2);
+}
+
+.jp-llm-ext-settings-cancel-button:hover {
+  background-color: var(--jp-layout-color3);
+}
