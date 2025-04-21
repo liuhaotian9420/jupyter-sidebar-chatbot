@@ -89,7 +89,6 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.apiClient = new api_client_1.ApiClient();
         // Initialize container elements before creating layout
         this.messageContainer = document.createElement('div');
-        this.inputContainer = document.createElement('div');
         this.inputField = document.createElement('textarea');
         this.titleInput = document.createElement('input');
         this.historyContainer = document.createElement('div');
@@ -161,14 +160,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.titleInput.value = 'New Chat';
         this.titleInput.addEventListener('change', () => this.updateCurrentChatTitle());
         titleContainer.appendChild(this.titleInput);
-        // Create New Chat & History buttons (but don't add them to a top container yet)
+        // Create New Chat & History buttons
         const newChatButton = document.createElement('button');
-        newChatButton.className = 'jp-Button jp-llm-ext-action-button'; // Re-use existing button style
+        newChatButton.className = 'jp-Button jp-llm-ext-action-button';
         newChatButton.textContent = '+ New Chat';
         newChatButton.title = 'Start a new chat';
         newChatButton.addEventListener('click', () => this.createNewChat());
         const historyButton = document.createElement('button');
-        historyButton.className = 'jp-Button jp-llm-ext-action-button'; // Re-use existing button style
+        historyButton.className = 'jp-Button jp-llm-ext-action-button';
         historyButton.textContent = 'History';
         historyButton.title = 'View chat history';
         historyButton.addEventListener('click', () => this.toggleHistoryView());
@@ -176,13 +175,11 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.messageContainer.className = 'jp-llm-ext-message-container';
         // Configure history container
         this.historyContainer.className = 'jp-llm-ext-history-container';
-        this.historyContainer.style.display = 'none'; // Initially hidden
-        // Configure input container (holds input field, send button, and other controls)
-        this.inputContainer.className = 'jp-llm-ext-input-area-container'; // Renamed class for clarity
-        // Configure input field
+        this.historyContainer.style.display = 'none';
+        // Configure input field (directly used later)
         this.inputField.placeholder = 'Ask me anything...';
-        // Removed inline styles, should be handled by CSS
-        this.inputField.rows = 1; // Start with 1 row
+        this.inputField.rows = 1;
+        this.inputField.className = 'jp-llm-ext-input-field'; // Add class for styling
         // Add keypress listener to input field
         this.inputField.addEventListener('keypress', (event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -190,7 +187,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 this.handleSendMessage();
             }
         });
-        // Create send button container (now part of inputContainer structure)
+        // Create send button container (directly used later)
         const inputActionsContainer = document.createElement('div');
         inputActionsContainer.className = 'jp-llm-ext-input-actions-container';
         // Create send button
@@ -199,26 +196,36 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         sendButton.textContent = 'Send';
         sendButton.addEventListener('click', () => this.handleSendMessage());
         inputActionsContainer.appendChild(sendButton);
-        // Create controls container (Markdown toggle, @, etc.)
-        const controlsContainer = this.createControlsContainer(); // Contains toggle and action buttons
-        // Assemble the input container's children: controls, input field, send button
-        this.inputContainer.appendChild(controlsContainer); // Controls (markdown, @, etc.)
-        this.inputContainer.appendChild(this.inputField); // Text area
-        this.inputContainer.appendChild(inputActionsContainer); // Send button container
-        // Create the new bottom bar container
+        // Create controls container (Markdown toggle, @, etc.) (directly used later)
+        const controlsContainer = this.createControlsContainer();
+        // Create the new bottom bar container with three rows
         const bottomBarContainer = document.createElement('div');
         bottomBarContainer.className = 'jp-llm-ext-bottom-bar-container';
-        // Add the input container (with all its contents) to the bottom bar
-        bottomBarContainer.appendChild(this.inputContainer);
-        // Add New Chat and History buttons to the bottom bar
-        bottomBarContainer.appendChild(newChatButton);
-        bottomBarContainer.appendChild(historyButton);
+        this.bottomBarContainer = bottomBarContainer;
+        // First row: Controls (Markdown toggle and action buttons)
+        const topRow = document.createElement('div');
+        topRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-controls-row';
+        topRow.appendChild(controlsContainer);
+        // Second row: Input field
+        const middleRow = document.createElement('div');
+        middleRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row';
+        middleRow.appendChild(this.inputField);
+        // Third row: Action buttons (Send, New Chat, History)
+        const bottomRow = document.createElement('div');
+        bottomRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-buttons-row';
+        // Add all buttons to bottom row
+        bottomRow.appendChild(sendButton);
+        bottomRow.appendChild(newChatButton);
+        bottomRow.appendChild(historyButton);
+        // Add all rows to the bottom bar container
+        bottomBarContainer.appendChild(topRow);
+        bottomBarContainer.appendChild(middleRow);
+        bottomBarContainer.appendChild(bottomRow);
         // Assemble all main components
-        // Note: No more topActionsContainer
         mainContent.appendChild(titleContainer);
         mainContent.appendChild(this.messageContainer);
         mainContent.appendChild(this.historyContainer);
-        mainContent.appendChild(bottomBarContainer); // Add the new bottom bar here
+        mainContent.appendChild(bottomBarContainer);
         return mainContent;
     }
     /**
@@ -254,19 +261,19 @@ class SimpleSidebarWidget extends widgets_1.Widget {
     toggleHistoryView() {
         this.isHistoryViewActive = !this.isHistoryViewActive;
         if (this.isHistoryViewActive) {
-            // Show history view, hide message view
+            // Show history view, hide message view and bottom bar
             this.messageContainer.style.display = 'none';
             this.historyContainer.style.display = 'block';
-            this.inputContainer.style.display = 'none';
+            this.bottomBarContainer.style.display = 'none'; // Use class property directly
             this.titleInput.style.display = 'none';
             // Populate history
             this.renderChatHistory();
         }
         else {
-            // Show message view, hide history view
+            // Show message view and bottom bar, hide history view
             this.messageContainer.style.display = 'block';
             this.historyContainer.style.display = 'none';
-            this.inputContainer.style.display = 'flex';
+            this.bottomBarContainer.style.display = 'flex'; // Use class property directly
             this.titleInput.style.display = 'block';
         }
     }

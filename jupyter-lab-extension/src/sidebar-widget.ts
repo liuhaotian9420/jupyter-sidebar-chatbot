@@ -31,7 +31,6 @@ export class SimpleSidebarWidget extends Widget {
   private messageContainer: HTMLDivElement;
   private inputField: HTMLTextAreaElement;
   private isMarkdownMode: boolean = false;
-  private inputContainer: HTMLDivElement;
   private isInputExpanded: boolean = false;
   private docManager: IDocumentManager;
   private chatHistory: ChatHistoryItem[] = [];
@@ -62,7 +61,6 @@ export class SimpleSidebarWidget extends Widget {
 
     // Initialize container elements before creating layout
     this.messageContainer = document.createElement('div');
-    this.inputContainer = document.createElement('div');
     this.inputField = document.createElement('textarea');
     this.titleInput = document.createElement('input');
     this.historyContainer = document.createElement('div');
@@ -249,24 +247,40 @@ export class SimpleSidebarWidget extends Widget {
     // Create controls container (Markdown toggle, @, etc.) (directly used later)
     const controlsContainer = this.createControlsContainer(); 
 
-    // *** Assemble the new bottom bar container ***
+    // Create the new bottom bar container with three rows
     const bottomBarContainer = document.createElement('div');
     bottomBarContainer.className = 'jp-llm-ext-bottom-bar-container';
-    // Assign to a class member so toggleHistoryView can access it
-    this.bottomBarContainer = bottomBarContainer; 
+    this.bottomBarContainer = bottomBarContainer;
 
-    // Add children directly to the bottom bar in the desired order
-    bottomBarContainer.appendChild(controlsContainer);      // Markdown toggle, @, etc.
-    bottomBarContainer.appendChild(this.inputField);        // Text area
-    bottomBarContainer.appendChild(inputActionsContainer);  // Send button container
-    bottomBarContainer.appendChild(newChatButton);          // New Chat button
-    bottomBarContainer.appendChild(historyButton);          // History button
+    // First row: Controls (Markdown toggle and action buttons)
+    const topRow = document.createElement('div');
+    topRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-controls-row';
+    topRow.appendChild(controlsContainer);
+
+    // Second row: Input field
+    const middleRow = document.createElement('div');
+    middleRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row';
+    middleRow.appendChild(this.inputField);
+
+    // Third row: Action buttons (Send, New Chat, History)
+    const bottomRow = document.createElement('div');
+    bottomRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-buttons-row';
+    
+    // Add all buttons to bottom row
+    bottomRow.appendChild(sendButton);
+    bottomRow.appendChild(newChatButton);
+    bottomRow.appendChild(historyButton);
+
+    // Add all rows to the bottom bar container
+    bottomBarContainer.appendChild(topRow);
+    bottomBarContainer.appendChild(middleRow);
+    bottomBarContainer.appendChild(bottomRow);
 
     // Assemble all main components
     mainContent.appendChild(titleContainer);
     mainContent.appendChild(this.messageContainer);
     mainContent.appendChild(this.historyContainer);
-    mainContent.appendChild(bottomBarContainer); // Add the bottom bar
+    mainContent.appendChild(bottomBarContainer);
     
     return mainContent;
   }
@@ -312,19 +326,19 @@ export class SimpleSidebarWidget extends Widget {
     this.isHistoryViewActive = !this.isHistoryViewActive;
     
     if (this.isHistoryViewActive) {
-      // Show history view, hide message view
+      // Show history view, hide message view and bottom bar
       this.messageContainer.style.display = 'none';
       this.historyContainer.style.display = 'block';
-      this.inputContainer.style.display = 'none';
+      this.bottomBarContainer.style.display = 'none'; // Use class property directly
       this.titleInput.style.display = 'none';
       
       // Populate history
       this.renderChatHistory();
     } else {
-      // Show message view, hide history view
+      // Show message view and bottom bar, hide history view
       this.messageContainer.style.display = 'block';
       this.historyContainer.style.display = 'none';
-      this.inputContainer.style.display = 'flex';
+      this.bottomBarContainer.style.display = 'flex'; // Use class property directly
       this.titleInput.style.display = 'block';
     }
   }

@@ -7,7 +7,6 @@ export declare class SimpleSidebarWidget extends Widget {
     private messageContainer;
     private inputField;
     private isMarkdownMode;
-    private inputContainer;
     private isInputExpanded;
     private docManager;
     private chatHistory;
@@ -19,6 +18,7 @@ export declare class SimpleSidebarWidget extends Widget {
     private keyboardShortcutIndicator;
     private settingsModalContainer;
     private popupMenuManager;
+    private bottomBarContainer;
     constructor(docManager: IDocumentManager);
     /**
      * Shows a visual indicator for keyboard shortcuts

@@ -265,15 +265,45 @@
 
 /* Popup Menu Styles */
 .jp-llm-ext-popup-menu-container {
-  position: absolute !important;
-  z-index: 100000 !important; /* Highest z-index to ensure visibility */
+  position: fixed !important;
+  z-index: 100000 !important;
   background-color: var(--jp-layout-color1);
   border: 1px solid var(--jp-border-color2);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2) !important;
   width: 250px !important;
   max-height: 400px !important;
   overflow-y: auto;
+  transform: translate(-50%, -100%) !important;
+  margin-bottom: 10px !important;
+}
+
+/* Add a small arrow pointing down */
+.jp-llm-ext-popup-menu-container::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--jp-border-color2);
+}
+
+.jp-llm-ext-popup-menu-container::before {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid var(--jp-layout-color1);
+  z-index: 1;
 }
 
 .jp-llm-ext-popup-menu-item {
@@ -1182,104 +1212,153 @@
 /* New Bottom Bar Styling */
 .jp-llm-ext-bottom-bar-container {
   display: flex;
-  align-items: center; /* Vertically align items in the middle */
-  padding: 8px 12px;
-  border-top: 1px solid var(--jp-border-color2);
+  flex-direction: column;
   background-color: var(--jp-layout-color1);
-  gap: 8px; /* Consistent spacing between elements */
-  min-height: 46px; /* Ensure a minimum height for the bar */
+  border-top: 1px solid var(--jp-border-color2);
+  padding: 8px;
+  gap: 8px;
 }
 
-/* Controls container (Markdown toggle, @ etc.) within the Bottom Bar */
-.jp-llm-ext-bottom-bar-container .jp-llm-ext-controls-container {
-  display: flex; 
+/* Common styles for all rows */
+.jp-llm-ext-bottom-bar-row {
+  display: flex;
   align-items: center;
-  flex-shrink: 0; /* *** Prevent shrinking *** */
-  gap: 8px; 
-  padding: 0; 
-  margin: 0; 
+  gap: 8px;
+  width: 100%;
 }
 
-/* Ensure action buttons inside controls container are spaced and don't shrink */
-.jp-llm-ext-controls-container .jp-llm-ext-action-buttons-container {
+/* First row - Controls */
+.jp-llm-ext-controls-row {
+  padding: 4px 0;
+}
+
+.jp-llm-ext-controls-row .jp-llm-ext-controls-container {
   display: flex;
-  gap: 4px;
-  margin: 0;
-  flex-shrink: 0; /* *** Prevent shrinking *** */
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  margin-left: auto;
 }
 
-/* Input field within the Bottom Bar */
-.jp-llm-ext-bottom-bar-container .jp-llm-ext-input-field {
-  flex-grow: 1; /* *** Allow input field to take available space *** */
-  flex-shrink: 1; /* *** Allow input to shrink if needed *** */
-  min-width: 50px; /* *** Set a minimum width to prevent complete collapse *** */
-  resize: none; 
-  border: 1px solid var(--jp-border-color1);
-  border-radius: 3px;
-  padding: 5px 8px;
-  margin: 0; 
-  height: 30px; /* Fixed height to align with buttons */
-  max-height: 150px; /* Still allow expansion if needed via JS later */
-  overflow-y: auto; 
-  line-height: 1.4;
-}
-
-/* Send button container within the Bottom Bar */
-.jp-llm-ext-bottom-bar-container .jp-llm-ext-input-actions-container {
-  display: flex;
-  align-items: center; 
-  margin: 0; 
-  flex-shrink: 0; /* *** Prevent shrinking *** */
-}
-
-/* Send button itself */
-.jp-llm-ext-bottom-bar-container .jp-llm-ext-send-button {
-  flex-shrink: 0; /* *** Prevent shrinking *** */
-  height: 30px; 
-  padding: 0 12px; 
-  min-width: auto; /* Use intrinsic width */
-}
-
-/* New Chat / History buttons within the Bottom Bar */
-.jp-llm-ext-bottom-bar-container > .jp-Button.jp-llm-ext-action-button {
-  flex-shrink: 0; /* *** Prevent shrinking *** */
-  height: 30px; 
-  padding: 0 12px; 
-  margin: 0; 
-  min-width: auto; /* Use intrinsic width */
-  white-space: nowrap; /* Prevent text wrapping */
-}
-
-/* Style adjustments for toggle label and checkbox */
+/* Toggle container styles */
 .jp-llm-ext-toggle-container {
-  display: flex; /* Needed for vertical-align */
+  display: flex;
   align-items: center;
-  flex-shrink: 0; /* *** Prevent shrinking *** */
+  gap: 4px;
+  margin-right: 8px;
 }
 
 .jp-llm-ext-toggle-container label {
   font-size: 12px;
   color: var(--jp-ui-font-color2);
-  margin-left: 4px;
-  cursor: pointer;
-  white-space: nowrap; 
+  white-space: nowrap;
+  margin: 0;
+  line-height: 28px;
 }
 
 .jp-llm-ext-toggle-container input[type="checkbox"] {
-  cursor: pointer;
+  margin: 0;
   vertical-align: middle;
-  flex-shrink: 0; /* *** Prevent shrinking *** */
 }
 
-/* Remove the old input area container styles if still present */
-.jp-llm-ext-input-area-container {
-  display: none; 
+/* Action buttons container (@, expand, settings) */
+.jp-llm-ext-action-buttons-container {
+  display: flex;
+  gap: 4px;
+  margin-left: 0;
 }
 
-.jp-llm-ext-input-container {
-  display: none; 
+/* Second row - Input field */
+.jp-llm-ext-input-row {
+  flex-grow: 1;
 }
 
-.jp-llm-ext-input-area {
-  display: none; 
+.jp-llm-ext-input-field {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px;
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 4px;
+  background-color: var(--jp-layout-color1);
+  resize: none;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.jp-llm-ext-input-field:focus {
+  border-color: var(--jp-brand-color1);
+  outline: none;
+}
+
+/* Third row - Main action buttons */
+.jp-llm-ext-buttons-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+/* Style for all buttons in the bottom row */
+.jp-llm-ext-buttons-row .jp-Button {
+  flex: 1;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Send button specific styles */
+.jp-llm-ext-buttons-row .jp-llm-ext-send-button {
+  background-color: var(--jp-brand-color1);
+  color: white;
+}
+
+.jp-llm-ext-buttons-row .jp-llm-ext-send-button:hover {
+  background-color: var(--jp-brand-color0);
+}
+
+/* New Chat and History buttons styles */
+.jp-llm-ext-buttons-row .jp-llm-ext-action-button {
+  background-color: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color1);
+  border: 1px solid var(--jp-border-color1);
+}
+
+.jp-llm-ext-buttons-row .jp-llm-ext-action-button:hover {
+  background-color: var(--jp-layout-color3);
+  border-color: var(--jp-brand-color1);
+}
+
+/* Small action buttons in the first row */
+.jp-llm-ext-controls-row .jp-Button {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 4px;
+  background-color: var(--jp-layout-color2);
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-llm-ext-controls-row .jp-Button:hover {
+  background-color: var(--jp-layout-color3);
+  border-color: var(--jp-brand-color1);
+}
+
+/* Message container adjustment */
+.jp-llm-ext-message-container {
+  padding-bottom: 180px; /* Increased to accommodate three rows */
+}
+
+/* Remove old styles */
+.jp-llm-ext-input-area-container,
+.jp-llm-ext-input-container,
+.jp-llm-ext-input-area,
+.jp-llm-ext-top-actions-container {
+  display: none;
 }

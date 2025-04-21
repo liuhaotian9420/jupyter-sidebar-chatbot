@@ -61,7 +61,7 @@
     "extension": true,
     "outputDir": "jupyter-simple-extension/labextension",
     "_build": {
-      "load": "static\\remoteEntry.3097c7a2dd47c599fa6f.js",
+      "load": "static\\remoteEntry.1959fc8ee03debcaef9a.js",
       "extension": "./extension",
       "style": "./style"
     }
