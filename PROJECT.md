@@ -67,8 +67,8 @@ Notebook communicates via HTTP (or WebSocket for advanced features).
 
 ## Core Infrastructure
 - [x] Define purpose and high-level architecture
-- [ ] Scaffold the backend FastAPI sidecar service
-- [ ] Package sidecar app with script to launch it alongside JupyterLab
+- [x] Scaffold the backend FastAPI sidecar service
+- [x] Package sidecar app with script to launch it alongside JupyterLab
 
 ## Jupyter Extension Development
 - [x] Build Jupyter Notebook extension (Classic) with:
@@ -79,9 +79,9 @@ Notebook communicates via HTTP (or WebSocket for advanced features).
 - [x] Implement basic chat interface in sidebar
 
 ## Backend Implementation
-- [ ] Manage sidecar IPython kernel using jupyter_client
-- [ ] Return stdout, stderr, and result objects cleanly
-- [ ] Mock backend response for UI testing
+- [x] Manage sidecar IPython kernel using jupyter_client
+- [x] Return stdout, stderr, and result objects cleanly
+- [x] Mock backend response for UI testing
 
 ## Advanced Features
 - [ ] Integrate optional LLM (OpenAI, Ollama, etc.)
@@ -90,12 +90,47 @@ Notebook communicates via HTTP (or WebSocket for advanced features).
 # Current Project Structure
 ```
 jupyter-llm-ext/
-├── backend/         # Backend service code (in progress)
-│   └── src/         # Source code directory
-├── jupyter-lab-extension/  # Frontend extension
-│   ├── src/         # TypeScript source code
+├── backend/         # Backend service code (FastAPI mock LLM, streaming API)
+│   ├── requirements.txt
+│   ├── README.md    # Backend usage & API
+│   └── src/
+│       └── main.py  # FastAPI app, chat & health endpoints
+├── jupyter-lab-extension/  # Frontend extension (JupyterLab)
+│   ├── src/         # TypeScript source code (modular, chat UI, context tracking)
 │   ├── style/       # CSS styles
-│   └── package.json # Node.js dependencies
+│   ├── package.json # Node.js dependencies
+│   └── README.md    # Frontend usage & dev
+├── jupyter-simple-extension/ # (Scaffolded, for future use)
 ├── PROJECT.md       # English project documentation
 └── README.md        # Chinese documentation
 ```
+
+## Backend API (FastAPI)
+- `POST /chat`: Streaming chat endpoint (mock LLM, markdown/code/SQL/TypeScript)
+- `GET /health`: Health check
+- See `backend/src/main.py` for details
+
+## JupyterLab Extension
+- Modular TypeScript architecture
+- Sidebar chat UI
+- Cell context tracking
+- Connects to FastAPI backend for LLM chat
+
+## Development Quickstart
+
+```bash
+# Backend
+cd backend
+pip install -r requirements.txt
+python src/main.py
+
+# Frontend
+cd ../jupyter-lab-extension
+npm install
+npm run build
+jupyter labextension install . --no-build
+jupyter lab
+```
+
+---
+For more details, see each component's README.

@@ -433,36 +433,43 @@
   font-weight: bold;
 }
 
-.command-menu-container {
+/* Popup Menu Styles */
+.jp-llm-ext-popup-menu-container {
   position: absolute;
-  background: var(--jp-layout-color1);
-  border: 1px solid var(--jp-border-color1);
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  z-index: 1000;
-  min-width: 200px;
+  background-color: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color2);
+  box-shadow: var(--jp-elevation-z4);
+  z-index: 10001;
+  padding: 4px;
+  min-width: 250px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
-.command-menu-item {
-  padding: 8px 12px;
-  cursor: pointer;
+.jp-llm-ext-popup-menu-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--jp-border-color1);
 }
 
-.command-menu-item:hover {
+.jp-llm-ext-popup-menu-item:last-child {
+  border-bottom: none;
+}
+
+.jp-llm-ext-popup-menu-item:hover {
   background: var(--jp-layout-color2);
 }
 
-.command-label {
-  font-weight: bold;
-  color: var(--jp-ui-font-color0);
-}
-
-.command-description {
+.jp-llm-ext-popup-menu-path {
+  padding: 4px 12px;
   font-size: 0.9em;
   color: var(--jp-ui-font-color2);
+  background-color: var(--jp-layout-color2);
+  border-bottom: 1px solid var(--jp-border-color2);
+  margin-bottom: 4px;
+  font-style: italic;
 }
 
 /* Keyboard shortcut visual indicator */
@@ -532,4 +539,4 @@
 .message-action-button:hover {
   background-color: var(--jp-layout-color3);
   color: var(--jp-brand-color1);
-} 
+}

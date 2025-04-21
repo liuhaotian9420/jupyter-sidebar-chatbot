@@ -1,4 +1,5 @@
 import { Widget } from '@lumino/widgets';
+import { Message } from '@lumino/messaging';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 /**
  * Main sidebar widget for the AI chat interface
@@ -16,8 +17,13 @@ export declare class SimpleSidebarWidget extends Widget {
     private isHistoryViewActive;
     private historyContainer;
     private apiClient;
-    private commandMenuContainer;
+    private popupMenuContainer;
     private keyboardShortcutIndicator;
+    private settingsModalContainer;
+    private currentNotebook;
+    private currentMenuLevel;
+    private currentMenuPath;
+    private menuHistory;
     constructor(docManager: IDocumentManager);
     /**
      * Shows a visual indicator for keyboard shortcuts
@@ -85,20 +91,37 @@ export declare class SimpleSidebarWidget extends Widget {
     private addMessageToCell;
     /**
      * Lists the contents of the current directory
+     * @param filterType Optional parameter to filter results by type ('all', 'file', or 'directory')
      */
-    private listCurrentDirectoryContents;
+    listCurrentDirectoryContents(filterType?: 'all' | 'file' | 'directory'): Promise<string[] | null>;
     /**
-     * Shows the command menu at the specified position
-     */
-    private showCommandMenu;
-    /**
-     * Hides the command menu
-     */
-    private hideCommandMenu;
-    /**
-     * Handles clicks outside the command menu
+     * Handles clicks outside the popup menu to close it.
      */
     private handleClickOutside;
+    /**
+     * Shows the popup menu at the specified position
+     */
+    private showPopupMenu;
+    /**
+     * Creates menu items from commands and appends them to the popup menu container
+     */
+    private createMenuItems;
+    /**
+     * Loads and displays directory contents in the popup menu
+     */
+    private loadDirectoryContents;
+    /**
+     * Sets the current directory path based on context
+     */
+    private setCurrentDirectoryPath;
+    /**
+     * Hides the popup menu
+     */
+    private hidePopupMenu;
+    /**
+     * Handle widget detachment.
+     */
+    protected onBeforeDetach(msg: Message): void;
     /**
      * Handles the code command - inserts selected code
      */
@@ -115,4 +138,7 @@ export declare class SimpleSidebarWidget extends Widget {
      * Gets the selected text from cell context
      */
     private getSelectedText;
+    private createSettingsModal;
+    private showSettingsModal;
+    private hideSettingsModal;
 }
