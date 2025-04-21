@@ -1207,6 +1207,7 @@ exports.SimpleSidebarWidget = void 0;
 const widgets_1 = __webpack_require__(/*! @lumino/widgets */ "webpack/sharing/consume/default/@lumino/widgets");
 const icons_1 = __webpack_require__(/*! ../icons */ "./lib/icons.js");
 const globals_1 = __webpack_require__(/*! ../globals */ "./lib/globals.js");
+__webpack_require__(/*! ../../style/index.css */ "./style/index.css"); // Add this line
 // Import modular components
 const chat_history_manager_1 = __webpack_require__(/*! ./chat-history-manager */ "./lib/chat/chat-history-manager.js");
 const file_browser_manager_1 = __webpack_require__(/*! ./file-browser-manager */ "./lib/chat/file-browser-manager.js");
@@ -1916,4 +1917,4 @@ function preprocessMarkdown(text) {
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.32dfcef183cf7179f4ca.js.map
+//# sourceMappingURL=lib_index_js.0aafac750f3d4af39f71.js.map

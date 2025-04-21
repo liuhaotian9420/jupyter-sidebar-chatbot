@@ -11,10 +11,10 @@ var _JUPYTERLAB;
 
 var moduleMap = {
 	"./index": () => {
-		return __webpack_require__.e("lib_index_js").then(() => (() => ((__webpack_require__(/*! ./lib/index.js */ "./lib/index.js")))));
+		return Promise.all([__webpack_require__.e("style_index_css"), __webpack_require__.e("lib_index_js")]).then(() => (() => ((__webpack_require__(/*! ./lib/index.js */ "./lib/index.js")))));
 	},
 	"./extension": () => {
-		return __webpack_require__.e("lib_index_js").then(() => (() => ((__webpack_require__(/*! ./lib/index.js */ "./lib/index.js")))));
+		return Promise.all([__webpack_require__.e("style_index_css"), __webpack_require__.e("lib_index_js")]).then(() => (() => ((__webpack_require__(/*! ./lib/index.js */ "./lib/index.js")))));
 	},
 	"./style": () => {
 		return __webpack_require__.e("style_index_css").then(() => (() => ((__webpack_require__(/*! ./style/index.css */ "./style/index.css")))));
@@ -124,7 +124,7 @@ __webpack_require__.d(exports, {
 /******/ 		// This function allow to reference async chunks
 /******/ 		__webpack_require__.u = (chunkId) => {
 /******/ 			// return url for filenames based on template
-/******/ 			return "" + chunkId + "." + {"lib_index_js":"32dfcef183cf7179f4ca","style_index_css":"70f3d9a12be4d8da8e54","vendors-node_modules_dompurify_dist_purify_es_mjs":"5c9bdb74b76d75afe368","vendors-node_modules_marked_lib_marked_esm_js":"4709d16d20ea1c806191"}[chunkId] + ".js";
+/******/ 			return "" + chunkId + "." + {"style_index_css":"2217246fb1a70ae62f3e","lib_index_js":"0aafac750f3d4af39f71","vendors-node_modules_dompurify_dist_purify_es_mjs":"5c9bdb74b76d75afe368","vendors-node_modules_marked_lib_marked_esm_js":"4709d16d20ea1c806191"}[chunkId] + ".js";
 /******/ 		};
 /******/ 	})();
 /******/ 	
@@ -244,7 +244,7 @@ __webpack_require__.d(exports, {
 /******/ 			switch(name) {
 /******/ 				case "default": {
 /******/ 					register("dompurify", "3.2.5", () => (__webpack_require__.e("vendors-node_modules_dompurify_dist_purify_es_mjs").then(() => (() => (__webpack_require__(/*! ./node_modules/dompurify/dist/purify.es.mjs */ "./node_modules/dompurify/dist/purify.es.mjs"))))));
-/******/ 					register("jupyter-simple-extension", "0.1.0", () => (__webpack_require__.e("lib_index_js").then(() => (() => (__webpack_require__(/*! ./lib/index.js */ "./lib/index.js"))))));
+/******/ 					register("jupyter-simple-extension", "0.1.0", () => (Promise.all([__webpack_require__.e("style_index_css"), __webpack_require__.e("lib_index_js")]).then(() => (() => (__webpack_require__(/*! ./lib/index.js */ "./lib/index.js"))))));
 /******/ 					register("marked", "15.0.8", () => (__webpack_require__.e("vendors-node_modules_marked_lib_marked_esm_js").then(() => (() => (__webpack_require__(/*! ./node_modules/marked/lib/marked.esm.js */ "./node_modules/marked/lib/marked.esm.js"))))));
 /******/ 				}
 /******/ 				break;
@@ -562,4 +562,4 @@ __webpack_require__.d(exports, {
 /******/ 	
 /******/ })()
 ;
-//# sourceMappingURL=remoteEntry.d33f1304b15b65b59e92.js.map
+//# sourceMappingURL=remoteEntry.95a1a1abc2a30208bac9.js.map

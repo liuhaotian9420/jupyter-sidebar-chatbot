@@ -6,6 +6,7 @@ import { Widget } from '@lumino/widgets';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { extensionIcon } from '../icons';
 import { globals } from '../globals';
+import '../../style/index.css'; // Add this line
 
 // Import modular components
 import { ChatHistoryManager } from './chat-history-manager';

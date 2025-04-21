@@ -1,7 +1,7 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { ICommandPalette } from '@jupyterlab/apputils';
 import { ILauncher } from '@jupyterlab/launcher';
-import { SimpleSidebarWidget } from './sidebar-widget';
+import { SimpleSidebarWidget } from './chat/sidebar-widget';
 /**
  * Registers commands for the extension
  */
