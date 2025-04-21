@@ -9,6 +9,7 @@ interface MenuActionCallbacks {
     insertDirectoryPath: (path: string) => void;
     getSelectedText: () => string | null;
     getCurrentCellContent: () => string | null;
+    insertCellByIndex: (index: number) => void;
 }
 /**
  * Manages the state and interactions of the multi-level popup menu.
@@ -24,24 +25,26 @@ export declare class PopupMenuManager {
     private callbacks;
     private currentNotebook;
     private selectedMenuItemIndex;
-    private currentDirectoryItems;
-    private itemsContainer;
+    private isRenderingContent;
+    private lastSearchTerm;
     constructor(docManager: IDocumentManager, widgetNode: HTMLElement, callbacks: MenuActionCallbacks);
+    private boundHandleKeyDown;
     dispose(): void;
     private handleDocumentClick;
     showPopupMenu(x: number, y: number): Promise<void>;
     hidePopupMenu(): void;
     private renderMenuContent;
     private renderTopLevelItems;
-    /** Fetches directory contents if needed and populates the items container */
-    private fetchAndPopulateMenuItems;
-    /** Updates only the list items in the itemsContainer based on search */
-    private updateMenuItemsUI;
+    private renderDirectoryBrowserItems;
+    /**
+     * Renders all cells from the current notebook
+     */
+    private renderCellItems;
     private createMenuItem;
     private handleMenuClick;
-    navigateMenu(level: 'files' | 'directories', path: string): Promise<void>;
+    navigateMenu(level: 'files' | 'directories' | 'cells', path: string): Promise<void>;
     navigateBackMenu(): void;
-    listCurrentDirectoryContents(basePath: string): Promise<{
+    listCurrentDirectoryContents(basePath: string, filterType?: 'file' | 'directory'): Promise<{
         name: string;
         path: string;
         type: 'file' | 'directory';
@@ -57,7 +60,7 @@ export declare class PopupMenuManager {
     private selectNextMenuItem;
     private selectPreviousMenuItem;
     /**
-     * Get all interactive menu items from the items container
+     * Get all interactive menu items
      */
     private getMenuItems;
 }

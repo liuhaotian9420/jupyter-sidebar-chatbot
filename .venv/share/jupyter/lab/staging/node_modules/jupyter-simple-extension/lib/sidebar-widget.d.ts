@@ -100,6 +100,11 @@ export declare class SimpleSidebarWidget extends Widget {
     private appendToInput;
     private createSettingsModal;
     private showSettingsModal;
+    private loadSavedSettings;
     private hideSettingsModal;
     private popSaveSuccess;
+    /**
+     * Gets cell content by index from the current notebook and inserts it into the input field
+     */
+    private insertCellByIndex;
 }

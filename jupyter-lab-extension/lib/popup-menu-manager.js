@@ -12,7 +12,8 @@ class PopupMenuManager {
         this.menuHistory = [];
         this.currentNotebook = null;
         this.selectedMenuItemIndex = -1; // Track currently selected menu item
-        this.currentDirectoryItems = null; // Cache for directory items
+        this.isRenderingContent = false; // Flag to prevent recursive renders
+        this.lastSearchTerm = ''; // Track last search term to avoid unnecessary re-renders
         this.docManager = docManager;
         this.widgetNode = widgetNode;
         this.callbacks = callbacks;
@@ -26,23 +27,48 @@ class PopupMenuManager {
         this.searchInput.type = 'text';
         this.searchInput.placeholder = 'Search...';
         this.searchInput.className = 'jp-llm-ext-popup-menu-search'; // Add class for styling
-        this.searchInput.addEventListener('input', () => this.updateMenuItemsUI()); // Change listener to call the targeted update function
-        this.searchInput.addEventListener('keydown', (event) => {
-            // Only stop specific keys needed to prevent menu interaction
-            if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape', 'Tab'].includes(event.key)) {
-                // Stop propagation so the main handler doesn't also act on these
-                console.log('POPUP (Search Input Listener): Stopping propagation for key:', event.key);
-                event.stopPropagation();
-                // We will handle these keys in the main handler based on target check
+        // Use 'input' event instead of directly re-rendering on every keystroke
+        this.searchInput.addEventListener('input', () => {
+            // Only re-render if the search term has actually changed
+            if (this.searchInput.value !== this.lastSearchTerm) {
+                this.lastSearchTerm = this.searchInput.value;
+                this.renderMenuContent();
             }
-            // Allow default behavior (like Backspace) by *not* stopping propagation for other keys
         });
-        // Create a dedicated container for the menu items
-        this.itemsContainer = document.createElement('div');
-        this.itemsContainer.className = 'jp-llm-ext-popup-menu-items-container';
+        // Handle keydown in search input to stop propagation for navigation keys
+        this.searchInput.addEventListener('keydown', (event) => {
+            console.log(`POPUP Search KeyDown: Key='${event.key}'`);
+            // IMPORTANT: Prevent these keys from being captured by the document handler
+            if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+                console.log('POPUP (Search Input): Stopping propagation for navigation key:', event.key);
+                if (event.key === 'Escape') {
+                    // Handle Escape directly here
+                    this.hidePopupMenu();
+                }
+                else if (event.key === 'Enter') {
+                    // Maybe select first item on Enter?
+                    const menuItems = this.getMenuItems();
+                    if (menuItems.length > 0) {
+                        this.selectedMenuItemIndex = 0;
+                        this.updateSelectionHighlight();
+                        // Optionally activate the item:
+                        // menuItems[0].click(); 
+                    }
+                }
+                else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    // Move to first/last menu item
+                    // The blur() will be handled by main key handler
+                }
+                event.stopPropagation();
+            }
+            // CRITICAL: DO NOT stop propagation for Backspace or other text editing keys
+            // This allows default behavior to work properly
+        }, true); // Use capture phase
         document.addEventListener('click', this.handleDocumentClick.bind(this), true);
-        // Add keyboard event listener for navigation
-        document.addEventListener('keydown', this.handleKeyDown.bind(this), true);
+        // IMPORTANT: Use a separate bound function for the document keydown
+        // so we can remove the exact same listener later
+        this.boundHandleKeyDown = this.handleKeyDown.bind(this);
+        document.addEventListener('keydown', this.boundHandleKeyDown, true);
         if (globals_1.globals.notebookTracker) {
             this.currentNotebook = globals_1.globals.notebookTracker.currentWidget;
             globals_1.globals.notebookTracker.currentChanged.connect((_, notebook) => {
@@ -52,7 +78,8 @@ class PopupMenuManager {
     }
     dispose() {
         document.removeEventListener('click', this.handleDocumentClick.bind(this), true);
-        document.removeEventListener('keydown', this.handleKeyDown.bind(this), true);
+        // Remove using the exact same bound function
+        document.removeEventListener('keydown', this.boundHandleKeyDown, true);
         // Remove from widgetNode if attached
         if (this.popupMenuContainer.parentNode === this.widgetNode) {
             this.popupMenuContainer.parentNode.removeChild(this.popupMenuContainer);
@@ -76,7 +103,7 @@ class PopupMenuManager {
             this.currentMenuPath = '';
             this.menuHistory = [];
             this.searchInput.value = ''; // Clear search on show
-            this.currentDirectoryItems = null; // Clear cache on show
+            this.lastSearchTerm = ''; // Reset last search term
             await this.setCurrentDirectoryPath();
         }
         await this.renderMenuContent();
@@ -92,10 +119,14 @@ class PopupMenuManager {
         // Add a small gap (10px) between the bottom of the menu and the trigger point
         const gap = 10;
         // Position above the cursor/button (y - menuHeight - gap)
-        this.popupMenuContainer.style.top = `${Math.max(0, y - menuHeight - gap)}px`;
+        this.popupMenuContainer.style.top = `${y - menuHeight - gap}px`;
         // Focus the search input if we are in file/directory view, otherwise focus the first item
         if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-            setTimeout(() => this.searchInput.focus(), 0); // Focus search input
+            setTimeout(() => {
+                // Focus after timeout to ensure DOM is ready
+                this.searchInput.focus();
+                console.log('POPUP: Focused search input');
+            }, 50); // Slightly longer timeout
             this.selectedMenuItemIndex = -1; // Don't select an item if search is focused
         }
         else {
@@ -103,7 +134,7 @@ class PopupMenuManager {
             this.selectedMenuItemIndex = -1;
             setTimeout(() => {
                 this.selectNextMenuItem();
-            }, 0);
+            }, 50);
         }
     }
     hidePopupMenu() {
@@ -118,142 +149,251 @@ class PopupMenuManager {
         }
     }
     async renderMenuContent() {
-        console.log(`POPUP: Rendering full menu content for level: ${this.currentMenuLevel}, path: ${this.currentMenuPath}`);
-        this.popupMenuContainer.innerHTML = '';
-        this.currentDirectoryItems = null; // Clear cache when re-rendering structure
-        if (this.menuHistory.length > 0) {
-            const backButton = this.createMenuItem('← Back', 'navigate-back', '', '');
-            this.popupMenuContainer.appendChild(backButton);
+        // Prevent recursive renders
+        if (this.isRenderingContent) {
+            console.log('POPUP: Skipping render - already rendering');
+            return;
         }
-        if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-            // Add search input
-            this.popupMenuContainer.appendChild(this.searchInput);
-            // Add path indicator
-            const pathIndicator = document.createElement('div');
-            pathIndicator.className = 'jp-llm-ext-popup-menu-path';
-            pathIndicator.textContent = `Path: ${this.currentMenuPath || '/'}`;
-            this.popupMenuContainer.appendChild(pathIndicator);
-            // Add the container for list items
-            this.popupMenuContainer.appendChild(this.itemsContainer);
-            // Fetch initial items and populate the items container
-            await this.fetchAndPopulateMenuItems();
+        this.isRenderingContent = true;
+        try {
+            // Clear existing content
+            while (this.popupMenuContainer.firstChild) {
+                this.popupMenuContainer.removeChild(this.popupMenuContainer.firstChild);
+            }
+            // If not at top level, add a search input for filtering items
+            if (this.currentMenuLevel !== 'top') {
+                // Add search input at the top of the menu
+                this.popupMenuContainer.appendChild(this.searchInput);
+                // Add the current path display
+                const pathDisplay = document.createElement('div');
+                pathDisplay.className = 'jp-llm-ext-popup-menu-path';
+                if (this.currentMenuLevel === 'cells') {
+                    pathDisplay.textContent = 'Current Notebook Cells';
+                }
+                else {
+                    // For files and directories
+                    pathDisplay.textContent = this.currentMenuPath || '/';
+                }
+                this.popupMenuContainer.appendChild(pathDisplay);
+                // Add back button if there's a history
+                if (this.menuHistory.length > 0) {
+                    const backButton = this.createMenuItem('« Back', 'navigate-back');
+                    backButton.classList.add('jp-llm-ext-popup-menu-back');
+                    this.popupMenuContainer.appendChild(backButton);
+                }
+            }
+            // Render different menu content based on current level
+            switch (this.currentMenuLevel) {
+                case 'top':
+                    this.renderTopLevelItems();
+                    break;
+                case 'files':
+                case 'directories':
+                    await this.renderDirectoryBrowserItems();
+                    break;
+                case 'cells':
+                    await this.renderCellItems();
+                    break;
+            }
+            // Reset selection after rendering
+            this.selectedMenuItemIndex = -1;
+            this.updateSelectionHighlight();
         }
-        else if (this.currentMenuLevel === 'top') {
-            this.renderTopLevelItems();
+        catch (error) {
+            console.error('POPUP: Error rendering menu content', error);
         }
-        // Re-apply selection highlight after rendering
-        this.updateSelectionHighlight();
+        finally {
+            this.isRenderingContent = false;
+        }
     }
     renderTopLevelItems() {
-        this.itemsContainer.innerHTML = ''; // Ensure items container is clear
         const topLevelCommands = [
-            { label: 'Code', description: 'Insert selected code or current cell', actionId: 'insert-code' },
-            { label: 'Cell', description: 'Insert current cell content', actionId: 'insert-cell' },
-            { label: 'File', description: 'Browse and insert file path', actionId: 'browse-files' },
-            { label: 'Directory', description: 'Browse and insert directory path', actionId: 'browse-directories' }
+            { label: 'Code', description: '', actionId: 'insert-code' },
+            { label: 'Cells', description: '', actionId: 'browse-cells' },
+            { label: 'File', description: '', actionId: 'browse-files' },
+            { label: 'Directory', description: '', actionId: 'browse-directories' }
         ];
         topLevelCommands.forEach(cmd => {
             const item = this.createMenuItem(cmd.label, cmd.actionId, '', cmd.description);
-            this.itemsContainer.appendChild(item);
+            this.popupMenuContainer.appendChild(item);
         });
     }
-    /** Fetches directory contents if needed and populates the items container */
-    async fetchAndPopulateMenuItems() {
-        var _a, _b;
-        console.log(`POPUP: Fetching/Populating items. Cached: ${!!this.currentDirectoryItems}`);
-        this.itemsContainer.innerHTML = ''; // Clear previous items
+    async renderDirectoryBrowserItems() {
+        var _a;
+        // Get search term
+        const searchTerm = this.searchInput.value.toLowerCase().trim();
         const loadingItem = this.createMenuItem('Loading...', 'loading', '', '');
         loadingItem.style.pointerEvents = 'none';
-        this.itemsContainer.appendChild(loadingItem);
+        // Temporarily add loading item below search/path
+        const insertionPoint = (_a = this.popupMenuContainer.querySelector('.jp-llm-ext-popup-menu-path')) === null || _a === void 0 ? void 0 : _a.nextSibling;
+        this.popupMenuContainer.insertBefore(loadingItem, insertionPoint || null);
         try {
-            // Fetch if cache is empty
-            if (!this.currentDirectoryItems) {
-                // Removed unused filterType declaration
-                // Fetch all initially for filtering, or apply server-side filter if API supports it
-                this.currentDirectoryItems = await this.listCurrentDirectoryContents(this.currentMenuPath); // Fetch all initially
-                console.log(`POPUP: Fetched ${(_b = (_a = this.currentDirectoryItems) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0} items for ${this.currentMenuPath}`);
+            // If contents were already fetched recently and we're just filtering again,
+            // we could potentially cache the results to avoid unnecessary API calls
+            const filterType = this.currentMenuLevel === 'files' ? 'file' : 'directory';
+            const contents = await this.listCurrentDirectoryContents(this.currentMenuPath, undefined); // Get both files and dirs first
+            // Check if still in DOM before trying to remove
+            if (this.popupMenuContainer.contains(loadingItem)) {
+                this.popupMenuContainer.removeChild(loadingItem);
             }
-            // Remove loading indicator
-            if (this.itemsContainer.contains(loadingItem)) {
-                this.itemsContainer.removeChild(loadingItem);
+            if (contents && contents.length > 0) {
+                // Filter based on search term and required type (file/dir)
+                const filteredContents = contents.filter(item => {
+                    const nameMatches = item.name.toLowerCase().includes(searchTerm);
+                    const typeMatches = this.currentMenuLevel === 'files' ? item.type === 'file' : item.type === 'directory';
+                    return nameMatches && typeMatches;
+                });
+                if (filteredContents.length > 0) {
+                    filteredContents.forEach(item => {
+                        const itemName = item.name;
+                        const itemType = item.type;
+                        const itemPath = item.path;
+                        const icon = itemType === 'directory' ? '📁' : '📄';
+                        let actionId;
+                        if (itemType === 'directory') {
+                            actionId = this.currentMenuLevel === 'files' ? 'select-directory-navigate' : 'select-directory-callback';
+                        }
+                        else { // itemType === 'file'
+                            actionId = 'select-file';
+                        }
+                        const menuItem = this.createMenuItem(`${icon} ${itemName}`, actionId, itemPath);
+                        this.popupMenuContainer.appendChild(menuItem);
+                    });
+                }
+                else {
+                    const emptyItem = this.createMenuItem(searchTerm ? 'No matches found' : `No ${filterType}s found`, 'empty', '', '');
+                    emptyItem.style.pointerEvents = 'none';
+                    this.popupMenuContainer.appendChild(emptyItem);
+                }
             }
-            // Populate UI based on current cache and search term
-            this.updateMenuItemsUI();
+            else {
+                const emptyItem = this.createMenuItem(`No items found in this directory`, 'empty', '', '');
+                emptyItem.style.pointerEvents = 'none';
+                this.popupMenuContainer.appendChild(emptyItem);
+            }
         }
         catch (error) {
-            if (this.itemsContainer.contains(loadingItem)) {
-                this.itemsContainer.removeChild(loadingItem);
+            if (this.popupMenuContainer.contains(loadingItem)) {
+                this.popupMenuContainer.removeChild(loadingItem);
             }
             const errorItem = this.createMenuItem(`Error: ${error}`, 'error', '', '');
             errorItem.style.color = 'red';
             errorItem.style.pointerEvents = 'none';
-            this.itemsContainer.appendChild(errorItem); // Add error to items container
-            console.error('POPUP: Error fetching directory contents:', error);
-            this.currentDirectoryItems = null; // Clear cache on error
+            this.popupMenuContainer.appendChild(errorItem);
+            console.error('POPUP: Error loading/filtering directory contents:', error);
         }
-        // Reset selection after fetching/re-populating
-        this.selectedMenuItemIndex = -1;
-        this.updateSelectionHighlight();
     }
-    /** Updates only the list items in the itemsContainer based on search */
-    updateMenuItemsUI() {
+    /**
+     * Renders all cells from the current notebook
+     */
+    async renderCellItems() {
+        var _a, _b;
+        // Get search term for filtering
         const searchTerm = this.searchInput.value.toLowerCase().trim();
-        console.log(`POPUP: Updating UI for search term: "${searchTerm}"`);
-        // Clear only the items container
-        this.itemsContainer.innerHTML = '';
-        if (!this.currentDirectoryItems) {
-            console.log('POPUP: No directory items cached, cannot update UI.');
-            // Optionally show a message or try fetching again
-            const errorItem = this.createMenuItem(`No items loaded`, 'empty', '', '');
-            this.itemsContainer.appendChild(errorItem);
-            return;
-        }
-        const currentLevelFilterType = this.currentMenuLevel === 'files' ? 'file' : 'directory'; // Use this for "No X found" message
-        // Filter cached items based on search term first
-        const searchFilteredContents = this.currentDirectoryItems.filter(item => {
-            return item.name.toLowerCase().includes(searchTerm);
-        });
-        // Filter again based *strictly* on the level's primary type + directories if browsing files
-        const finalFilteredContents = searchFilteredContents.filter(item => {
-            if (this.currentMenuLevel === 'files') {
-                // Keep files that match search, and directories that match search
-                return item.type === 'file' || item.type === 'directory';
+        // Create a loading indicator
+        const loadingItem = this.createMenuItem('Loading cells...', 'loading', '', '');
+        loadingItem.style.pointerEvents = 'none';
+        const insertionPoint = (_a = this.popupMenuContainer.querySelector('.jp-llm-ext-popup-menu-path')) === null || _a === void 0 ? void 0 : _a.nextSibling;
+        this.popupMenuContainer.insertBefore(loadingItem, insertionPoint || null);
+        try {
+            // Check if we have an active notebook
+            if (!this.currentNotebook || !this.currentNotebook.content || !this.currentNotebook.content.model) {
+                // Remove loading item
+                if (this.popupMenuContainer.contains(loadingItem)) {
+                    this.popupMenuContainer.removeChild(loadingItem);
+                }
+                const errorItem = this.createMenuItem('No active notebook found', 'error', '', '');
+                errorItem.style.color = 'red';
+                errorItem.style.pointerEvents = 'none';
+                this.popupMenuContainer.appendChild(errorItem);
+                return;
             }
-            else { // 'directories'
-                // Keep only directories that match search
-                return item.type === 'directory';
+            const notebookModel = this.currentNotebook.content.model;
+            const cells = notebookModel.cells;
+            // Remove loading indicator
+            if (this.popupMenuContainer.contains(loadingItem)) {
+                this.popupMenuContainer.removeChild(loadingItem);
             }
-        });
-        if (finalFilteredContents.length > 0) {
-            finalFilteredContents.forEach(item => {
-                const itemName = item.name;
-                const itemType = item.type;
-                const itemPath = item.path;
-                const icon = itemType === 'directory' ? '📁' : '📄';
-                let actionId;
-                if (itemType === 'directory') {
-                    // If viewing 'files', clicking dir navigates. If viewing 'dirs', clicking dir selects.
-                    actionId = this.currentMenuLevel === 'files' ? 'select-directory-navigate' : 'select-directory-callback';
+            if (!cells || cells.length === 0) {
+                const emptyItem = this.createMenuItem('No cells in notebook', 'empty', '', '');
+                emptyItem.style.pointerEvents = 'none';
+                this.popupMenuContainer.appendChild(emptyItem);
+                return;
+            }
+            // Process and display each cell
+            let filteredCellCount = 0;
+            for (let i = 0; i < cells.length; i++) {
+                const cell = cells.get(i);
+                const cellType = cell.type;
+                const cellContent = cell.sharedModel ? cell.sharedModel.getSource() :
+                    (((_b = cell.toJSON()) === null || _b === void 0 ? void 0 : _b.source) || '');
+                // Use type casting to avoid TypeScript errors
+                const executionCount = cellType === 'code' ?
+                    (cell.executionCount !== undefined && cell.executionCount !== null ?
+                        cell.executionCount : '*') :
+                    '';
+                // Create a preview of the cell content (truncate if needed)
+                const contentPreview = typeof cellContent === 'string' ?
+                    cellContent :
+                    (Array.isArray(cellContent) ? cellContent.join('\n') : '');
+                const firstLine = contentPreview.split('\n')[0] || '';
+                const truncatedContent = firstLine.length > 30 ?
+                    firstLine.substring(0, 30) + '...' :
+                    firstLine;
+                // Create cell label with styled type indicator
+                const typeIndicator = cellType === 'markdown' ? 'M' : 'C';
+                const executionDisplay = executionCount !== '' ? `[${executionCount}]` : '';
+                // Create menu item for this cell
+                const cellItem = this.createMenuItem('', // Empty text, will be added as HTML
+                'select-cell', i.toString() // Store cell index in path
+                );
+                // Create styled content with HTML elements
+                const typeSpan = document.createElement('span');
+                typeSpan.className = `cell-type-indicator cell-type-${cellType === 'markdown' ? 'md' : 'code'}`;
+                typeSpan.textContent = typeIndicator;
+                const execSpan = document.createElement('span');
+                execSpan.className = 'cell-exec-count';
+                execSpan.textContent = executionDisplay;
+                execSpan.style.marginRight = '8px';
+                const contentSpan = document.createElement('span');
+                contentSpan.className = 'cell-content-preview';
+                contentSpan.textContent = truncatedContent;
+                // Get the label span (first child of the menu item)
+                const labelSpan = cellItem.querySelector('span');
+                if (labelSpan) {
+                    labelSpan.textContent = ''; // Clear existing text
+                    labelSpan.appendChild(typeSpan);
+                    if (executionDisplay) {
+                        labelSpan.appendChild(execSpan);
+                    }
+                    labelSpan.appendChild(contentSpan);
                 }
-                else { // itemType === 'file'
-                    // Can only select a file if we are in 'files' mode.
-                    actionId = this.currentMenuLevel === 'files' ? 'select-file' : 'invalid-action'; // Should not happen if filtering is correct
+                // Construct full searchable text
+                const searchableText = `${typeIndicator} ${executionDisplay} ${truncatedContent}`.toLowerCase();
+                // Filter by search term if one is provided
+                if (searchTerm && !searchableText.includes(searchTerm)) {
+                    continue;
                 }
-                if (actionId !== 'invalid-action') {
-                    const menuItem = this.createMenuItem(`${icon} ${itemName}`, actionId, itemPath);
-                    this.itemsContainer.appendChild(menuItem); // Append to items container
-                }
-            });
+                this.popupMenuContainer.appendChild(cellItem);
+                filteredCellCount++;
+            }
+            if (filteredCellCount === 0) {
+                const noMatchItem = this.createMenuItem('No matching cells found', 'empty', '', '');
+                noMatchItem.style.pointerEvents = 'none';
+                this.popupMenuContainer.appendChild(noMatchItem);
+            }
         }
-        else {
-            // Use currentLevelFilterType for the message
-            const emptyItem = this.createMenuItem(searchTerm ? 'No matches found' : `No ${currentLevelFilterType}s found`, 'empty', '', '');
-            emptyItem.style.pointerEvents = 'none';
-            this.itemsContainer.appendChild(emptyItem); // Append to items container
+        catch (error) {
+            // Clean up loading indicator
+            if (this.popupMenuContainer.contains(loadingItem)) {
+                this.popupMenuContainer.removeChild(loadingItem);
+            }
+            const errorItem = this.createMenuItem(`Error: ${error}`, 'error', '', '');
+            errorItem.style.color = 'red';
+            errorItem.style.pointerEvents = 'none';
+            this.popupMenuContainer.appendChild(errorItem);
+            console.error('POPUP: Error loading notebook cells:', error);
         }
-        // Reset selection highlight as items changed
-        this.selectedMenuItemIndex = -1;
-        this.updateSelectionHighlight();
     }
     createMenuItem(text, actionId, path = '', description = '') {
         const item = document.createElement('div');
@@ -290,76 +430,83 @@ class PopupMenuManager {
                 const selectedText = this.callbacks.getSelectedText ? this.callbacks.getSelectedText() : null;
                 if (selectedText) {
                     this.callbacks.insertCode(selectedText);
-                    this.hidePopupMenu();
                 }
                 else {
                     const cellContent = this.callbacks.getCurrentCellContent ? this.callbacks.getCurrentCellContent() : null;
                     if (cellContent) {
                         this.callbacks.insertCode(cellContent);
-                        this.hidePopupMenu();
-                    }
-                    else {
-                        // Maybe provide feedback?
-                        console.log('POPUP: No code/cell selected to insert.');
                     }
                 }
+                this.hidePopupMenu();
                 break;
             }
-            case 'insert-cell': {
-                const cellContent = this.callbacks.getCurrentCellContent ? this.callbacks.getCurrentCellContent() : null;
-                if (cellContent) {
-                    this.callbacks.insertCell(cellContent);
-                    this.hidePopupMenu();
-                }
-                else {
-                    console.log('POPUP: No cell content to insert.');
-                }
+            case 'browse-cells':
+                await this.navigateMenu('cells', '');
+                this.searchInput.value = '';
                 break;
-            }
             case 'browse-files':
                 await this.navigateMenu('files', this.currentMenuPath || '');
-                // Don't clear search here, navigation handles focus/render
+                // Clear search when changing view type
+                this.searchInput.value = '';
                 break;
             case 'browse-directories':
                 await this.navigateMenu('directories', this.currentMenuPath || '');
-                // Don't clear search here
+                // Clear search when changing view type
+                this.searchInput.value = '';
+                break;
+            case 'select-cell':
+                if (path) {
+                    const cellIndex = parseInt(path);
+                    if (!isNaN(cellIndex) && this.callbacks.insertCellByIndex) {
+                        this.callbacks.insertCellByIndex(cellIndex);
+                        this.hidePopupMenu();
+                    }
+                    else {
+                        console.error('POPUP: Invalid cell index or callback missing.');
+                    }
+                }
                 break;
             case 'select-file':
-                if (path && this.currentMenuLevel === 'files') { // Ensure we are in the right mode
+                if (path) {
                     this.callbacks.insertFilePath(path);
                     this.hidePopupMenu();
                 }
                 else {
-                    console.error('POPUP: File selected but path is missing or not in file mode.');
+                    console.error('POPUP: File selected but path is missing.');
                 }
                 break;
-            case 'select-directory-navigate': // Navigate into dir when in file view
+            case 'select-directory-navigate': // New action to navigate into dir when in file view
                 if (path) {
                     await this.navigateMenu('files', path); // Navigate deeper, still looking for files
+                    this.searchInput.value = ''; // Clear search on navigation
                 }
                 else {
                     console.error('POPUP: Directory selected for navigation but path is missing.');
                 }
                 break;
-            case 'select-directory-callback': // Select dir when in directory view
-                if (path && this.currentMenuLevel === 'directories') { // Ensure we are in the right mode
+            case 'select-directory-callback': // New action to select dir when in directory view
+                if (path) {
                     this.callbacks.insertDirectoryPath(path); // Use the callback
                     this.hidePopupMenu();
                 }
                 else {
-                    console.error('POPUP: Directory selected for callback but path is missing or not in directory mode.');
+                    console.error('POPUP: Directory selected for callback but path is missing.');
                 }
+                break;
+            case 'placeholder-action':
+                console.log('Placeholder action triggered.');
+                this.hidePopupMenu();
                 break;
             case 'loading':
             case 'empty':
             case 'error':
                 break;
             default:
-                console.warn('Unknown or invalid menu action:', actionId);
-                // this.hidePopupMenu(); // Maybe don't hide on unknown action
+                console.warn('Unknown menu action:', actionId);
+                this.hidePopupMenu();
                 break;
         }
-        event.stopPropagation(); // Stop propagation after handling click
+        event.stopPropagation();
     }
     async navigateMenu(level, path) {
         console.log(`POPUP: Navigating to level: ${level}, path: ${path}`);
@@ -369,15 +516,19 @@ class PopupMenuManager {
         }
         this.currentMenuLevel = level;
         this.currentMenuPath = path;
-        this.searchInput.value = ''; // Clear search on explicit navigation
-        this.currentDirectoryItems = null; // Clear cache for new directory
-        // Render the new view structure (will fetch items)
+        // Don't clear search on programmatic navigation (like back button)
+        // this.searchInput.value = ''; // Maybe keep search term?
         await this.renderMenuContent();
         // Focus search input after navigating to file/dir view
         if (level === 'files' || level === 'directories') {
             setTimeout(() => this.searchInput.focus(), 0);
+            this.selectedMenuItemIndex = -1; // Reset selection
         }
-        // Selection is handled by renderMenuContent/fetchAndPopulate
+        else {
+            // Select first item if navigating back to top level
+            this.selectedMenuItemIndex = -1;
+            setTimeout(() => this.selectNextMenuItem(), 0);
+        }
     }
     navigateBackMenu() {
         const previousState = this.menuHistory.pop();
@@ -385,12 +536,12 @@ class PopupMenuManager {
             console.log(`POPUP: Navigating back to level: ${previousState.level}, path: ${previousState.path}`);
             this.currentMenuLevel = previousState.level;
             this.currentMenuPath = previousState.path;
-            this.searchInput.value = ''; // Clear search on back navigation too? Or keep it? Let's clear.
-            this.currentDirectoryItems = null; // Clear cache when going back
+            // Don't clear search on back navigation
             this.renderMenuContent().then(() => {
                 // Focus search input if going back to file/dir view
                 if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
                     setTimeout(() => this.searchInput.focus(), 0);
+                    this.selectedMenuItemIndex = -1; // Reset selection
                 }
                 else {
                     // Select first item if going back to top level
@@ -401,25 +552,31 @@ class PopupMenuManager {
         }
         else {
             console.log('POPUP: Already at the top level.');
-            // Don't hide here, maybe user hit backspace accidentally
-            // this.hidePopupMenu();
+            this.hidePopupMenu();
         }
     }
-    async listCurrentDirectoryContents(basePath) {
-        console.log(`POPUP: Listing directory contents for path: '${basePath}'`);
+    async listCurrentDirectoryContents(basePath, filterType) {
+        console.log(`POPUP: Listing directory contents for path: '${basePath}', filter: ${filterType || 'all'}`);
         try {
             const effectivePath = basePath === '/' ? '' : basePath;
+            // Ensure trailing slash removed for consistency unless it's root
             const pathForApi = effectivePath.endsWith('/') && effectivePath.length > 1 ? effectivePath.slice(0, -1) : effectivePath;
-            const contents = await this.docManager.services.contents.get(pathForApi || '');
+            const contents = await this.docManager.services.contents.get(pathForApi || ''); // Use empty string for root
             if (contents.type === 'directory') {
                 let items = contents.content.map((item) => ({
                     name: item.name,
                     path: item.path,
-                    type: item.type === 'directory' ? 'directory' : 'file'
+                    type: item.type === 'directory' ? 'directory' : 'file' // Simplify type
                 }));
+                // Filter only to files and directories (excluding notebooks, etc. if needed later)
                 items = items.filter((item) => item.type === 'file' || item.type === 'directory');
-                console.log(`POPUP: Raw directory items for '${basePath}':`, items.length);
+                // Apply optional filter *if provided*
+                if (filterType) {
+                    items = items.filter((item) => item.type === filterType);
+                }
+                console.log(`POPUP: Directory items for '${basePath}':`, items);
                 return items.sort((a, b) => {
+                    // Sort directories first, then files, then alphabetically
                     if (a.type === 'directory' && b.type !== 'directory')
                         return -1;
                     if (a.type !== 'directory' && b.type === 'directory')
@@ -429,12 +586,13 @@ class PopupMenuManager {
             }
             else {
                 console.error('Path is not a directory:', basePath);
-                return []; // Return empty array instead of null for consistency
+                return null;
             }
         }
         catch (error) {
             console.error(`POPUP: Error listing directory contents for '${basePath}':`, error);
-            return []; // Return empty array on error
+            // Handle specific errors like 404 Not Found if needed
+            return null;
         }
     }
     async setCurrentDirectoryPath() {
@@ -497,126 +655,118 @@ class PopupMenuManager {
      * Handle keyboard navigation when the popup menu is shown
      */
     handleKeyDown(event) {
+        var _a;
+        // Skip if menu not visible
         if (this.popupMenuContainer.style.display === 'none') {
-            return; // Menu not visible
-        }
-        // --- Check if the event target is the search input FIRST ---
-        if (event.target === this.searchInput) {
-            console.log(`POPUP KeyDown (Target Search): Key='${event.key}'`);
-            switch (event.key) {
-                case 'Escape':
-                    event.preventDefault(); // Prevent default Esc behavior (like clearing input)
-                    // Stop propagation handled by input's listener, but do it again just in case
-                    event.stopPropagation();
-                    this.hidePopupMenu();
-                    break;
-                case 'Enter':
-                    event.preventDefault(); // Prevent form submission
-                    event.stopPropagation();
-                    // Maybe select first item?
-                    const menuItemsForEnter = this.getMenuItems();
-                    if (menuItemsForEnter.length > 0) {
-                        this.selectedMenuItemIndex = 0; // Select first
-                        this.updateSelectionHighlight();
-                        menuItemsForEnter[0].click(); // Activate first item
-                    }
-                    break;
-                case 'ArrowUp':
-                case 'ArrowDown':
-                    event.preventDefault(); // Prevent cursor move in input
-                    event.stopPropagation();
-                    this.searchInput.blur(); // Move focus away
-                    if (event.key === 'ArrowDown') {
-                        this.selectNextMenuItem(); // Select first item
-                    }
-                    else {
-                        this.selectPreviousMenuItem(); // Select last item
-                    }
-                    break;
-                case 'Tab':
-                    // Allow default tab behavior *or* implement custom cycle
-                    event.preventDefault(); // Prevent default tab
-                    event.stopPropagation();
-                    // Tab moves focus to the first menu item
-                    this.searchInput.blur();
-                    this.selectNextMenuItem(); // Selects first
-                    // Optionally focus the item visually:
-                    // this.getMenuItems()[this.selectedMenuItemIndex]?.focus();
-                    break;
-                default:
-                    // Allow Backspace, letters, etc. - DO NOTHING HERE
-                    // Let the browser handle the input field editing.
-                    // The 'input' event listener will handle re-filtering the list.
-                    console.log(`POPUP KeyDown (Target Search): Allowing default for key '${event.key}'`);
-                    // Crucially, DO NOT stopPropagation or preventDefault
-                    break;
-            }
-            // Handled or allowed default, return from main handler
             return;
         }
-        // --- If the event target is NOT the search input ---
-        console.log(`POPUP KeyDown (Target Menu): Key='${event.key}'`);
+        console.log(`POPUP KeyDown: Key='${event.key}', Target='${(_a = event.target) === null || _a === void 0 ? void 0 : _a.tagName}', SearchFocused='${document.activeElement === this.searchInput}'`);
+        // Special handling for when search input is focused
+        if (document.activeElement === this.searchInput) {
+            // The input's own keydown handler will handle most keys
+            // But for certain keys like arrow keys, we may need to move focus
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                // Move selection to first/last item
+                event.preventDefault();
+                event.stopPropagation();
+                // Delay before moving focus - this gives time for the search input's
+                // own keydown handler to process the key first
+                setTimeout(() => {
+                    if (event.key === 'ArrowDown') {
+                        this.searchInput.blur();
+                        this.selectNextMenuItem();
+                    }
+                    else { // ArrowUp
+                        this.searchInput.blur();
+                        this.selectPreviousMenuItem();
+                    }
+                }, 0);
+                return;
+            }
+            // IMPORTANT: For Backspace in search input, just return without handling
+            // Let the default behavior happen
+            if (event.key === 'Backspace') {
+                // Just perform default behavior in search input
+                return;
+            }
+            // Let all other keys be handled by the search input's own handler
+            return;
+        }
+        // From here, search input is NOT focused
         const menuItems = this.getMenuItems();
         switch (event.key) {
             case 'ArrowDown':
-            case 'ArrowUp': // Consolidate arrow handling
                 if (menuItems.length > 0) {
+                    console.log('POPUP KeyDown (Menu Focused): ArrowDown');
                     event.preventDefault();
                     event.stopPropagation();
-                    if (event.key === 'ArrowDown')
-                        this.selectNextMenuItem();
-                    else
-                        this.selectPreviousMenuItem();
+                    this.selectNextMenuItem();
+                }
+                break;
+            case 'ArrowUp':
+                if (menuItems.length > 0) {
+                    console.log('POPUP KeyDown (Menu Focused): ArrowUp');
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.selectPreviousMenuItem();
                 }
                 break;
             case 'Backspace':
+                console.log('POPUP KeyDown (Menu Focused): Backspace');
+                // Only prevent default and navigate back if we have history
                 if (this.menuHistory.length > 0) {
-                    event.preventDefault(); // Prevent default only if navigating
+                    event.preventDefault();
                     event.stopPropagation();
                     this.navigateBackMenu();
                 }
                 else {
-                    // At top level, DO NOTHING - allow backspace to potentially affect chat input
-                    console.log('POPUP KeyDown (Target Menu): Allowing Backspace at top level.');
+                    console.log('POPUP KeyDown (Menu Focused): No history, allowing Backspace default action');
+                    // Allow default - don't prevent or stop propagation
                 }
                 break;
             case 'Enter':
+                console.log('POPUP KeyDown (Menu Focused): Enter');
+                // Only activate if an item is selected
                 if (this.selectedMenuItemIndex >= 0 && this.selectedMenuItemIndex < menuItems.length) {
                     event.preventDefault();
                     event.stopPropagation();
-                    console.log(`POPUP KeyDown (Target Menu): Clicking item ${this.selectedMenuItemIndex}`);
                     menuItems[this.selectedMenuItemIndex].click();
                 }
                 break;
             case 'Tab':
-                event.preventDefault(); // Prevent default tab
+                console.log('POPUP KeyDown (Menu Focused): Tab');
+                // Basic Tab support: move focus between search and first/last item
+                event.preventDefault();
                 event.stopPropagation();
-                // If in file/dir view, Tab from menu moves to search input
                 if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-                    this.deselectAllMenuItems();
                     this.searchInput.focus();
+                    this.deselectAllMenuItems(); // Deselect items when search gets focus via Tab
                 }
                 else {
-                    // From top-level menu, maybe close? Or cycle? Let's close.
+                    // Maybe close menu on Tab from top level? Or do nothing.
                     this.hidePopupMenu();
                 }
                 break;
             case 'Escape':
+                console.log('POPUP KeyDown (Menu Focused): Escape');
                 event.preventDefault();
                 event.stopPropagation();
                 this.hidePopupMenu();
                 break;
             default:
+                console.log(`POPUP KeyDown (Menu Focused): Default key '${event.key}'`);
                 // If typing a character and in file/dir view, focus search
                 if ((this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') &&
                     event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                    event.preventDefault();
+                    event.preventDefault(); // Prevent character appearing elsewhere
                     event.stopPropagation();
                     this.searchInput.focus();
-                    // Append character and trigger input event
+                    // Manually append the typed character as focus happens after keydown default action
                     this.searchInput.value += event.key;
+                    // Trigger input event manually to update list
                     this.searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
                 }
+                // Allow other keys (e.g., modifiers) to pass through if not handled
                 break;
         }
     }
@@ -675,15 +825,14 @@ class PopupMenuManager {
         this.updateSelectionHighlight();
     }
     /**
-     * Get all interactive menu items from the items container
+     * Get all interactive menu items
      */
     getMenuItems() {
-        // Query only within the specific items container
-        const items = Array.from(this.itemsContainer.querySelectorAll('.jp-llm-ext-popup-menu-item'));
+        const items = Array.from(this.popupMenuContainer.querySelectorAll('.jp-llm-ext-popup-menu-item'));
+        // Filter out non-interactive items like loading, empty, error
         return items.filter(item => {
             const actionId = item.dataset.actionId;
-            // Filter out non-interactive items
-            return actionId && actionId !== 'loading' && actionId !== 'empty' && actionId !== 'error';
+            return actionId !== 'loading' && actionId !== 'empty' && actionId !== 'error';
         });
     }
 }

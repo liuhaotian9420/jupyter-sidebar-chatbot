@@ -80,6 +80,7 @@ export class SimpleSidebarWidget extends Widget {
         insertDirectoryPath: (path: string) => this.appendToInput(`directory ${path}`), // If needed
         getSelectedText: () => this.getSelectedText(),
         getCurrentCellContent: () => this.getCurrentCellContent(),
+        insertCellByIndex: (index: number) => this.insertCellByIndex(index)
     });
 
     // Create a new chat on start
@@ -156,7 +157,7 @@ export class SimpleSidebarWidget extends Widget {
         
         // Show the popup menu above the cursor position
         this.popupMenuManager.showPopupMenu(left + 60, cursorTop -20);
-        this.showKeyboardShortcutIndicator('Context menu opened');
+        this.showKeyboardShortcutIndicator('Browse cells, code, files, and more');
       }
     }
     // Check for Ctrl+L (for selected code)
@@ -514,7 +515,7 @@ export class SimpleSidebarWidget extends Widget {
     const buttons = [
       { 
         text: '@', 
-        title: 'Insert context (@)', 
+        title: 'Browse cells, code, files, and more', 
         action: (event: MouseEvent) => {
           // Get the button's position
           const targetButton = event.currentTarget as HTMLElement;
@@ -1071,9 +1072,19 @@ export class SimpleSidebarWidget extends Widget {
       const key = (document.getElementById('settings-api-key') as HTMLInputElement).value;
       const url = (document.getElementById('settings-api-url') as HTMLInputElement).value;
       const rules = (document.getElementById('settings-rules') as HTMLTextAreaElement).value;
-      console.log('Settings saved:', { provider, key, url, rules });
+      
+      // Save settings to localStorage for persistence
+      const settings = { provider, key, url, rules };
+      localStorage.setItem('jp-llm-ext-settings', JSON.stringify(settings));
+      
+      console.log('Settings saved:', settings);
       this.hideSettingsModal();
       this.popSaveSuccess();
+      
+      // Update API client with new settings if needed
+      if (url) {
+        this.apiClient = new ApiClient(url);
+      }
     });
 
     const cancelBtn = document.createElement('button');
@@ -1094,19 +1105,103 @@ export class SimpleSidebarWidget extends Widget {
   }
 
   private showSettingsModal(): void {
+    // Load saved settings from localStorage
+    this.loadSavedSettings();
     this.settingsModalContainer.style.display = 'flex';
+  }
+
+  private loadSavedSettings(): void {
+    const savedSettings = localStorage.getItem('jp-llm-ext-settings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        
+        // Update UI with saved settings
+        if (settings.provider) {
+          (document.getElementById('settings-provider') as HTMLSelectElement).value = settings.provider;
+        }
+        
+        if (settings.key) {
+          (document.getElementById('settings-api-key') as HTMLInputElement).value = settings.key;
+        }
+        
+        if (settings.url) {
+          (document.getElementById('settings-api-url') as HTMLInputElement).value = settings.url;
+        }
+        
+        if (settings.rules) {
+          (document.getElementById('settings-rules') as HTMLTextAreaElement).value = settings.rules;
+        }
+      } catch (error) {
+        console.error('Error loading saved settings:', error);
+      }
+    }
   }
 
   private hideSettingsModal(): void {
     this.settingsModalContainer.style.display = 'none';
   }
   private popSaveSuccess(): void {
-    const successMessage = document.createElement('div');
-    successMessage.className = 'jp-llm-ext-settings-success-message';
-    successMessage.textContent = 'Settings saved successfully';
-    this.settingsModalContainer.appendChild(successMessage);
+    // Create a toast notification container
+    const toast = document.createElement('div');
+    toast.className = 'jp-llm-ext-toast-notification jp-llm-ext-settings-success';
+    toast.textContent = 'Settings saved successfully';
+    
+    // Add to the main widget (not the modal which is hidden)
+    this.node.appendChild(toast);
+    
+    // Animate in
     setTimeout(() => {
-      successMessage.remove();
+      toast.classList.add('visible');
+    }, 10);
+    
+    // Remove after delay
+    setTimeout(() => {
+      toast.classList.remove('visible');
+      // Wait for fade out animation to complete before removing
+      setTimeout(() => {
+        toast.remove();
+      }, 300);
     }, 3000);
+  }
+
+  /**
+   * Gets cell content by index from the current notebook and inserts it into the input field
+   */
+  private insertCellByIndex(index: number): void {
+    try {
+      if (!globals.notebookTracker || !globals.notebookTracker.currentWidget) {
+        console.error('No active notebook found');
+        return;
+      }
+
+      const notebookPanel = globals.notebookTracker.currentWidget;
+      const model = notebookPanel.content.model;
+      
+      if (!model || !model.cells || index >= model.cells.length) {
+        console.error(`Invalid cell index: ${index}`);
+        return;
+      }
+      
+      const cell = model.cells.get(index);
+      let cellContent = '';
+      
+      // Get cell content - handle different ways content might be stored
+      if (cell.sharedModel && typeof cell.sharedModel.getSource === 'function') {
+        cellContent = cell.sharedModel.getSource();
+      } else {
+        const cellJson = cell.toJSON();
+        if (typeof cellJson?.source === 'string') {
+          cellContent = cellJson.source;
+        } else if (Array.isArray(cellJson?.source)) {
+          cellContent = cellJson.source.join('\n');
+        }
+      }
+      
+      // Insert cell reference with content, without type indicator or execution count
+      this.appendToInput(`cell ${cellContent}`);
+    } catch (error) {
+      console.error('Error inserting cell by index:', error);
+    }
   }
 }
