@@ -505,7 +505,6 @@ export class PopupMenuManager {
                 const selectedText = this.callbacks.getSelectedText ? this.callbacks.getSelectedText() : null;
                 if (selectedText) {
                     // Show submenu for code insertion options
-                    const menuPosition = target.getBoundingClientRect();
                     const submenuItems = [
                         { label: 'Insert as plain code', actionId: 'insert-plain-code', data: selectedText },
                         { label: 'Insert as collapsed reference', actionId: 'collapse-code-ref', data: selectedText }

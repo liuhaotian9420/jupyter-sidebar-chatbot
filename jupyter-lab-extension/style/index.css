@@ -1564,6 +1564,68 @@
   transform: translateY(-1px);
 }
 
+/* Code reference widgets */
+.jp-llm-ext-code-ref-widget {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--jp-layout-color2);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 4px;
+  margin: 4px 0;
+  padding: 2px 6px;
+  font-family: var(--jp-code-font-family);
+  font-size: var(--jp-code-font-size);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.jp-llm-ext-code-ref-label {
+  color: var(--jp-inverse-layout-color3);
+  margin-right: 8px;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+.jp-llm-ext-code-ref-toggle {
+  background: none;
+  border: none;
+  color: var(--jp-inverse-layout-color3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  margin-left: 2px;
+}
+
+.jp-llm-ext-code-ref-toggle:hover {
+  background-color: var(--jp-layout-color3);
+  border-radius: 2px;
+}
+
+.jp-llm-ext-code-ref-content {
+  background-color: var(--jp-layout-color0);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 4px;
+  color: var(--jp-content-font-color1);
+  font-family: var(--jp-code-font-family);
+  font-size: var(--jp-code-font-size);
+  margin-top: 4px;
+  max-height: 300px;
+  max-width: 100%;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+  width: 100%;
+}
+
+.user-content-with-refs {
+  white-space: pre-wrap;
+  font-family: var(--jp-content-font-family);
+  font-size: var(--jp-content-font-size);
+  line-height: var(--jp-content-line-height);
+  color: var(--jp-content-font-color1);
+}
+
 /* Add highlight.js theme styles - based on a light theme compatible with JupyterLab */
 /* This is a simplified version of the GitHub theme */
 .hljs {

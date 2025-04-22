@@ -10,6 +10,7 @@ interface MenuActionCallbacks {
     getSelectedText: () => string | null;
     getCurrentCellContent: () => string | null;
     insertCellByIndex: (index: number) => void;
+    insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => void;
 }
 /**
  * Manages the state and interactions of the multi-level popup menu.

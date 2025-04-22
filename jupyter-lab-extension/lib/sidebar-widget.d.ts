@@ -20,6 +20,7 @@ export declare class SimpleSidebarWidget extends Widget {
     private popupMenuManager;
     private bottomBarContainer;
     private hasAtSymbol;
+    private hasCodeRefListeners;
     constructor(docManager: IDocumentManager);
     /**
      * Shows a visual indicator for keyboard shortcuts
@@ -125,4 +126,12 @@ export declare class SimpleSidebarWidget extends Widget {
      * Copies an image to the clipboard
      */
     private copyImageToClipboard;
+    /**
+     * Inserts a collapsible code reference widget in the input area
+     */
+    private insertCollapsedCodeRef;
+    /**
+     * Handle clicks on code reference expand/collapse buttons
+     */
+    private handleCodeRefClick;
 }

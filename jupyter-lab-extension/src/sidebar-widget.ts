@@ -657,9 +657,31 @@ export class SimpleSidebarWidget extends Widget {
   private handleSendMessage(): void {
     const message = this.inputField.value.trim();
     if (message) {
+      // Process the message to replace code reference placeholders
+      let processedMessage = message;
+      let hasCodeRefs = false;
+      
+      // Check if we have code references
+      if ('_codeRefMap' in this.inputField && (this.inputField as any)._codeRefMap instanceof Map) {
+        const codeRefMap = (this.inputField as any)._codeRefMap as Map<string, string>;
+        hasCodeRefs = codeRefMap.size > 0;
+        
+        // Create a processed message with the placeholders for display
+        // We'll keep the original message for sending to the API
+        processedMessage = message;
+        
+        // No need to actually modify the message since we'll use the DOM for rendering
+      }
+      
       // Add user message to UI (send as text, not markdown by default for user)
-      this.addMessage(message, 'user', false);
+      this.addMessage(processedMessage, 'user', hasCodeRefs);
+      
+      // Clear input and reset the code reference map
       this.inputField.value = '';
+      if ('_codeRefMap' in this.inputField) {
+        (this.inputField as any)._codeRefMap = new Map<string, string>();
+      }
+      
       this.inputField.rows = 1; // Reset rows after sending
       this.inputField.style.height = ''; // Reset height after sending
       
@@ -1138,7 +1160,7 @@ export class SimpleSidebarWidget extends Widget {
           addPathBtn.title = 'Add image path to current cell';
           addPathBtn.addEventListener('click', (event) => {
             event.stopPropagation();
-            this.addMessageToCell(completeResponse.trim()); // Adds just the image path to the cell
+            this.addMessageToCell(fullImageUrl); // Use the full image URL
           });
           imgActionsDiv.appendChild(addPathBtn);
           
@@ -1416,7 +1438,7 @@ export class SimpleSidebarWidget extends Widget {
       addPathBtn.title = 'Add image path to current cell';
       addPathBtn.addEventListener('click', (event) => {
         event.stopPropagation();
-        this.addMessageToCell(text.trim()); // Adds just the image path to the cell
+        this.addMessageToCell(fullImageUrl); // Use the full image URL
       });
       imgActionsDiv.appendChild(addPathBtn);
       
@@ -1425,6 +1447,96 @@ export class SimpleSidebarWidget extends Widget {
       
       // Add the image container to the message div
       messageDiv.appendChild(imageContainer);
+    } else if (sender === 'user' && isMarkdown) {
+      // Special case: User message with code references
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'user-content-with-refs';
+      
+      // Process the text to replace code reference placeholders
+      let processedText = text;
+      
+      // Check if we have a code reference map attached to the input field
+      if ('_codeRefMap' in this.inputField && (this.inputField as any)._codeRefMap instanceof Map) {
+        const codeRefMap = (this.inputField as any)._codeRefMap as Map<string, string>;
+        
+        // If we have code reference widgets to render
+        if (codeRefMap.size > 0) {
+          // Create a document fragment to avoid multiple reflows
+          const fragment = document.createDocumentFragment();
+          
+          // Split the text by code reference placeholders and create the widgets
+          const regex = /\[CodeRef:([^\]]+)\]/g;
+          let lastIndex = 0;
+          let match;
+          
+          while ((match = regex.exec(processedText)) !== null) {
+            // Add the text before the placeholder
+            const textBefore = processedText.substring(lastIndex, match.index);
+            if (textBefore) {
+              const textNode = document.createTextNode(textBefore);
+              fragment.appendChild(textNode);
+            }
+            
+            // Get the placeholder and its corresponding HTML
+            const placeholder = match[0];
+            const widgetHtml = codeRefMap.get(placeholder);
+            
+            if (widgetHtml) {
+              // Create a temporary container for the HTML
+              const tempContainer = document.createElement('div');
+              tempContainer.innerHTML = widgetHtml;
+              
+              // Append the code reference widget
+              while (tempContainer.firstChild) {
+                fragment.appendChild(tempContainer.firstChild);
+              }
+            } else {
+              // If widget HTML not found, just add the placeholder text
+              const placeholderNode = document.createTextNode(placeholder);
+              fragment.appendChild(placeholderNode);
+            }
+            
+            lastIndex = match.index + placeholder.length;
+          }
+          
+          // Add any remaining text after the last placeholder
+          if (lastIndex < processedText.length) {
+            const textAfter = processedText.substring(lastIndex);
+            const textNode = document.createTextNode(textAfter);
+            fragment.appendChild(textNode);
+          }
+          
+          // Add the processed content to the message
+          contentDiv.appendChild(fragment);
+          
+          // Add click event handlers for the code reference widgets
+          const toggleButtons = contentDiv.querySelectorAll('.jp-llm-ext-code-ref-toggle');
+          toggleButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+              const target = event.target as HTMLElement;
+              const widget = target.closest('.jp-llm-ext-code-ref-widget') as HTMLElement;
+              const content = widget?.querySelector('.jp-llm-ext-code-ref-content') as HTMLElement;
+              
+              if (content) {
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+                target.textContent = isVisible ? '⯈' : '⯆';
+              }
+              
+              event.preventDefault();
+              event.stopPropagation();
+            });
+          });
+        } else {
+          // Just plain text without code references
+          contentDiv.textContent = processedText;
+        }
+      } else {
+        // No code reference map, just add the text
+        contentDiv.textContent = processedText;
+      }
+      
+      messageDiv.appendChild(contentDiv);
     } else if (isMarkdown || sender === 'bot') {
       // Render as markdown (existing logic)
       const markdownIndicator = document.createElement('div');

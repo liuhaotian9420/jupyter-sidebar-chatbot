@@ -29,6 +29,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.currentChatId = '';
         this.isHistoryViewActive = false;
         this.hasAtSymbol = false; // Track whether @ symbol is present in input
+        this.hasCodeRefListeners = false; // Track whether code ref listeners are added
         /**
          * Handles keyboard shortcuts
          */
@@ -151,7 +152,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             insertDirectoryPath: (path) => this.appendToInput(`directory ${path}`), // If needed
             getSelectedText: () => this.getSelectedText(),
             getCurrentCellContent: () => this.getCurrentCellContent(),
-            insertCellByIndex: (index) => this.insertCellByIndex(index)
+            insertCellByIndex: (index) => this.insertCellByIndex(index),
+            insertCollapsedCodeRef: (code, cellIndex, lineNumber, notebookName) => this.insertCollapsedCodeRef(code, cellIndex, lineNumber, notebookName)
         });
         // Create a new chat on start
         this.createNewChat();
@@ -520,9 +522,25 @@ class SimpleSidebarWidget extends widgets_1.Widget {
     handleSendMessage() {
         const message = this.inputField.value.trim();
         if (message) {
+            // Process the message to replace code reference placeholders
+            let processedMessage = message;
+            let hasCodeRefs = false;
+            // Check if we have code references
+            if ('_codeRefMap' in this.inputField && this.inputField._codeRefMap instanceof Map) {
+                const codeRefMap = this.inputField._codeRefMap;
+                hasCodeRefs = codeRefMap.size > 0;
+                // Create a processed message with the placeholders for display
+                // We'll keep the original message for sending to the API
+                processedMessage = message;
+                // No need to actually modify the message since we'll use the DOM for rendering
+            }
             // Add user message to UI (send as text, not markdown by default for user)
-            this.addMessage(message, 'user', false);
+            this.addMessage(processedMessage, 'user', hasCodeRefs);
+            // Clear input and reset the code reference map
             this.inputField.value = '';
+            if ('_codeRefMap' in this.inputField) {
+                this.inputField._codeRefMap = new Map();
+            }
             this.inputField.rows = 1; // Reset rows after sending
             this.inputField.style.height = ''; // Reset height after sending
             // Reset expanded state if needed after sending
@@ -937,7 +955,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 addPathBtn.title = 'Add image path to current cell';
                 addPathBtn.addEventListener('click', (event) => {
                     event.stopPropagation();
-                    this.addMessageToCell(completeResponse.trim()); // Adds just the image path to the cell
+                    this.addMessageToCell(fullImageUrl); // Use the full image URL
                 });
                 imgActionsDiv.appendChild(addPathBtn);
                 // Add the buttons to the image container
@@ -1182,13 +1200,92 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             addPathBtn.title = 'Add image path to current cell';
             addPathBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
-                this.addMessageToCell(text.trim()); // Adds just the image path to the cell
+                this.addMessageToCell(fullImageUrl); // Use the full image URL
             });
             imgActionsDiv.appendChild(addPathBtn);
             // Add the buttons to the image container
             imageContainer.appendChild(imgActionsDiv);
             // Add the image container to the message div
             messageDiv.appendChild(imageContainer);
+        }
+        else if (sender === 'user' && isMarkdown) {
+            // Special case: User message with code references
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'user-content-with-refs';
+            // Process the text to replace code reference placeholders
+            let processedText = text;
+            // Check if we have a code reference map attached to the input field
+            if ('_codeRefMap' in this.inputField && this.inputField._codeRefMap instanceof Map) {
+                const codeRefMap = this.inputField._codeRefMap;
+                // If we have code reference widgets to render
+                if (codeRefMap.size > 0) {
+                    // Create a document fragment to avoid multiple reflows
+                    const fragment = document.createDocumentFragment();
+                    // Split the text by code reference placeholders and create the widgets
+                    const regex = /\[CodeRef:([^\]]+)\]/g;
+                    let lastIndex = 0;
+                    let match;
+                    while ((match = regex.exec(processedText)) !== null) {
+                        // Add the text before the placeholder
+                        const textBefore = processedText.substring(lastIndex, match.index);
+                        if (textBefore) {
+                            const textNode = document.createTextNode(textBefore);
+                            fragment.appendChild(textNode);
+                        }
+                        // Get the placeholder and its corresponding HTML
+                        const placeholder = match[0];
+                        const widgetHtml = codeRefMap.get(placeholder);
+                        if (widgetHtml) {
+                            // Create a temporary container for the HTML
+                            const tempContainer = document.createElement('div');
+                            tempContainer.innerHTML = widgetHtml;
+                            // Append the code reference widget
+                            while (tempContainer.firstChild) {
+                                fragment.appendChild(tempContainer.firstChild);
+                            }
+                        }
+                        else {
+                            // If widget HTML not found, just add the placeholder text
+                            const placeholderNode = document.createTextNode(placeholder);
+                            fragment.appendChild(placeholderNode);
+                        }
+                        lastIndex = match.index + placeholder.length;
+                    }
+                    // Add any remaining text after the last placeholder
+                    if (lastIndex < processedText.length) {
+                        const textAfter = processedText.substring(lastIndex);
+                        const textNode = document.createTextNode(textAfter);
+                        fragment.appendChild(textNode);
+                    }
+                    // Add the processed content to the message
+                    contentDiv.appendChild(fragment);
+                    // Add click event handlers for the code reference widgets
+                    const toggleButtons = contentDiv.querySelectorAll('.jp-llm-ext-code-ref-toggle');
+                    toggleButtons.forEach(button => {
+                        button.addEventListener('click', (event) => {
+                            const target = event.target;
+                            const widget = target.closest('.jp-llm-ext-code-ref-widget');
+                            const content = widget === null || widget === void 0 ? void 0 : widget.querySelector('.jp-llm-ext-code-ref-content');
+                            if (content) {
+                                const isVisible = content.style.display !== 'none';
+                                content.style.display = isVisible ? 'none' : 'block';
+                                target.textContent = isVisible ? '⯈' : '⯆';
+                            }
+                            event.preventDefault();
+                            event.stopPropagation();
+                        });
+                    });
+                }
+                else {
+                    // Just plain text without code references
+                    contentDiv.textContent = processedText;
+                }
+            }
+            else {
+                // No code reference map, just add the text
+                contentDiv.textContent = processedText;
+            }
+            messageDiv.appendChild(contentDiv);
         }
         else if (isMarkdown || sender === 'bot') {
             // Render as markdown (existing logic)
@@ -1828,6 +1925,79 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         catch (error) {
             console.error('Error copying image to clipboard:', error);
             alert('Error copying image to clipboard: ' + error);
+        }
+    }
+    /**
+     * Inserts a collapsible code reference widget in the input area
+     */
+    insertCollapsedCodeRef(code, cellIndex, lineNumber, notebookName) {
+        try {
+            // Create a unique ID for this reference
+            const refId = `code-ref-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+            // Format the reference as "notebook-name:cell-index-line-number"
+            const codeRef = `${notebookName}:${cellIndex}-${lineNumber}`;
+            // Create the collapsible widget HTML
+            const widgetHtml = `<span class="jp-llm-ext-code-ref-widget" data-ref-id="${refId}" data-code="${encodeURIComponent(code)}" data-ref="${codeRef}">
+        <span class="jp-llm-ext-code-ref-label">${codeRef}</span>
+        <button class="jp-llm-ext-code-ref-toggle" title="Expand/collapse code">⯈</button>
+        <span class="jp-llm-ext-code-ref-content" style="display:none;">${code}</span>
+      </span>`;
+            // Insert at cursor position or append to end
+            const cursorPos = this.inputField.selectionStart || 0;
+            const textBeforeCursor = this.inputField.value.substring(0, cursorPos);
+            const textAfterCursor = this.inputField.value.substring(cursorPos);
+            // Insert widget placeholder text in the textarea
+            const placeholderText = `[CodeRef:${codeRef}]`;
+            this.inputField.value = textBeforeCursor + placeholderText + textAfterCursor;
+            // Store the HTML to replace the placeholder when rendering
+            let elementMap;
+            if (!('_codeRefMap' in this.inputField)) {
+                elementMap = new Map();
+                this.inputField._codeRefMap = elementMap;
+            }
+            else {
+                elementMap = this.inputField._codeRefMap;
+            }
+            // Store the HTML to replace the placeholder when rendering
+            elementMap.set(placeholderText, widgetHtml);
+            // Focus the input field and move cursor to after the inserted widget
+            this.inputField.focus();
+            this.inputField.setSelectionRange(cursorPos + placeholderText.length, cursorPos + placeholderText.length);
+            // Add event listener for expanding/collapsing (delegated to parent)
+            if (!this.hasCodeRefListeners) {
+                this.inputField.addEventListener('click', this.handleCodeRefClick.bind(this));
+                this.hasCodeRefListeners = true;
+            }
+        }
+        catch (error) {
+            console.error('Error inserting collapsed code reference:', error);
+            // Fallback to inserting code directly
+            this.appendToInput(`code ${code}`);
+        }
+    }
+    /**
+     * Handle clicks on code reference expand/collapse buttons
+     */
+    handleCodeRefClick(event) {
+        const target = event.target;
+        // Check if it's the toggle button
+        if (target.classList.contains('jp-llm-ext-code-ref-toggle')) {
+            // Find the parent widget
+            const widget = target.closest('.jp-llm-ext-code-ref-widget');
+            if (!widget)
+                return;
+            // Find the content element
+            const content = widget.querySelector('.jp-llm-ext-code-ref-content');
+            if (!content)
+                return;
+            // Toggle the content visibility
+            const isVisible = content.style.display !== 'none';
+            content.style.display = isVisible ? 'none' : 'block';
+            // Update the toggle button text
+            target.textContent = isVisible ? '⯈' : '⯆';
+            // Stop event propagation
+            event.preventDefault();
+            event.stopPropagation();
         }
     }
 }
