@@ -13,6 +13,7 @@ interface MenuActionCallbacks {
     getSelectedText: () => string | null;
     getCurrentCellContent: () => string | null;
     insertCellByIndex: (index: number) => void; // New callback for cell selection
+    insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => void; // New callback for collapsed references
 }
 
 /**
@@ -503,7 +504,26 @@ export class PopupMenuManager {
             case 'insert-code': {
                 const selectedText = this.callbacks.getSelectedText ? this.callbacks.getSelectedText() : null;
                 if (selectedText) {
-                    this.callbacks.insertCode(selectedText);
+                    // Show submenu for code insertion options
+                    const menuPosition = target.getBoundingClientRect();
+                    const submenuItems = [
+                        { label: 'Insert as plain code', actionId: 'insert-plain-code', data: selectedText },
+                        { label: 'Insert as collapsed reference', actionId: 'collapse-code-ref', data: selectedText }
+                    ];
+                    
+                    // Replace current menu with submenu options
+                    this.popupMenuContainer.innerHTML = '';
+                    submenuItems.forEach(item => {
+                        const menuItem = this.createMenuItem(item.label, item.actionId, item.data);
+                        this.popupMenuContainer.appendChild(menuItem);
+                    });
+                    
+                    // Add back button
+                    const backButton = this.createMenuItem('Back', 'navigate-back');
+                    backButton.style.borderTop = '1px solid var(--jp-border-color1)';
+                    this.popupMenuContainer.appendChild(backButton);
+                    
+                    return; // Don't hide menu, wait for submenu selection
                 } else {
                     const cellContent = this.callbacks.getCurrentCellContent ? this.callbacks.getCurrentCellContent() : null;
                     if (cellContent) {
@@ -511,6 +531,58 @@ export class PopupMenuManager {
                     }
                 }
                 this.hidePopupMenu();
+                break;
+            }
+            case 'insert-plain-code': {
+                if (path) {
+                    this.callbacks.insertCode(path);
+                    this.hidePopupMenu();
+                }
+                break;
+            }
+            case 'collapse-code-ref': {
+                if (path && this.currentNotebook) {
+                    try {
+                        // Get notebook file name (without extension)
+                        const notebookPath = this.currentNotebook.context.path;
+                        const notebookName = notebookPath.split('/').pop()?.split('.')[0] || 'notebook';
+                        
+                        // Find current cell index and approximate line number
+                        const currentCell = this.currentNotebook.content.activeCell;
+                        if (!currentCell) {
+                            throw new Error('No active cell found');
+                        }
+                        
+                        // Get current cell index
+                        const currentCellIndex = this.currentNotebook.content.activeCellIndex;
+                        
+                        // Estimate line number from cursor position
+                        let lineNumber = 1; // Default to line 1
+                        
+                        if (currentCell.editor) {
+                            const editor = currentCell.editor;
+                            const cursor = editor.getCursorPosition();
+                            if (cursor) {
+                                lineNumber = cursor.line + 1; // Convert to 1-indexed
+                            }
+                        }
+                        
+                        // Invoke the callback with all the information needed
+                        this.callbacks.insertCollapsedCodeRef(path, currentCellIndex, lineNumber, notebookName);
+                        this.hidePopupMenu();
+                    } catch (error) {
+                        console.error('Error creating collapsed code reference:', error);
+                        // Fallback to inserting code directly
+                        this.callbacks.insertCode(path);
+                        this.hidePopupMenu();
+                    }
+                } else {
+                    // If something went wrong or no path provided, just insert as regular code
+                    if (path) {
+                        this.callbacks.insertCode(path);
+                    }
+                    this.hidePopupMenu();
+                }
                 break;
             }
             case 'browse-cells':

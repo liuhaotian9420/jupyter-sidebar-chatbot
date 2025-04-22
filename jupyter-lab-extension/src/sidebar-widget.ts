@@ -75,6 +75,7 @@ export class SimpleSidebarWidget extends Widget {
   private popupMenuManager: PopupMenuManager;
   private bottomBarContainer!: HTMLDivElement;
   private hasAtSymbol: boolean = false; // Track whether @ symbol is present in input
+  private hasCodeRefListeners: boolean = false; // Track whether code ref listeners are added
 
   constructor(docManager: IDocumentManager) {
     super();
@@ -112,7 +113,9 @@ export class SimpleSidebarWidget extends Widget {
         insertDirectoryPath: (path: string) => this.appendToInput(`directory ${path}`), // If needed
         getSelectedText: () => this.getSelectedText(),
         getCurrentCellContent: () => this.getCurrentCellContent(),
-        insertCellByIndex: (index: number) => this.insertCellByIndex(index)
+        insertCellByIndex: (index: number) => this.insertCellByIndex(index),
+        insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => 
+            this.insertCollapsedCodeRef(code, cellIndex, lineNumber, notebookName)
     });
 
     // Create a new chat on start
@@ -2120,6 +2123,93 @@ export class SimpleSidebarWidget extends Widget {
     } catch (error) {
       console.error('Error copying image to clipboard:', error);
       alert('Error copying image to clipboard: ' + error);
+    }
+  }
+
+  /**
+   * Inserts a collapsible code reference widget in the input area
+   */
+  private insertCollapsedCodeRef(code: string, cellIndex: number, lineNumber: number, notebookName: string): void {
+    try {
+      // Create a unique ID for this reference
+      const refId = `code-ref-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+      
+      // Format the reference as "notebook-name:cell-index-line-number"
+      const codeRef = `${notebookName}:${cellIndex}-${lineNumber}`;
+      
+      // Create the collapsible widget HTML
+      const widgetHtml = `<span class="jp-llm-ext-code-ref-widget" data-ref-id="${refId}" data-code="${encodeURIComponent(code)}" data-ref="${codeRef}">
+        <span class="jp-llm-ext-code-ref-label">${codeRef}</span>
+        <button class="jp-llm-ext-code-ref-toggle" title="Expand/collapse code">⯈</button>
+        <span class="jp-llm-ext-code-ref-content" style="display:none;">${code}</span>
+      </span>`;
+      
+      // Insert at cursor position or append to end
+      const cursorPos = this.inputField.selectionStart || 0;
+      const textBeforeCursor = this.inputField.value.substring(0, cursorPos);
+      const textAfterCursor = this.inputField.value.substring(cursorPos);
+      
+      // Insert widget placeholder text in the textarea
+      const placeholderText = `[CodeRef:${codeRef}]`;
+      this.inputField.value = textBeforeCursor + placeholderText + textAfterCursor;
+      
+      // Store the HTML to replace the placeholder when rendering
+      let elementMap: Map<string, string>;
+      if (!('_codeRefMap' in this.inputField)) {
+        elementMap = new Map<string, string>();
+        (this.inputField as any)._codeRefMap = elementMap;
+      } else {
+        elementMap = (this.inputField as any)._codeRefMap;
+      }
+      
+      // Store the HTML to replace the placeholder when rendering
+      elementMap.set(placeholderText, widgetHtml);
+      
+      // Focus the input field and move cursor to after the inserted widget
+      this.inputField.focus();
+      this.inputField.setSelectionRange(
+        cursorPos + placeholderText.length,
+        cursorPos + placeholderText.length
+      );
+      
+      // Add event listener for expanding/collapsing (delegated to parent)
+      if (!this.hasCodeRefListeners) {
+        this.inputField.addEventListener('click', this.handleCodeRefClick.bind(this));
+        this.hasCodeRefListeners = true;
+      }
+    } catch (error) {
+      console.error('Error inserting collapsed code reference:', error);
+      // Fallback to inserting code directly
+      this.appendToInput(`code ${code}`);
+    }
+  }
+  
+  /**
+   * Handle clicks on code reference expand/collapse buttons
+   */
+  private handleCodeRefClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    
+    // Check if it's the toggle button
+    if (target.classList.contains('jp-llm-ext-code-ref-toggle')) {
+      // Find the parent widget
+      const widget = target.closest('.jp-llm-ext-code-ref-widget') as HTMLElement;
+      if (!widget) return;
+      
+      // Find the content element
+      const content = widget.querySelector('.jp-llm-ext-code-ref-content') as HTMLElement;
+      if (!content) return;
+      
+      // Toggle the content visibility
+      const isVisible = content.style.display !== 'none';
+      content.style.display = isVisible ? 'none' : 'block';
+      
+      // Update the toggle button text
+      target.textContent = isVisible ? '⯈' : '⯆';
+      
+      // Stop event propagation
+      event.preventDefault();
+      event.stopPropagation();
     }
   }
 }
