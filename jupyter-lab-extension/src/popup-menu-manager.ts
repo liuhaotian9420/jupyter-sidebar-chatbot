@@ -31,6 +31,8 @@ export class PopupMenuManager {
     private selectedMenuItemIndex: number = -1; // Track currently selected menu item
     private isRenderingContent: boolean = false; // Flag to prevent recursive renders
     private lastSearchTerm: string = ''; // Track last search term to avoid unnecessary re-renders
+    private _anchorX?: number;
+    private _anchorY?: number;
 
     constructor(docManager: IDocumentManager, widgetNode: HTMLElement, callbacks: MenuActionCallbacks) {
         this.docManager = docManager;
@@ -133,6 +135,10 @@ export class PopupMenuManager {
 
     async showPopupMenu(x: number, y: number): Promise<void> { 
         console.log(`POPUP: Showing menu at (${x}, ${y})`);
+        // Store the initial anchor point for positioning
+        this._anchorX = x;
+        this._anchorY = y;
+        
         if (this.popupMenuContainer.style.display === 'none') {
             this.currentMenuLevel = 'top';
             this.currentMenuPath = '';
@@ -147,21 +153,8 @@ export class PopupMenuManager {
         // Ensure it's attached to the widget node if somehow detached
         this.widgetNode.appendChild(this.popupMenuContainer);
         
-        // Position the popup menu - place it above the trigger point
-        this.popupMenuContainer.style.position = 'absolute';
-        this.popupMenuContainer.style.left = `${x}px`;
-        
-        // Show the menu first so we can calculate its height
-        this.popupMenuContainer.style.display = 'block';
-        
-        // Get the actual height after rendering
-        const menuHeight = this.popupMenuContainer.offsetHeight;
-        
-        // Add a small gap (10px) between the bottom of the menu and the trigger point
-        const gap = 10;
-        
-        // Position above the cursor/button (y - menuHeight - gap)
-        this.popupMenuContainer.style.top = `${y - menuHeight - gap}px`;
+        // Position the popup menu - handled in updatePopupPosition
+        this.updatePopupPosition();
         
         // Focus the search input if we are in file/directory view, otherwise focus the first item
         if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
@@ -174,9 +167,7 @@ export class PopupMenuManager {
         } else {
             // Reset and select the first menu item for top level
             this.selectedMenuItemIndex = -1;
-            setTimeout(() => {
-                this.selectNextMenuItem();
-            }, 50);
+             setTimeout(() => this.selectNextMenuItem(), 50);
         }
     }
 
@@ -250,6 +241,11 @@ export class PopupMenuManager {
             // Reset selection after rendering
             this.selectedMenuItemIndex = -1;
             this.updateSelectionHighlight();
+            
+            // Update the position to maintain the fixed bottom edge
+            if (this.popupMenuContainer.style.display !== 'none' && this._anchorX !== undefined && this._anchorY !== undefined) {
+                this.updatePopupPosition();
+            }
         } catch (error) {
             console.error('POPUP: Error rendering menu content', error);
         } finally {
@@ -940,6 +936,34 @@ export class PopupMenuManager {
             const actionId = item.dataset.actionId;
             return actionId !== 'loading' && actionId !== 'empty' && actionId !== 'error';
         });
+    }
+
+    /**
+     * Update popup position, keeping the bottom edge fixed at the anchor point
+     */
+    private updatePopupPosition(): void {
+        // Make sure anchor points are defined
+        const anchorX = this._anchorX ?? 0;
+        const anchorY = this._anchorY ?? 0;
+        
+        // Position the popup menu
+        this.popupMenuContainer.style.position = 'absolute';
+        this.popupMenuContainer.style.left = `${anchorX}px`;
+        
+        // Show the menu so we can calculate its height
+        this.popupMenuContainer.style.display = 'block';
+        
+        // Get the actual height after rendering
+        const menuHeight = this.popupMenuContainer.offsetHeight;
+        
+        // Add a small gap (10px) between the bottom of the menu and the trigger point
+        const gap = 10;
+        
+        // Position above the cursor/button to keep bottom edge at the anchor point:
+        // y - gap = bottom edge of popup, so popup top = y - gap - menuHeight
+        this.popupMenuContainer.style.top = `${anchorY - gap - menuHeight}px`;
+        
+        console.log(`POPUP: Positioned menu at height ${menuHeight}px with bottom at ${anchorY - gap}px`);
     }
 
     // Add other necessary methods related to the popup menu here...

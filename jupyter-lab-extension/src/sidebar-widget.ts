@@ -43,6 +43,7 @@ export class SimpleSidebarWidget extends Widget {
   private settingsModalContainer: HTMLDivElement;
   private popupMenuManager: PopupMenuManager;
   private bottomBarContainer!: HTMLDivElement;
+  private hasAtSymbol: boolean = false; // Track whether @ symbol is present in input
 
   constructor(docManager: IDocumentManager) {
     super();
@@ -150,6 +151,9 @@ export class SimpleSidebarWidget extends Widget {
           '@' + 
           this.inputField.value.substring(cursorPosition);
         this.inputField.value = newValue;
+        
+        // Update has @ symbol flag
+        this.hasAtSymbol = true;
         
         // Move cursor after the @ symbol
         this.inputField.selectionStart = cursorPosition + 1;
@@ -282,6 +286,21 @@ export class SimpleSidebarWidget extends Widget {
         event.preventDefault();
         this.handleSendMessage();
       }
+    });
+    
+    // Add input event listener to detect changes to the input field
+    this.inputField.addEventListener('input', () => {
+      // Check if the @ symbol has been removed
+      const cursorPosition = this.inputField.selectionStart;
+      const textBeforeCursor = this.inputField.value.slice(0, cursorPosition);
+      const hasAtNow = textBeforeCursor.endsWith('@') && 
+                     (cursorPosition === 1 || // @ is at start of input
+                      !!textBeforeCursor[cursorPosition - 2].match(/\s/)); // @ follows whitespace
+      if (this.hasAtSymbol && !hasAtNow) {
+        // @ symbol was present but now it's gone, hide the popup
+        this.popupMenuManager.hidePopupMenu();
+      }
+      this.hasAtSymbol = hasAtNow;
     });
 
     // Create send button container (directly used later)

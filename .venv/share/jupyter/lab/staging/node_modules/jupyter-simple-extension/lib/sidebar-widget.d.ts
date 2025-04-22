@@ -19,6 +19,7 @@ export declare class SimpleSidebarWidget extends Widget {
     private settingsModalContainer;
     private popupMenuManager;
     private bottomBarContainer;
+    private hasAtSymbol;
     constructor(docManager: IDocumentManager);
     /**
      * Shows a visual indicator for keyboard shortcuts

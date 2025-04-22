@@ -27,6 +27,8 @@ export declare class PopupMenuManager {
     private selectedMenuItemIndex;
     private isRenderingContent;
     private lastSearchTerm;
+    private _anchorX?;
+    private _anchorY?;
     constructor(docManager: IDocumentManager, widgetNode: HTMLElement, callbacks: MenuActionCallbacks);
     private boundHandleKeyDown;
     dispose(): void;
@@ -63,5 +65,9 @@ export declare class PopupMenuManager {
      * Get all interactive menu items
      */
     private getMenuItems;
+    /**
+     * Update popup position, keeping the bottom edge fixed at the anchor point
+     */
+    private updatePopupPosition;
 }
 export {};
