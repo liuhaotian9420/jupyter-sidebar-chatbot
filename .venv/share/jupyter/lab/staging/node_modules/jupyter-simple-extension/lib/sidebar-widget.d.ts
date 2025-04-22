@@ -74,6 +74,10 @@ export declare class SimpleSidebarWidget extends Widget {
      */
     private handleSendMessage;
     /**
+     * Handles sending an automatic message (like confirmed/rejected) from the UI
+     */
+    private handleSendAutoMessage;
+    /**
      * Adds a message to the chat interface
      */
     private addMessage;
@@ -117,4 +121,8 @@ export declare class SimpleSidebarWidget extends Widget {
      */
     private highlightCode;
     private copyToClipboard;
+    /**
+     * Copies an image to the clipboard
+     */
+    private copyImageToClipboard;
 }

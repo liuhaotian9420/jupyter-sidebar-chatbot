@@ -144,7 +144,7 @@
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "yjs": "^13.5.40",
-        "jupyter-simple-extension": "file:C:\\Users\\11459\\Documents\\GitHub\\jupyter-llm-ext\\.venv\\share\\jupyter\\lab\\extensions\\jupyter-simple-extension-0.1.0-feeb4415ae8625b0ab76d3c6a4758e0f08ed880a.tgz"
+        "jupyter-simple-extension": "file:C:\\Users\\11459\\Documents\\GitHub\\jupyter-llm-ext\\.venv\\share\\jupyter\\lab\\extensions\\jupyter-simple-extension-0.1.0-d8df52c0006a989e29dfc7542b99a157e807ab9a.tgz"
     },
     "dependencies": {
         "@jupyterlab/application": "~4.4.0",
@@ -198,7 +198,7 @@
         "@jupyterlab/ui-components-extension": "~4.4.0",
         "@jupyterlab/vega5-extension": "~4.4.0",
         "@jupyterlab/workspaces-extension": "~4.4.0",
-        "jupyter-simple-extension": "file:../extensions/jupyter-simple-extension-0.1.0-feeb4415ae8625b0ab76d3c6a4758e0f08ed880a.tgz"
+        "jupyter-simple-extension": "file:../extensions/jupyter-simple-extension-0.1.0-d8df52c0006a989e29dfc7542b99a157e807ab9a.tgz"
     },
     "devDependencies": {
         "@jupyterlab/builder": "^4.4.0",

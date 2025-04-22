@@ -9,15 +9,14 @@ import { configureMarked, preprocessMarkdown } from './markdown-config';
 import { PopupMenuManager } from './popup-menu-manager';
 import hljs from 'highlight.js';
 
-// Add image cache object for base64 images
-const imageCache: Record<string, string> = {};
+// Add image cache object for base64 images - COMMENTED OUT, no longer needed for URL method
+// const imageCache: Record<string, string> = {};
 
 // Configure marked with our settings
 configureMarked();
 
-/**
- * Process HTML content to cache and optimize base64 images
- */
+// COMMENTED OUT: Process HTML content to cache and optimize base64 images
+/*
 function processBase64Images(html: string): string {
   // Use a DOM parser to find and process <img> tags with base64 src attributes
   const parser = new DOMParser();
@@ -41,6 +40,7 @@ function processBase64Images(html: string): string {
   // Return the processed HTML
   return doc.body.innerHTML;
 }
+*/
 
 /**
  * Chat history item interface
@@ -654,8 +654,8 @@ export class SimpleSidebarWidget extends Widget {
   private handleSendMessage(): void {
     const message = this.inputField.value.trim();
     if (message) {
-      // Add user message to UI
-      this.addMessage(message, 'user', this.isMarkdownMode);
+      // Add user message to UI (send as text, not markdown by default for user)
+      this.addMessage(message, 'user', false);
       this.inputField.value = '';
       this.inputField.rows = 1; // Reset rows after sending
       this.inputField.style.height = ''; // Reset height after sending
@@ -715,147 +715,272 @@ export class SimpleSidebarWidget extends Widget {
         },
         // On complete
         () => {
-          // Hide streaming div, show markdown div
+          // Hide streaming div, show final content div
           streamingDiv.style.display = 'none';
           contentDiv.style.display = 'block';
           
-          // Pre-process and render markdown
-          try {
-            // Pre-process the markdown to fix any issues with code blocks
-            const processedMarkdown = preprocessMarkdown(completeResponse);
+          // Check if the complete response is an image URL
+          const isImageUrl = completeResponse.startsWith('/images/') && completeResponse.endsWith('.png');
+
+          if (isImageUrl) {
+            // Create a container for the image that allows positioning the buttons
+            const imageContainer = document.createElement('div');
+            imageContainer.className = 'jp-llm-ext-image-container';
+            imageContainer.style.position = 'relative';
             
-            // Parse and sanitize
-            const rawHtml = marked.parse(processedMarkdown) as string;
-            const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+            // Render as an image tag
+            const img = document.createElement('img');
+            const fullImageUrl = `http://127.0.0.1:8000${completeResponse}`; // Construct full URL
+            img.src = fullImageUrl;
+            img.alt = 'Image from bot';
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
             
-            // Process base64 images in the HTML
-            const processedHtml = processBase64Images(sanitizedHtml);
+            imageContainer.appendChild(img);
             
-            // Apply the HTML with proper code block styling
-            contentDiv.innerHTML = processedHtml;
+            // Add action buttons for the image
+            const imgActionsDiv = document.createElement('div');
+            imgActionsDiv.className = 'jp-llm-ext-image-actions';
+            imgActionsDiv.style.position = 'absolute';
+            imgActionsDiv.style.bottom = '10px';
+            imgActionsDiv.style.right = '10px';
+            imgActionsDiv.style.display = 'flex';
+            imgActionsDiv.style.gap = '8px';
+            imgActionsDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.6)';
+            imgActionsDiv.style.borderRadius = '4px';
+            imgActionsDiv.style.padding = '4px';
             
-            // Enhance code blocks with language detection and action buttons
-            const codeBlocks = contentDiv.querySelectorAll('pre code');
-            codeBlocks.forEach(block => {
-              // Add standard JupyterLab classes for consistency
-              block.classList.add('jp-RenderedText');
-              block.parentElement?.classList.add('jp-RenderedHTMLCommon');
-              
-              // Get code content to detect language
-              const codeContent = block.textContent || '';
-              
-              // Create code block header for buttons
-              const codeHeader = document.createElement('div');
-              codeHeader.className = 'jp-llm-ext-code-header';
-              
-              // Add language indicator if detected
-              const language = this.detectLanguage(codeContent);
-              if (language) {
-                const langIndicator = document.createElement('span');
-                langIndicator.className = 'jp-llm-ext-code-language';
-                langIndicator.textContent = language;
-                codeHeader.appendChild(langIndicator);
-                
-                // Add language class for syntax highlighting
-                block.classList.add(`language-${language}`);
-                
-                // Apply syntax highlighting
-                try {
-                  block.innerHTML = this.highlightCode(codeContent, language);
-                } catch (error) {
-                  console.error('Error applying syntax highlighting:', error);
-                  // Keep original content if highlighting fails
-                }
-              } else {
-                // Try auto-detection if no specific language detected
-                try {
-                  block.innerHTML = this.highlightCode(codeContent, '');
-                } catch (error) {
-                  console.error('Error applying auto syntax highlighting:', error);
-                  // Keep original content if highlighting fails
-                }
+            // Copy image button
+            const copyImgBtn = document.createElement('button');
+            copyImgBtn.className = 'jp-llm-ext-image-action-button';
+            copyImgBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+            copyImgBtn.title = 'Copy image to clipboard';
+            copyImgBtn.addEventListener('click', (event) => {
+              event.stopPropagation();
+              this.copyImageToClipboard(fullImageUrl);
+            });
+            imgActionsDiv.appendChild(copyImgBtn);
+            
+            // Add file path button
+            const addPathBtn = document.createElement('button');
+            addPathBtn.className = 'jp-llm-ext-image-action-button';
+            addPathBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+            addPathBtn.title = 'Add image path to current cell';
+            addPathBtn.addEventListener('click', (event) => {
+              event.stopPropagation();
+              this.addMessageToCell(completeResponse); // Adds just the image path to the cell
+            });
+            imgActionsDiv.appendChild(addPathBtn);
+            
+            // Add the buttons to the image container
+            imageContainer.appendChild(imgActionsDiv);
+            
+            // Add the image container to the content div
+            contentDiv.appendChild(imageContainer);
+            
+            // Save image URL to history (as text)
+            const chat = this.chatHistory.find(c => c.id === this.currentChatId);
+            if (chat) {
+                chat.messages.push({ 
+                    text: completeResponse, // Store the URL
+                    sender: 'bot', 
+                    isMarkdown: false // Treat it as non-markdown for history
+                });
+            }
+          } else {
+            // Try to render markdown
+            try {
+              const processedText = preprocessMarkdown(completeResponse);
+              const rawHtml = marked.parse(processedText) as string;
+              const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+              contentDiv.innerHTML = sanitizedHtml;
+
+              // Check if this is an interrupt message
+              const isInterrupt = completeResponse.startsWith('**[INTERRUPT]**');
+              if (isInterrupt) {
+                // Create buttons container
+                const buttonsContainer = document.createElement('div');
+                buttonsContainer.className = 'jp-llm-ext-interrupt-buttons';
+                buttonsContainer.style.marginTop = '12px';
+                buttonsContainer.style.display = 'flex';
+                buttonsContainer.style.gap = '8px';
+
+                // Create confirm button
+                const confirmButton = document.createElement('button');
+                confirmButton.className = 'jp-llm-ext-confirm-button';
+                confirmButton.textContent = 'Confirm';
+                confirmButton.style.padding = '6px 12px';
+                confirmButton.style.background = '#4CAF50';
+                confirmButton.style.color = 'white';
+                confirmButton.style.border = 'none';
+                confirmButton.style.borderRadius = '4px';
+                confirmButton.style.cursor = 'pointer';
+                confirmButton.style.fontWeight = 'bold';
+                confirmButton.addEventListener('click', () => {
+                  // Disable buttons after click
+                  confirmButton.disabled = true;
+                  rejectButton.disabled = true;
+                  confirmButton.style.opacity = '0.5';
+                  rejectButton.style.opacity = '0.5';
+
+                  // Add "confirmed" message as user and send it to API
+                  this.addMessage('confirmed', 'user', false);
+                  this.handleSendAutoMessage('confirmed');
+                });
+
+                // Create reject button
+                const rejectButton = document.createElement('button');
+                rejectButton.className = 'jp-llm-ext-reject-button';
+                rejectButton.textContent = 'Reject';
+                rejectButton.style.padding = '6px 12px';
+                rejectButton.style.background = '#F44336';
+                rejectButton.style.color = 'white';
+                rejectButton.style.border = 'none';
+                rejectButton.style.borderRadius = '4px';
+                rejectButton.style.cursor = 'pointer';
+                rejectButton.style.fontWeight = 'bold';
+                rejectButton.addEventListener('click', () => {
+                  // Disable buttons after click
+                  confirmButton.disabled = true;
+                  rejectButton.disabled = true;
+                  confirmButton.style.opacity = '0.5';
+                  rejectButton.style.opacity = '0.5';
+
+                  // Add "rejected" message as user and send it to API
+                  this.addMessage('rejected', 'user', false);
+                  this.handleSendAutoMessage('rejected');
+                });
+
+                // Add buttons to container
+                buttonsContainer.appendChild(confirmButton);
+                buttonsContainer.appendChild(rejectButton);
+
+                // Add container below the message
+                contentDiv.appendChild(buttonsContainer);
               }
-              
-              // Add action buttons to the code header
+
+              // Enhance code blocks with language detection and action buttons
+              const codeBlocks = contentDiv.querySelectorAll('pre code');
+              codeBlocks.forEach(block => {
+                  // Add standard JupyterLab classes for consistency
+                  block.classList.add('jp-RenderedText');
+                  block.parentElement?.classList.add('jp-RenderedHTMLCommon');
+                  
+                  // Get code content to detect language
+                  const codeContent = block.textContent || '';
+                  
+                  // Create code block header for buttons
+                  const codeHeader = document.createElement('div');
+                  codeHeader.className = 'jp-llm-ext-code-header';
+                  
+                  // Add language indicator if detected
+                  const language = this.detectLanguage(codeContent);
+                  if (language) {
+                      const langIndicator = document.createElement('span');
+                      langIndicator.className = 'jp-llm-ext-code-language';
+                      langIndicator.textContent = language;
+                      codeHeader.appendChild(langIndicator);
+                      
+                      // Add language class for syntax highlighting
+                      block.classList.add(`language-${language}`);
+                      
+                      // Apply syntax highlighting
+                      try {
+                          block.innerHTML = this.highlightCode(codeContent, language);
+                      } catch (error) {
+                          console.error('Error applying syntax highlighting:', error);
+                          // Keep original content if highlighting fails
+                      }
+                  } else {
+                      // Try auto-detection if no specific language detected
+                      try {
+                          block.innerHTML = this.highlightCode(codeContent, '');
+                      } catch (error) {
+                          console.error('Error applying auto syntax highlighting:', error);
+                          // Keep original content if highlighting fails
+                      }
+                  }
+                  
+                  // Add action buttons to the code header
+                  const actionsDiv = document.createElement('div');
+                  actionsDiv.className = 'jp-llm-ext-code-actions';
+                  
+                  // Copy button with icon
+                  const copyButton = document.createElement('button');
+                  copyButton.className = 'jp-llm-ext-code-action-button';
+                  copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                  copyButton.title = 'Copy code to clipboard';
+                  copyButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.copyToClipboard(codeContent);
+                  });
+                  actionsDiv.appendChild(copyButton);
+
+                  // Add to button with icon
+                  const addToButton = document.createElement('button');
+                  addToButton.className = 'jp-llm-ext-code-action-button';
+                  addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+                  addToButton.title = 'Add code to current cell';
+                  addToButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.addMessageToCell(codeContent);
+                  });
+                  actionsDiv.appendChild(addToButton);
+                  
+                  // Add the actions to the header
+                  codeHeader.appendChild(actionsDiv);
+                  
+                  // Insert the header before the code block
+                  if (block.parentElement) {
+                      block.parentElement.insertBefore(codeHeader, block);
+                  }
+              });
+
+              // Add action buttons for the bot message (Copy, Add to Cell)
+              console.log('Adding action buttons to streamed bot message');
               const actionsDiv = document.createElement('div');
-              actionsDiv.className = 'jp-llm-ext-code-actions';
-              
-              // Copy button with icon
+              actionsDiv.className = 'jp-llm-ext-message-actions';
+              actionsDiv.style.display = 'flex'; // Ensure display is set
+
+              // Copy button
               const copyButton = document.createElement('button');
-              copyButton.className = 'jp-llm-ext-code-action-button';
-              copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-              copyButton.title = 'Copy code to clipboard';
+              copyButton.className = 'jp-llm-ext-message-action-button';
+              copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+              copyButton.title = 'Copy message to clipboard';
               copyButton.addEventListener('click', (event) => {
                 event.stopPropagation();
-                this.copyToClipboard(codeContent);
+                this.copyMessageToClipboard(completeResponse); // Copy the original markdown
               });
               actionsDiv.appendChild(copyButton);
 
-              // Add to button with icon
+              // Add to Cell button
               const addToButton = document.createElement('button');
-              addToButton.className = 'jp-llm-ext-code-action-button';
-              addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-              addToButton.title = 'Add code to current cell';
+              addToButton.className = 'jp-llm-ext-message-action-button';
+              addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+              addToButton.title = 'Add message to current cell';
               addToButton.addEventListener('click', (event) => {
                 event.stopPropagation();
-                this.addMessageToCell(codeContent);
+                this.addMessageToCell(completeResponse); // Add the original markdown
               });
               actionsDiv.appendChild(addToButton);
-              
-              // Add the actions to the header
-              codeHeader.appendChild(actionsDiv);
-              
-              // Insert the header before the code block
-              if (block.parentElement) {
-                block.parentElement.insertBefore(codeHeader, block);
-              }
-            });
 
-            // Add action buttons to the bot message
-            console.log('Adding action buttons to streamed bot message');
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'jp-llm-ext-message-actions';
-            actionsDiv.style.display = 'flex'; // Ensure display is set
+              botMessageDiv.appendChild(actionsDiv);
+              console.log('Action buttons added to bot message:', actionsDiv);
 
-            // Copy button with icon
-            const copyButton = document.createElement('button');
-            copyButton.className = 'jp-llm-ext-message-action-button';
-            copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-            copyButton.title = 'Copy message to clipboard';
-            copyButton.addEventListener('click', (event) => {
-              event.stopPropagation();
-              this.copyMessageToClipboard(completeResponse);
-            });
-            actionsDiv.appendChild(copyButton);
-
-            // Add to button with icon
-            const addToButton = document.createElement('button');
-            addToButton.className = 'jp-llm-ext-message-action-button';
-            addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-            addToButton.title = 'Add message to current cell';
-            addToButton.addEventListener('click', (event) => {
-              event.stopPropagation();
-              this.addMessageToCell(completeResponse);
-            });
-            actionsDiv.appendChild(addToButton);
-
-            // Add buttons to message
-            botMessageDiv.appendChild(actionsDiv);
-            console.log('Action buttons added to bot message:', actionsDiv);
-
-          } catch (error) {
-            contentDiv.textContent = completeResponse;
-            console.error('Failed to render markdown:', error);
-          }
-          
-          // Save to chat history
-          const chat = this.chatHistory.find(c => c.id === this.currentChatId);
-          if (chat) {
-            chat.messages.push({ 
-              text: completeResponse, 
-              sender: 'bot', 
-              isMarkdown: true
-            });
+            } catch (error) {
+                contentDiv.textContent = completeResponse;
+                console.error('Failed to render markdown:', error);
+            }
+            
+            // Save markdown to chat history
+            const chat = this.chatHistory.find(c => c.id === this.currentChatId);
+            if (chat) {
+                chat.messages.push({ 
+                text: completeResponse, 
+                sender: 'bot', 
+                isMarkdown: true // It's markdown
+                });
+            }
           }
           
           this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
@@ -872,113 +997,403 @@ export class SimpleSidebarWidget extends Widget {
   }
 
   /**
+   * Handles sending an automatic message (like confirmed/rejected) from the UI
+   */
+  private handleSendAutoMessage(message: string): void {
+    // Create a temporary message container for the bot's streaming response
+    const botMessageDiv = document.createElement('div');
+    botMessageDiv.className = 'jp-llm-ext-bot-message';
+    
+    const markdownIndicator = document.createElement('div');
+    markdownIndicator.textContent = "MD";
+    markdownIndicator.className = 'markdown-indicator';
+    botMessageDiv.appendChild(markdownIndicator);
+    
+    // Create separate divs for streaming text and final markdown
+    const streamingDiv = document.createElement('div');
+    streamingDiv.className = 'streaming-content';
+    streamingDiv.style.whiteSpace = 'pre-wrap';
+    streamingDiv.style.fontFamily = 'monospace';
+    streamingDiv.style.fontSize = '0.9em';
+    botMessageDiv.appendChild(streamingDiv);
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'markdown-content';
+    contentDiv.style.display = 'none'; // Initially hidden
+    botMessageDiv.appendChild(contentDiv);
+    
+    this.messageContainer.appendChild(botMessageDiv);
+    
+    // Variable to collect the complete response
+    let completeResponse = '';
+    
+    // Get cell context if available
+    const cellContext = globals.cellContextTracker ? 
+      globals.cellContextTracker.getCurrentCellContext() : null;
+    
+    // Stream response from API
+    this.apiClient.streamChat(
+      message, // This will be 'confirmed' or 'rejected'
+      { cellContext },
+      // On each chunk received
+      (chunk: string) => {
+        completeResponse += chunk;
+        streamingDiv.textContent = completeResponse;
+        this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+      },
+      // On complete
+      () => {
+        // Hide streaming div, show final content div
+        streamingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+        
+        // Check if the complete response is an image URL
+        const isImageUrl = completeResponse.startsWith('/images/') && completeResponse.endsWith('.png');
+
+        if (isImageUrl) {
+          // Handle image (existing code)
+          // ... existing image handling code ...
+        } else {
+          // Render as markdown (existing code)
+          try {
+            const processedMarkdown = preprocessMarkdown(completeResponse);
+            const rawHtml = marked.parse(processedMarkdown) as string;
+            const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+            contentDiv.innerHTML = sanitizedHtml;
+            
+            // Check if this is an interrupt message
+            const isInterrupt = completeResponse.startsWith('**[INTERRUPT]**');
+            if (isInterrupt) {
+              // Add confirm/reject buttons (same as in addMessage method)
+              // Create buttons container
+              const buttonsContainer = document.createElement('div');
+              buttonsContainer.className = 'jp-llm-ext-interrupt-buttons';
+              buttonsContainer.style.marginTop = '12px';
+              buttonsContainer.style.display = 'flex';
+              buttonsContainer.style.gap = '8px';
+
+              // Create confirm button
+              const confirmButton = document.createElement('button');
+              confirmButton.className = 'jp-llm-ext-confirm-button';
+              confirmButton.textContent = 'Confirm';
+              confirmButton.style.padding = '6px 12px';
+              confirmButton.style.background = '#4CAF50';
+              confirmButton.style.color = 'white';
+              confirmButton.style.border = 'none';
+              confirmButton.style.borderRadius = '4px';
+              confirmButton.style.cursor = 'pointer';
+              confirmButton.style.fontWeight = 'bold';
+              confirmButton.addEventListener('click', () => {
+                // Disable buttons after click
+                confirmButton.disabled = true;
+                rejectButton.disabled = true;
+                confirmButton.style.opacity = '0.5';
+                rejectButton.style.opacity = '0.5';
+
+                // Add "confirmed" message as user and send it to API
+                this.addMessage('confirmed', 'user', false);
+                this.handleSendAutoMessage('confirmed');
+              });
+
+              // Create reject button
+              const rejectButton = document.createElement('button');
+              rejectButton.className = 'jp-llm-ext-reject-button';
+              rejectButton.textContent = 'Reject';
+              rejectButton.style.padding = '6px 12px';
+              rejectButton.style.background = '#F44336';
+              rejectButton.style.color = 'white';
+              rejectButton.style.border = 'none';
+              rejectButton.style.borderRadius = '4px';
+              rejectButton.style.cursor = 'pointer';
+              rejectButton.style.fontWeight = 'bold';
+              rejectButton.addEventListener('click', () => {
+                // Disable buttons after click
+                confirmButton.disabled = true;
+                rejectButton.disabled = true;
+                confirmButton.style.opacity = '0.5';
+                rejectButton.style.opacity = '0.5';
+
+                // Add "rejected" message as user and send it to API
+                this.addMessage('rejected', 'user', false);
+                this.handleSendAutoMessage('rejected');
+              });
+
+              // Add buttons to container
+              buttonsContainer.appendChild(confirmButton);
+              buttonsContainer.appendChild(rejectButton);
+
+              // Add container below the message
+              contentDiv.appendChild(buttonsContainer);
+            }
+
+            // Enhance code blocks (existing code)
+            const codeBlocks = contentDiv.querySelectorAll('pre code');
+            codeBlocks.forEach(block => {
+                // Add standard JupyterLab classes for consistency
+                block.classList.add('jp-RenderedText');
+                block.parentElement?.classList.add('jp-RenderedHTMLCommon');
+                
+                // Get code content to detect language
+                const codeContent = block.textContent || '';
+                
+                // Create code block header for buttons
+                const codeHeader = document.createElement('div');
+                codeHeader.className = 'jp-llm-ext-code-header';
+                
+                // Add language indicator if detected
+                const language = this.detectLanguage(codeContent);
+                if (language) {
+                    const langIndicator = document.createElement('span');
+                    langIndicator.className = 'jp-llm-ext-code-language';
+                    langIndicator.textContent = language;
+                    codeHeader.appendChild(langIndicator);
+                    
+                    // Add language class for syntax highlighting
+                    block.classList.add(`language-${language}`);
+                    
+                    // Apply syntax highlighting
+                    try {
+                        block.innerHTML = this.highlightCode(codeContent, language);
+                    } catch (error) {
+                        console.error('Error applying syntax highlighting:', error);
+                        // Keep original content if highlighting fails
+                    }
+                } else {
+                    // Try auto-detection if no specific language detected
+                    try {
+                        block.innerHTML = this.highlightCode(codeContent, '');
+                    } catch (error) {
+                        console.error('Error applying auto syntax highlighting:', error);
+                        // Keep original content if highlighting fails
+                    }
+                }
+                
+                // Add action buttons to the code header
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'jp-llm-ext-code-actions';
+                
+                // Copy button with icon
+                const copyButton = document.createElement('button');
+                copyButton.className = 'jp-llm-ext-code-action-button';
+                copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                copyButton.title = 'Copy code to clipboard';
+                copyButton.addEventListener('click', (event) => {
+                  event.stopPropagation();
+                  this.copyToClipboard(codeContent);
+                });
+                actionsDiv.appendChild(copyButton);
+
+                // Add to button with icon
+                const addToButton = document.createElement('button');
+                addToButton.className = 'jp-llm-ext-code-action-button';
+                addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+                addToButton.title = 'Add code to current cell';
+                addToButton.addEventListener('click', (event) => {
+                  event.stopPropagation();
+                  this.addMessageToCell(codeContent);
+                });
+                actionsDiv.appendChild(addToButton);
+                
+                // Add the actions to the header
+                codeHeader.appendChild(actionsDiv);
+                
+                // Insert the header before the code block
+                if (block.parentElement) {
+                    block.parentElement.insertBefore(codeHeader, block);
+                }
+            });
+          } catch (error) {
+            contentDiv.textContent = completeResponse;
+            console.error('Failed to render markdown:', error);
+          }
+          
+          // Save markdown to chat history
+          const chat = this.chatHistory.find(c => c.id === this.currentChatId);
+          if (chat) {
+            chat.messages.push({ 
+              text: completeResponse, 
+              sender: 'bot', 
+              isMarkdown: true // It's markdown
+            });
+          }
+        }
+        
+        this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
+      },
+      // On error
+      (error: Error) => {
+        streamingDiv.style.display = 'none';
+        contentDiv.style.display = 'block';
+        contentDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+        console.error('API Error:', error);
+      }
+    );
+  }
+
+  /**
    * Adds a message to the chat interface
    */
   private addMessage(text: string, sender: 'user' | 'bot', isMarkdown: boolean = false, saveToHistory: boolean = true): void {
-    console.log('Adding message:', { sender, isMarkdown }); // Debug log
+    console.log('Adding message:', { sender, isMarkdown });
 
     const messageDiv = document.createElement('div');
     messageDiv.className = sender === 'user' ? 'jp-llm-ext-user-message' : 'jp-llm-ext-bot-message';
 
-    // Add message content
-    if (isMarkdown || sender === 'bot') {
-      // Bot messages are always rendered as markdown
+    // Check if the message is an image URL from our backend
+    const isImageUrl = sender === 'bot' && text.startsWith('/images/') && text.endsWith('.png');
+
+    if (isImageUrl) {
+      // Create a container for the image that allows positioning the buttons
+      const imageContainer = document.createElement('div');
+      imageContainer.className = 'jp-llm-ext-image-container';
+      imageContainer.style.position = 'relative';
+      
+      // Render as an image tag
+      const img = document.createElement('img');
+      // Construct full URL assuming backend is at http://127.0.0.1:8000
+      // TODO: Make backend URL configurable
+      const fullImageUrl = `http://127.0.0.1:8000${text}`;
+      img.src = fullImageUrl;
+      img.alt = 'Image from bot';
+      img.style.maxWidth = '100%'; // Ensure image fits within the container
+      img.style.height = 'auto';
+      
+      imageContainer.appendChild(img);
+      
+      // Add action buttons for the image
+      const imgActionsDiv = document.createElement('div');
+      imgActionsDiv.className = 'jp-llm-ext-image-actions';
+      imgActionsDiv.style.position = 'absolute';
+      imgActionsDiv.style.bottom = '10px';
+      imgActionsDiv.style.right = '10px';
+      imgActionsDiv.style.display = 'flex';
+      imgActionsDiv.style.gap = '8px';
+      imgActionsDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.6)';
+      imgActionsDiv.style.borderRadius = '4px';
+      imgActionsDiv.style.padding = '4px';
+      
+      // Copy image button
+      const copyImgBtn = document.createElement('button');
+      copyImgBtn.className = 'jp-llm-ext-image-action-button';
+      copyImgBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+      copyImgBtn.title = 'Copy image to clipboard';
+      copyImgBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.copyImageToClipboard(fullImageUrl);
+      });
+      imgActionsDiv.appendChild(copyImgBtn);
+      
+      // Add file path button
+      const addPathBtn = document.createElement('button');
+      addPathBtn.className = 'jp-llm-ext-image-action-button';
+      addPathBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+      addPathBtn.title = 'Add image path to current cell';
+      addPathBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.addMessageToCell(text); // Adds just the image path to the cell
+      });
+      imgActionsDiv.appendChild(addPathBtn);
+      
+      // Add the buttons to the image container
+      imageContainer.appendChild(imgActionsDiv);
+      
+      // Add the image container to the message div
+      messageDiv.appendChild(imageContainer);
+    } else if (isMarkdown || sender === 'bot') {
+      // Render as markdown (existing logic)
       const markdownIndicator = document.createElement('div');
       markdownIndicator.textContent = "MD";
       markdownIndicator.className = 'markdown-indicator';
       messageDiv.appendChild(markdownIndicator);
       
-      // Create a container for the rendered markdown
       const contentDiv = document.createElement('div');
       contentDiv.className = 'markdown-content';
       
       try {
-        // Pre-process the markdown text
         const processedText = preprocessMarkdown(text);
-        
-        // Parse and render markdown
         const rawHtml = marked.parse(processedText) as string;
         const sanitizedHtml = DOMPurify.sanitize(rawHtml);
         
-        // Process base64 images in the HTML
-        const processedHtml = processBase64Images(sanitizedHtml);
-        contentDiv.innerHTML = processedHtml;
+        // COMMENTED OUT: Process base64 images in the HTML
+        // const processedHtml = processBase64Images(sanitizedHtml);
+        // contentDiv.innerHTML = processedHtml;
+        contentDiv.innerHTML = sanitizedHtml; // Use sanitized directly
         
         // Enhance code blocks with language detection and action buttons
         const codeBlocks = contentDiv.querySelectorAll('pre code');
         codeBlocks.forEach(block => {
-          // Add standard JupyterLab classes for consistency
-          block.classList.add('jp-RenderedText');
-          block.parentElement?.classList.add('jp-RenderedHTMLCommon');
-          
-          // Get code content to detect language
-          const codeContent = block.textContent || '';
-          
-          // Create code block header for buttons
-          const codeHeader = document.createElement('div');
-          codeHeader.className = 'jp-llm-ext-code-header';
-          
-          // Add language indicator if detected
-          const language = this.detectLanguage(codeContent);
-          if (language) {
-            const langIndicator = document.createElement('span');
-            langIndicator.className = 'jp-llm-ext-code-language';
-            langIndicator.textContent = language;
-            codeHeader.appendChild(langIndicator);
+            // Add standard JupyterLab classes for consistency
+            block.classList.add('jp-RenderedText');
+            block.parentElement?.classList.add('jp-RenderedHTMLCommon');
             
-            // Add language class for syntax highlighting
-            block.classList.add(`language-${language}`);
+            // Get code content to detect language
+            const codeContent = block.textContent || '';
             
-            // Apply syntax highlighting
-            try {
-              block.innerHTML = this.highlightCode(codeContent, language);
-            } catch (error) {
-              console.error('Error applying syntax highlighting:', error);
-              // Keep original content if highlighting fails
+            // Create code block header for buttons
+            const codeHeader = document.createElement('div');
+            codeHeader.className = 'jp-llm-ext-code-header';
+            
+            // Add language indicator if detected
+            const language = this.detectLanguage(codeContent);
+            if (language) {
+                const langIndicator = document.createElement('span');
+                langIndicator.className = 'jp-llm-ext-code-language';
+                langIndicator.textContent = language;
+                codeHeader.appendChild(langIndicator);
+                
+                // Add language class for syntax highlighting
+                block.classList.add(`language-${language}`);
+                
+                // Apply syntax highlighting
+                try {
+                    block.innerHTML = this.highlightCode(codeContent, language);
+                } catch (error) {
+                    console.error('Error applying syntax highlighting:', error);
+                    // Keep original content if highlighting fails
+                }
+            } else {
+                // Try auto-detection if no specific language detected
+                try {
+                    block.innerHTML = this.highlightCode(codeContent, '');
+                } catch (error) {
+                    console.error('Error applying auto syntax highlighting:', error);
+                    // Keep original content if highlighting fails
+                }
             }
-          } else {
-            // Try auto-detection if no specific language detected
-            try {
-              block.innerHTML = this.highlightCode(codeContent, '');
-            } catch (error) {
-              console.error('Error applying auto syntax highlighting:', error);
-              // Keep original content if highlighting fails
-            }
-          }
-          
-          // Add action buttons to the code header
-          const actionsDiv = document.createElement('div');
-          actionsDiv.className = 'jp-llm-ext-code-actions';
-          
-          // Copy button with icon
-          const copyButton = document.createElement('button');
-          copyButton.className = 'jp-llm-ext-code-action-button';
-          copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-          copyButton.title = 'Copy code to clipboard';
-          copyButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            this.copyToClipboard(codeContent);
-          });
-          actionsDiv.appendChild(copyButton);
+            
+            // Add action buttons to the code header
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'jp-llm-ext-code-actions';
+            
+            // Copy button with icon
+            const copyButton = document.createElement('button');
+            copyButton.className = 'jp-llm-ext-code-action-button';
+            copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+            copyButton.title = 'Copy code to clipboard';
+            copyButton.addEventListener('click', (event) => {
+              event.stopPropagation();
+              this.copyToClipboard(codeContent);
+            });
+            actionsDiv.appendChild(copyButton);
 
-          // Add to button with icon
-          const addToButton = document.createElement('button');
-          addToButton.className = 'jp-llm-ext-code-action-button';
-          addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-          addToButton.title = 'Add code to current cell';
-          addToButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            this.addMessageToCell(codeContent);
-          });
-          actionsDiv.appendChild(addToButton);
-          
-          // Add the actions to the header
-          codeHeader.appendChild(actionsDiv);
-          
-          // Insert the header before the code block
-          if (block.parentElement) {
-            block.parentElement.insertBefore(codeHeader, block);
-          }
+            // Add to button with icon
+            const addToButton = document.createElement('button');
+            addToButton.className = 'jp-llm-ext-code-action-button';
+            addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+            addToButton.title = 'Add code to current cell';
+            addToButton.addEventListener('click', (event) => {
+              event.stopPropagation();
+              this.addMessageToCell(codeContent);
+            });
+            actionsDiv.appendChild(addToButton);
+            
+            // Add the actions to the header
+            codeHeader.appendChild(actionsDiv);
+            
+            // Insert the header before the code block
+            if (block.parentElement) {
+                block.parentElement.insertBefore(codeHeader, block);
+            }
         });
       } catch (error) {
         contentDiv.textContent = text;
@@ -1525,6 +1940,60 @@ export class SimpleSidebarWidget extends Widget {
       });
     } catch (error) {
       console.error('Error copying to clipboard:', error);
+    }
+  }
+
+  /**
+   * Copies an image to the clipboard
+   */
+  private copyImageToClipboard(imageUrl: string): void {
+    try {
+      // Fetch the image
+      fetch(imageUrl)
+        .then(response => response.blob())
+        .then(blob => {
+          // Create a ClipboardItem with the image blob
+          const item = new ClipboardItem({
+            [blob.type]: blob
+          });
+          
+          // Copy the image to clipboard
+          navigator.clipboard.write([item]).then(() => {
+            console.log('Image copied to clipboard');
+            // Show visual feedback
+            const notification = document.createElement('div');
+            notification.className = 'jp-llm-ext-toast-notification jp-llm-ext-copy-success';
+            notification.textContent = 'Image copied to clipboard';
+            
+            // Add to the main widget
+            this.node.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => {
+              notification.classList.add('visible');
+            }, 10);
+            
+            // Remove after delay
+            setTimeout(() => {
+              notification.classList.remove('visible');
+              // Wait for fade out animation to complete before removing
+              setTimeout(() => {
+                notification.remove();
+              }, 300);
+            }, 1500);
+          })
+          .catch(err => {
+            console.error('Failed to copy image: ', err);
+            alert('Failed to copy image: ' + err.message);
+          });
+        })
+        .catch(err => {
+          console.error('Failed to fetch image: ', err);
+          alert('Failed to fetch image: ' + err.message);
+        });
+    } catch (error) {
+      console.error('Error copying image to clipboard:', error);
+      alert('Error copying image to clipboard: ' + error);
     }
   }
 }
