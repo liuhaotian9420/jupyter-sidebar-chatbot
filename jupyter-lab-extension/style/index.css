@@ -273,7 +273,7 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
   width: 200px !important;
   /* height:250px !important; */
-  max-height: 100px !important;
+  max-height: 300px !important;
   overflow-y: auto;
   transform: translate(-50%, 0) !important;
   margin-top: 0 !important;

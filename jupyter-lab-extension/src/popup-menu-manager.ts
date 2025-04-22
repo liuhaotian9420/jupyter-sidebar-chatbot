@@ -203,25 +203,7 @@ export class PopupMenuManager {
                 // Add search input at the top of the menu
                 this.popupMenuContainer.appendChild(this.searchInput);
                 
-                // Add the current path display
-                const pathDisplay = document.createElement('div');
-                pathDisplay.className = 'jp-llm-ext-popup-menu-path';
-                
-                if (this.currentMenuLevel === 'cells') {
-                    pathDisplay.textContent = 'Current Notebook Cells';
-                } else {
-                    // For files and directories
-                    pathDisplay.textContent = this.currentMenuPath || '/';
-                }
-                
-                this.popupMenuContainer.appendChild(pathDisplay);
-                
-                // Add back button if there's a history
-                if (this.menuHistory.length > 0) {
-                    const backButton = this.createMenuItem('« Back', 'navigate-back');
-                    backButton.classList.add('jp-llm-ext-popup-menu-back');
-                    this.popupMenuContainer.appendChild(backButton);
-                }
+                // Path display and back button removed for cleaner UI
             }
 
             // Render different menu content based on current level
