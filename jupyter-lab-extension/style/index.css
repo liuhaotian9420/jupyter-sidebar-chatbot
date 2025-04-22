@@ -163,6 +163,47 @@
   min-height: 0; /* Critical for preventing squashing */
 }
 
+/* Status indicator for confirmation/rejection */
+.jp-llm-ext-status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0;
+  padding: 4px 0;
+  color: var(--jp-ui-font-color2);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  width: 100%;
+  animation: fadeIn 0.3s ease;
+}
+
+.jp-llm-ext-status-indicator .status-line {
+  flex: 1;
+  height: 1px;
+  background-color: var(--jp-border-color2);
+  opacity: 0.6;
+}
+
+.jp-llm-ext-status-indicator .status-icon {
+  margin: 0 8px;
+  font-size: 14px;
+}
+
+.jp-llm-ext-status-indicator .status-text {
+  margin: 0 12px;
+  white-space: nowrap;
+  color: var(--jp-ui-font-color2);
+}
+
+.jp-llm-ext-status-indicator .confirm-icon {
+  color: #4CAF50;
+}
+
+.jp-llm-ext-status-indicator .reject-icon {
+  color: #F44336;
+}
+
 /* User message styles */
 .jp-llm-ext-user-message {
   align-self: flex-end;

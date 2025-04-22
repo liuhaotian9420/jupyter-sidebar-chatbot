@@ -405,9 +405,11 @@ function configureMarked() {
  * Pre-process markdown text to fix common issues with streaming content
  */
 function preprocessMarkdown(text) {
+    // Normalize line endings
+    const normalizedText = text.replace(/\r\n/g, '\n');
     // Handle code blocks first
     let inCodeBlock = false;
-    const lines = text.split('\n');
+    const lines = normalizedText.split('\n');
     const processedLines = lines.map((line, i) => {
         // Check for code block markers
         if (line.trim().startsWith('```')) {
@@ -419,10 +421,21 @@ function preprocessMarkdown(text) {
         if (inCodeBlock) {
             return line;
         }
-        // Outside code blocks, handle list items
-        return line.replace(/([^\n\s])-\s/g, '$1\n- ');
+        // Outside code blocks:
+        // 1. Handle list items with proper spacing
+        // 2. Trim excessive whitespace at start and end, but preserve indentation within lines
+        let processed = line;
+        // Handle dash list items by ensuring they have a space after the dash
+        processed = processed.replace(/(\s*)-(\S)/g, '$1- $2');
+        // Handle mixed space/dash issues - ensure proper newlines before list items
+        processed = processed.replace(/([^\n\s])-\s/g, '$1\n- ');
+        return processed;
     });
-    return processedLines.join('\n');
+    // Join lines and ensure code blocks are properly formatted
+    let result = processedLines.join('\n');
+    // Handle empty code blocks (add a space so they render properly)
+    result = result.replace(/```(.*)\n```/g, '```$1\n \n```');
+    return result;
 }
 
 
@@ -1996,8 +2009,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                                 rejectButton.disabled = true;
                                 confirmButton.style.opacity = '0.5';
                                 rejectButton.style.opacity = '0.5';
-                                // Add "confirmed" message as user and send it to API
+                                // Add "confirmed" message as user 
                                 this.addMessage('confirmed', 'user', false);
+                                // Add status indicator
+                                const statusIndicator = document.createElement('div');
+                                statusIndicator.className = 'jp-llm-ext-status-indicator';
+                                statusIndicator.innerHTML = `<span class="status-icon confirm-icon">✅</span><span class="status-line"></span><span class="status-text">User confirmed</span><span class="status-line"></span>`;
+                                this.messageContainer.appendChild(statusIndicator);
+                                // Send auto message to API without adding a new user message
                                 this.handleSendAutoMessage('confirmed');
                             });
                             // Create reject button
@@ -2017,8 +2036,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                                 rejectButton.disabled = true;
                                 confirmButton.style.opacity = '0.5';
                                 rejectButton.style.opacity = '0.5';
-                                // Add "rejected" message as user and send it to API
+                                // Add "rejected" message as user
                                 this.addMessage('rejected', 'user', false);
+                                // Add status indicator
+                                const statusIndicator = document.createElement('div');
+                                statusIndicator.className = 'jp-llm-ext-status-indicator';
+                                statusIndicator.innerHTML = `<span class="status-icon reject-icon">❌</span><span class="status-line"></span><span class="status-text">User rejected</span><span class="status-line"></span>`;
+                                this.messageContainer.appendChild(statusIndicator);
+                                // Send auto message to API without adding a new user message
                                 this.handleSendAutoMessage('rejected');
                             });
                             // Add buttons to container
@@ -2154,6 +2179,21 @@ class SimpleSidebarWidget extends widgets_1.Widget {
      * Handles sending an automatic message (like confirmed/rejected) from the UI
      */
     handleSendAutoMessage(message) {
+        if (!message.trim())
+            return;
+        // Skip adding user message - the calling function will handle this
+        // Prevent duplication of messages when called from confirm/reject buttons
+        // Add a confirmation/rejection status indicator line only if not already added
+        // by the calling function (checking if this is a direct call)
+        const statusIndicator = document.createElement('div');
+        statusIndicator.className = 'jp-llm-ext-status-indicator';
+        // Set the appropriate icon and text based on the message
+        if (message.toLowerCase() === 'confirmed') {
+            statusIndicator.innerHTML = `<span class="status-icon confirm-icon">✅</span><span class="status-line"></span><span class="status-text">User confirmed</span><span class="status-line"></span>`;
+        }
+        else if (message.toLowerCase() === 'rejected') {
+            statusIndicator.innerHTML = `<span class="status-icon reject-icon">❌</span><span class="status-line"></span><span class="status-text">User rejected</span><span class="status-line"></span>`;
+        }
         // Create a temporary message container for the bot's streaming response
         const botMessageDiv = document.createElement('div');
         botMessageDiv.className = 'jp-llm-ext-bot-message';
@@ -2193,16 +2233,74 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             streamingDiv.style.display = 'none';
             contentDiv.style.display = 'block';
             // Check if the complete response is an image URL
-            const isImageUrl = completeResponse.startsWith('/images/') && completeResponse.endsWith('.png');
+            const isImageUrl = completeResponse.trim().startsWith('/images/') &&
+                (completeResponse.trim().endsWith('.png') ||
+                    completeResponse.trim().endsWith('.jpg') ||
+                    completeResponse.trim().endsWith('.jpeg') ||
+                    completeResponse.trim().endsWith('.gif'));
             if (isImageUrl) {
-                // Handle image (existing code)
-                // ... existing image handling code ...
+                // Create a container for the image
+                const imageContainer = document.createElement('div');
+                imageContainer.className = 'jp-llm-ext-image-container';
+                imageContainer.style.position = 'relative';
+                // Render as an image tag
+                const img = document.createElement('img');
+                const fullImageUrl = `http://127.0.0.1:8000${completeResponse.trim()}`; // Construct full URL
+                img.src = fullImageUrl;
+                img.alt = 'Image from bot';
+                img.style.maxWidth = '100%';
+                img.style.height = 'auto';
+                imageContainer.appendChild(img);
+                // Add action buttons for the image
+                const imgActionsDiv = document.createElement('div');
+                imgActionsDiv.className = 'jp-llm-ext-image-actions';
+                imgActionsDiv.style.position = 'absolute';
+                imgActionsDiv.style.bottom = '10px';
+                imgActionsDiv.style.right = '10px';
+                imgActionsDiv.style.display = 'flex';
+                imgActionsDiv.style.gap = '8px';
+                imgActionsDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.6)';
+                imgActionsDiv.style.borderRadius = '4px';
+                imgActionsDiv.style.padding = '4px';
+                // Copy image button
+                const copyImgBtn = document.createElement('button');
+                copyImgBtn.className = 'jp-llm-ext-image-action-button';
+                copyImgBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                copyImgBtn.title = 'Copy image to clipboard';
+                copyImgBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.copyImageToClipboard(fullImageUrl);
+                });
+                imgActionsDiv.appendChild(copyImgBtn);
+                // Add file path button
+                const addPathBtn = document.createElement('button');
+                addPathBtn.className = 'jp-llm-ext-image-action-button';
+                addPathBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+                addPathBtn.title = 'Add image path to current cell';
+                addPathBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.addMessageToCell(completeResponse.trim()); // Adds just the image path to the cell
+                });
+                imgActionsDiv.appendChild(addPathBtn);
+                // Add the buttons to the image container
+                imageContainer.appendChild(imgActionsDiv);
+                // Add the image container to the content div
+                contentDiv.appendChild(imageContainer);
+                // Save image URL to history (as text)
+                const chat = this.chatHistory.find(c => c.id === this.currentChatId);
+                if (chat) {
+                    chat.messages.push({
+                        text: completeResponse.trim(), // Store the URL
+                        sender: 'bot',
+                        isMarkdown: false // Treat it as non-markdown for history
+                    });
+                }
             }
             else {
-                // Render as markdown (existing code)
+                // Try to render markdown
                 try {
-                    const processedMarkdown = (0, markdown_config_1.preprocessMarkdown)(completeResponse);
-                    const rawHtml = marked_1.marked.parse(processedMarkdown);
+                    const processedText = (0, markdown_config_1.preprocessMarkdown)(completeResponse);
+                    const rawHtml = marked_1.marked.parse(processedText);
                     const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
                     contentDiv.innerHTML = sanitizedHtml;
                     // Check if this is an interrupt message
@@ -2232,8 +2330,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                             rejectButton.disabled = true;
                             confirmButton.style.opacity = '0.5';
                             rejectButton.style.opacity = '0.5';
-                            // Add "confirmed" message as user and send it to API
+                            // Add "confirmed" message as user 
                             this.addMessage('confirmed', 'user', false);
+                            // Add status indicator
+                            const statusIndicator = document.createElement('div');
+                            statusIndicator.className = 'jp-llm-ext-status-indicator';
+                            statusIndicator.innerHTML = `<span class="status-icon confirm-icon">✅</span><span class="status-line"></span><span class="status-text">User confirmed</span><span class="status-line"></span>`;
+                            this.messageContainer.appendChild(statusIndicator);
+                            // Send auto message to API without adding a new user message
                             this.handleSendAutoMessage('confirmed');
                         });
                         // Create reject button
@@ -2253,8 +2357,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                             rejectButton.disabled = true;
                             confirmButton.style.opacity = '0.5';
                             rejectButton.style.opacity = '0.5';
-                            // Add "rejected" message as user and send it to API
+                            // Add "rejected" message as user
                             this.addMessage('rejected', 'user', false);
+                            // Add status indicator
+                            const statusIndicator = document.createElement('div');
+                            statusIndicator.className = 'jp-llm-ext-status-indicator';
+                            statusIndicator.innerHTML = `<span class="status-icon reject-icon">❌</span><span class="status-line"></span><span class="status-text">User rejected</span><span class="status-line"></span>`;
+                            this.messageContainer.appendChild(statusIndicator);
+                            // Send auto message to API without adding a new user message
                             this.handleSendAutoMessage('rejected');
                         });
                         // Add buttons to container
@@ -2366,7 +2476,11 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         const messageDiv = document.createElement('div');
         messageDiv.className = sender === 'user' ? 'jp-llm-ext-user-message' : 'jp-llm-ext-bot-message';
         // Check if the message is an image URL from our backend
-        const isImageUrl = sender === 'bot' && text.startsWith('/images/') && text.endsWith('.png');
+        const isImageUrl = sender === 'bot' && text.trim().startsWith('/images/') &&
+            (text.trim().endsWith('.png') ||
+                text.trim().endsWith('.jpg') ||
+                text.trim().endsWith('.jpeg') ||
+                text.trim().endsWith('.gif'));
         if (isImageUrl) {
             // Create a container for the image that allows positioning the buttons
             const imageContainer = document.createElement('div');
@@ -2376,7 +2490,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             const img = document.createElement('img');
             // Construct full URL assuming backend is at http://127.0.0.1:8000
             // TODO: Make backend URL configurable
-            const fullImageUrl = `http://127.0.0.1:8000${text}`;
+            const fullImageUrl = `http://127.0.0.1:8000${text.trim()}`;
             img.src = fullImageUrl;
             img.alt = 'Image from bot';
             img.style.maxWidth = '100%'; // Ensure image fits within the container
@@ -2410,7 +2524,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             addPathBtn.title = 'Add image path to current cell';
             addPathBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
-                this.addMessageToCell(text); // Adds just the image path to the cell
+                this.addMessageToCell(text.trim()); // Adds just the image path to the cell
             });
             imgActionsDiv.appendChild(addPathBtn);
             // Add the buttons to the image container
@@ -2427,13 +2541,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             const contentDiv = document.createElement('div');
             contentDiv.className = 'markdown-content';
             try {
+                // Process the text to handle common markdown issues
                 const processedText = (0, markdown_config_1.preprocessMarkdown)(text);
+                // Parse markdown to HTML
                 const rawHtml = marked_1.marked.parse(processedText);
+                // Sanitize HTML to prevent XSS
                 const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
-                // COMMENTED OUT: Process base64 images in the HTML
-                // const processedHtml = processBase64Images(sanitizedHtml);
-                // contentDiv.innerHTML = processedHtml;
-                contentDiv.innerHTML = sanitizedHtml; // Use sanitized directly
+                // Set content
+                contentDiv.innerHTML = sanitizedHtml;
                 // Enhance code blocks with language detection and action buttons
                 const codeBlocks = contentDiv.querySelectorAll('pre code');
                 codeBlocks.forEach(block => {
@@ -3064,4 +3179,4 @@ exports.SimpleSidebarWidget = SimpleSidebarWidget;
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.f1b8a08378c936014512.js.map
+//# sourceMappingURL=lib_index_js.f58df042c221c94d3a64.js.map
