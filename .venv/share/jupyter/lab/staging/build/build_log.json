@@ -630,6 +630,9 @@
             "dompurify": {
               "requiredVersion": "^3.2.5"
             },
+            "highlight.js": {
+              "requiredVersion": "^11.11.1"
+            },
             "react-highlight-words": {
               "requiredVersion": "^0.20.0"
             },

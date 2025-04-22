@@ -12,8 +12,35 @@ const globals_1 = require("./globals");
 const api_client_1 = require("./api-client");
 const markdown_config_1 = require("./markdown-config");
 const popup_menu_manager_1 = require("./popup-menu-manager");
+const highlight_js_1 = __importDefault(require("highlight.js"));
+// Add image cache object for base64 images
+const imageCache = {};
 // Configure marked with our settings
 (0, markdown_config_1.configureMarked)();
+/**
+ * Process HTML content to cache and optimize base64 images
+ */
+function processBase64Images(html) {
+    // Use a DOM parser to find and process <img> tags with base64 src attributes
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const images = doc.querySelectorAll('img[src^="data:image/"]');
+    // Process each base64 image
+    images.forEach(img => {
+        const src = img.getAttribute('src');
+        if (src) {
+            // Cache the base64 data if not already cached
+            if (!imageCache[src]) {
+                console.log('Caching base64 image', src.substring(0, 40) + '...');
+                imageCache[src] = src;
+            }
+            // Use the cached version
+            img.setAttribute('src', imageCache[src]);
+        }
+    });
+    // Return the processed HTML
+    return doc.body.innerHTML;
+}
 /**
  * Main sidebar widget for the AI chat interface
  */
@@ -399,6 +426,24 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         const chat = this.chatHistory.find(c => c.id === this.currentChatId);
         if (chat) {
             chat.title = this.titleInput.value;
+            // Add notification that title has been set
+            const notification = document.createElement('div');
+            notification.className = 'jp-llm-ext-toast-notification jp-llm-ext-title-updated';
+            notification.textContent = 'Chat title updated';
+            // Add to the main widget
+            this.node.appendChild(notification);
+            // Animate in
+            setTimeout(() => {
+                notification.classList.add('visible');
+            }, 10);
+            // Remove after delay
+            setTimeout(() => {
+                notification.classList.remove('visible');
+                // Wait for fade out animation to complete before removing
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 2000);
         }
     }
     /**
@@ -560,14 +605,79 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                     // Parse and sanitize
                     const rawHtml = marked_1.marked.parse(processedMarkdown);
                     const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
+                    // Process base64 images in the HTML
+                    const processedHtml = processBase64Images(sanitizedHtml);
                     // Apply the HTML with proper code block styling
-                    contentDiv.innerHTML = sanitizedHtml;
-                    // Add syntax highlighting classes to code blocks
+                    contentDiv.innerHTML = processedHtml;
+                    // Enhance code blocks with language detection and action buttons
                     const codeBlocks = contentDiv.querySelectorAll('pre code');
                     codeBlocks.forEach(block => {
                         var _a;
+                        // Add standard JupyterLab classes for consistency
                         block.classList.add('jp-RenderedText');
                         (_a = block.parentElement) === null || _a === void 0 ? void 0 : _a.classList.add('jp-RenderedHTMLCommon');
+                        // Get code content to detect language
+                        const codeContent = block.textContent || '';
+                        // Create code block header for buttons
+                        const codeHeader = document.createElement('div');
+                        codeHeader.className = 'jp-llm-ext-code-header';
+                        // Add language indicator if detected
+                        const language = this.detectLanguage(codeContent);
+                        if (language) {
+                            const langIndicator = document.createElement('span');
+                            langIndicator.className = 'jp-llm-ext-code-language';
+                            langIndicator.textContent = language;
+                            codeHeader.appendChild(langIndicator);
+                            // Add language class for syntax highlighting
+                            block.classList.add(`language-${language}`);
+                            // Apply syntax highlighting
+                            try {
+                                block.innerHTML = this.highlightCode(codeContent, language);
+                            }
+                            catch (error) {
+                                console.error('Error applying syntax highlighting:', error);
+                                // Keep original content if highlighting fails
+                            }
+                        }
+                        else {
+                            // Try auto-detection if no specific language detected
+                            try {
+                                block.innerHTML = this.highlightCode(codeContent, '');
+                            }
+                            catch (error) {
+                                console.error('Error applying auto syntax highlighting:', error);
+                                // Keep original content if highlighting fails
+                            }
+                        }
+                        // Add action buttons to the code header
+                        const actionsDiv = document.createElement('div');
+                        actionsDiv.className = 'jp-llm-ext-code-actions';
+                        // Copy button with icon
+                        const copyButton = document.createElement('button');
+                        copyButton.className = 'jp-llm-ext-code-action-button';
+                        copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                        copyButton.title = 'Copy code to clipboard';
+                        copyButton.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            this.copyToClipboard(codeContent);
+                        });
+                        actionsDiv.appendChild(copyButton);
+                        // Add to button with icon
+                        const addToButton = document.createElement('button');
+                        addToButton.className = 'jp-llm-ext-code-action-button';
+                        addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+                        addToButton.title = 'Add code to current cell';
+                        addToButton.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            this.addMessageToCell(codeContent);
+                        });
+                        actionsDiv.appendChild(addToButton);
+                        // Add the actions to the header
+                        codeHeader.appendChild(actionsDiv);
+                        // Insert the header before the code block
+                        if (block.parentElement) {
+                            block.parentElement.insertBefore(codeHeader, block);
+                        }
                     });
                     // Add action buttons to the bot message
                     console.log('Adding action buttons to streamed bot message');
@@ -645,13 +755,78 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 // Parse and render markdown
                 const rawHtml = marked_1.marked.parse(processedText);
                 const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
-                contentDiv.innerHTML = sanitizedHtml;
-                // Add syntax highlighting classes to code blocks
+                // Process base64 images in the HTML
+                const processedHtml = processBase64Images(sanitizedHtml);
+                contentDiv.innerHTML = processedHtml;
+                // Enhance code blocks with language detection and action buttons
                 const codeBlocks = contentDiv.querySelectorAll('pre code');
                 codeBlocks.forEach(block => {
                     var _a;
+                    // Add standard JupyterLab classes for consistency
                     block.classList.add('jp-RenderedText');
                     (_a = block.parentElement) === null || _a === void 0 ? void 0 : _a.classList.add('jp-RenderedHTMLCommon');
+                    // Get code content to detect language
+                    const codeContent = block.textContent || '';
+                    // Create code block header for buttons
+                    const codeHeader = document.createElement('div');
+                    codeHeader.className = 'jp-llm-ext-code-header';
+                    // Add language indicator if detected
+                    const language = this.detectLanguage(codeContent);
+                    if (language) {
+                        const langIndicator = document.createElement('span');
+                        langIndicator.className = 'jp-llm-ext-code-language';
+                        langIndicator.textContent = language;
+                        codeHeader.appendChild(langIndicator);
+                        // Add language class for syntax highlighting
+                        block.classList.add(`language-${language}`);
+                        // Apply syntax highlighting
+                        try {
+                            block.innerHTML = this.highlightCode(codeContent, language);
+                        }
+                        catch (error) {
+                            console.error('Error applying syntax highlighting:', error);
+                            // Keep original content if highlighting fails
+                        }
+                    }
+                    else {
+                        // Try auto-detection if no specific language detected
+                        try {
+                            block.innerHTML = this.highlightCode(codeContent, '');
+                        }
+                        catch (error) {
+                            console.error('Error applying auto syntax highlighting:', error);
+                            // Keep original content if highlighting fails
+                        }
+                    }
+                    // Add action buttons to the code header
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'jp-llm-ext-code-actions';
+                    // Copy button with icon
+                    const copyButton = document.createElement('button');
+                    copyButton.className = 'jp-llm-ext-code-action-button';
+                    copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                    copyButton.title = 'Copy code to clipboard';
+                    copyButton.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        this.copyToClipboard(codeContent);
+                    });
+                    actionsDiv.appendChild(copyButton);
+                    // Add to button with icon
+                    const addToButton = document.createElement('button');
+                    addToButton.className = 'jp-llm-ext-code-action-button';
+                    addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
+                    addToButton.title = 'Add code to current cell';
+                    addToButton.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        this.addMessageToCell(codeContent);
+                    });
+                    actionsDiv.appendChild(addToButton);
+                    // Add the actions to the header
+                    codeHeader.appendChild(actionsDiv);
+                    // Insert the header before the code block
+                    if (block.parentElement) {
+                        block.parentElement.insertBefore(codeHeader, block);
+                    }
                 });
             }
             catch (error) {
@@ -659,7 +834,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 console.error('Failed to render markdown:', error);
             }
             messageDiv.appendChild(contentDiv);
-            // Add action buttons for bot messages
+            // Add action buttons for bot messages (only for the whole message, not code blocks)
             if (sender === 'bot') {
                 console.log('Adding action buttons to bot message'); // Debug log
                 const actionsDiv = document.createElement('div');
@@ -1048,6 +1223,112 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         }
         catch (error) {
             console.error('Error inserting cell by index:', error);
+        }
+    }
+    /**
+     * Detects the programming language from code block content
+     */
+    detectLanguage(code) {
+        try {
+            // Try auto detection first
+            const result = highlight_js_1.default.highlightAuto(code, [
+                'python', 'javascript', 'typescript', 'java',
+                'html', 'css', 'cpp', 'csharp', 'sql', 'rust',
+                'php', 'bash', 'json', 'xml', 'markdown'
+            ]);
+            // If confidence is high enough, use that language
+            if (result.relevance > 5) {
+                return result.language || '';
+            }
+            // Fall back to pattern matching for better accuracy
+            if (/^(?:\s*)?(?:import\s+[^;]+;|package\s+[^;]+;|public\s+class)/.test(code)) {
+                return 'java';
+            }
+            else if (/^(?:\s*)?(import|from|def|class|if __name__)\s/.test(code)) {
+                return 'python';
+            }
+            else if (/^(?:\s*)?(?:function|const|let|var|import)\s/.test(code)) {
+                return 'javascript';
+            }
+            else if (/^(?:\s*)?(?:<!DOCTYPE|<html|<head|<body)/.test(code)) {
+                return 'html';
+            }
+            else if (/^(?:\s*)?#include/.test(code)) {
+                return 'cpp';
+            }
+            else if (/^(?:\s*)?(?:using\s+System|namespace|public\s+static\s+void\s+Main)/.test(code)) {
+                return 'csharp';
+            }
+            else if (/^(?:\s*)?(?:\$|SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)\s/i.test(code)) {
+                return 'sql';
+            }
+            else if (/^(?:\s*)?(?:module|fn|let|struct|enum|trait|impl)\s/.test(code)) {
+                return 'rust';
+            }
+            else if (/^(?:\s*)?(?:<?php|use\s+[\w\\]+;)/.test(code)) {
+                return 'php';
+            }
+            else if (/^(?:\s*)?(?:#\s*!\/usr\/bin\/env|require|module\.exports|console\.)/.test(code)) {
+                return 'bash';
+            }
+            return '';
+        }
+        catch (error) {
+            console.error('Error detecting language:', error);
+            return '';
+        }
+    }
+    /**
+     * Highlights code with appropriate syntax highlighting
+     */
+    highlightCode(code, language) {
+        try {
+            if (!language) {
+                // Try to auto-detect if no language specified
+                return highlight_js_1.default.highlightAuto(code).value;
+            }
+            if (highlight_js_1.default.getLanguage(language)) {
+                return highlight_js_1.default.highlight(code, { language }).value;
+            }
+            else {
+                // Fallback to auto-detection if specified language isn't available
+                return highlight_js_1.default.highlightAuto(code).value;
+            }
+        }
+        catch (error) {
+            console.error('Error highlighting code:', error);
+            return code; // Return original code on error
+        }
+    }
+    // Helper function to copy text to clipboard with visual feedback
+    copyToClipboard(text) {
+        try {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('Content copied to clipboard');
+                // Show a temporary notification
+                const notification = document.createElement('div');
+                notification.className = 'jp-llm-ext-toast-notification jp-llm-ext-copy-success';
+                notification.textContent = 'Copied to clipboard';
+                // Add to the main widget
+                this.node.appendChild(notification);
+                // Animate in
+                setTimeout(() => {
+                    notification.classList.add('visible');
+                }, 10);
+                // Remove after delay
+                setTimeout(() => {
+                    notification.classList.remove('visible');
+                    // Wait for fade out animation to complete before removing
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 300);
+                }, 1500);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        }
+        catch (error) {
+            console.error('Error copying to clipboard:', error);
         }
     }
 }

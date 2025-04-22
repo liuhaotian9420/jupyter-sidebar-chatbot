@@ -108,4 +108,13 @@ export declare class SimpleSidebarWidget extends Widget {
      * Gets cell content by index from the current notebook and inserts it into the input field
      */
     private insertCellByIndex;
+    /**
+     * Detects the programming language from code block content
+     */
+    private detectLanguage;
+    /**
+     * Highlights code with appropriate syntax highlighting
+     */
+    private highlightCode;
+    private copyToClipboard;
 }

@@ -44,6 +44,7 @@
     "@jupyterlab/launcher": "^4.4.0",
     "@jupyterlab/ui-components": "^4.4.0",
     "dompurify": "^3.2.5",
+    "highlight.js": "^11.11.1",
     "marked": "^15.0.8"
   },
   "devDependencies": {
@@ -61,7 +62,7 @@
     "extension": true,
     "outputDir": "jupyter-simple-extension/labextension",
     "_build": {
-      "load": "static\\remoteEntry.8f0abccc1899720eb70a.js",
+      "load": "static\\remoteEntry.aac14303b92dac3396bd.js",
       "extension": "./extension",
       "style": "./style"
     }

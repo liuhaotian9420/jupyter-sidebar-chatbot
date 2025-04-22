@@ -29,6 +29,8 @@ export declare class PopupMenuManager {
     private lastSearchTerm;
     private _anchorX?;
     private _anchorY?;
+    private allowedExtensions;
+    private fileCache;
     constructor(docManager: IDocumentManager, widgetNode: HTMLElement, callbacks: MenuActionCallbacks);
     private boundHandleKeyDown;
     dispose(): void;
@@ -50,6 +52,7 @@ export declare class PopupMenuManager {
         name: string;
         path: string;
         type: 'file' | 'directory';
+        relativePath: string;
     }[] | null>;
     private setCurrentDirectoryPath;
     private getParentDirectory;

@@ -14,6 +14,8 @@ class PopupMenuManager {
         this.selectedMenuItemIndex = -1; // Track currently selected menu item
         this.isRenderingContent = false; // Flag to prevent recursive renders
         this.lastSearchTerm = ''; // Track last search term to avoid unnecessary re-renders
+        this.allowedExtensions = ['.py', '.ipynb', '.md', '.json', '.txt', '.csv'];
+        this.fileCache = new Map();
         this.docManager = docManager;
         this.widgetNode = widgetNode;
         this.callbacks = callbacks;
@@ -156,23 +158,7 @@ class PopupMenuManager {
             if (this.currentMenuLevel !== 'top') {
                 // Add search input at the top of the menu
                 this.popupMenuContainer.appendChild(this.searchInput);
-                // Add the current path display
-                const pathDisplay = document.createElement('div');
-                pathDisplay.className = 'jp-llm-ext-popup-menu-path';
-                if (this.currentMenuLevel === 'cells') {
-                    pathDisplay.textContent = 'Current Notebook Cells';
-                }
-                else {
-                    // For files and directories
-                    pathDisplay.textContent = this.currentMenuPath || '/';
-                }
-                this.popupMenuContainer.appendChild(pathDisplay);
-                // Add back button if there's a history
-                if (this.menuHistory.length > 0) {
-                    const backButton = this.createMenuItem('« Back', 'navigate-back');
-                    backButton.classList.add('jp-llm-ext-popup-menu-back');
-                    this.popupMenuContainer.appendChild(backButton);
-                }
+                // Path display and back button removed for cleaner UI
             }
             // Render different menu content based on current level
             switch (this.currentMenuLevel) {
@@ -227,23 +213,23 @@ class PopupMenuManager {
             // If contents were already fetched recently and we're just filtering again,
             // we could potentially cache the results to avoid unnecessary API calls
             const filterType = this.currentMenuLevel === 'files' ? 'file' : 'directory';
-            const contents = await this.listCurrentDirectoryContents(this.currentMenuPath, undefined); // Get both files and dirs first
+            const contents = await this.listCurrentDirectoryContents(this.currentMenuPath, filterType);
             // Check if still in DOM before trying to remove
             if (this.popupMenuContainer.contains(loadingItem)) {
                 this.popupMenuContainer.removeChild(loadingItem);
             }
             if (contents && contents.length > 0) {
-                // Filter based on search term and required type (file/dir)
+                // Filter based on search term
                 const filteredContents = contents.filter(item => {
-                    const nameMatches = item.name.toLowerCase().includes(searchTerm);
-                    const typeMatches = this.currentMenuLevel === 'files' ? item.type === 'file' : item.type === 'directory';
-                    return nameMatches && typeMatches;
+                    return item.name.toLowerCase().includes(searchTerm) ||
+                        item.relativePath.toLowerCase().includes(searchTerm);
                 });
                 if (filteredContents.length > 0) {
                     filteredContents.forEach(item => {
                         const itemName = item.name;
                         const itemType = item.type;
                         const itemPath = item.path;
+                        const relativePath = item.relativePath;
                         const icon = itemType === 'directory' ? '📁' : '📄';
                         let actionId;
                         if (itemType === 'directory') {
@@ -252,7 +238,7 @@ class PopupMenuManager {
                         else { // itemType === 'file'
                             actionId = 'select-file';
                         }
-                        const menuItem = this.createMenuItem(`${icon} ${itemName}`, actionId, itemPath);
+                        const menuItem = this.createMenuItem(`${icon} ${itemName}`, actionId, itemPath, relativePath !== '.' ? relativePath : '');
                         this.popupMenuContainer.appendChild(menuItem);
                     });
                 }
@@ -403,13 +389,15 @@ class PopupMenuManager {
         labelSpan.textContent = text;
         item.appendChild(labelSpan);
         if (description) {
-            labelSpan.style.fontWeight = 'bold';
-            const descSpan = document.createElement('span');
-            descSpan.textContent = description;
-            descSpan.style.display = 'block';
-            descSpan.style.fontSize = '0.8em';
-            descSpan.style.color = 'var(--jp-ui-font-color2)';
-            item.appendChild(descSpan);
+            const pathSpan = document.createElement('span');
+            pathSpan.className = 'jp-llm-ext-popup-menu-path-indicator';
+            pathSpan.textContent = description;
+            pathSpan.style.fontSize = '0.85em';
+            pathSpan.style.color = 'var(--jp-ui-font-color2)';
+            pathSpan.style.marginLeft = '8px';
+            pathSpan.style.opacity = '0.8';
+            pathSpan.style.display = 'inline-block'; // Ensure the path is always displayed
+            item.appendChild(pathSpan);
         }
         return item;
     }
@@ -473,7 +461,13 @@ class PopupMenuManager {
                 break;
             case 'select-directory-navigate': // New action to navigate into dir when in file view
                 if (path) {
-                    await this.navigateMenu('files', path); // Navigate deeper, still looking for files
+                    // Clear the file cache for the specific directory to force a refresh
+                    const cacheKey = `${path}:${this.currentMenuLevel === 'files' ? 'file' : 'directory'}`;
+                    this.fileCache.delete(cacheKey);
+                    // Make sure we're passing the correct level type
+                    const level = (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') ?
+                        this.currentMenuLevel : 'files';
+                    await this.navigateMenu(level, path);
                     this.searchInput.value = ''; // Clear search on navigation
                 }
                 else {
@@ -553,41 +547,73 @@ class PopupMenuManager {
     }
     async listCurrentDirectoryContents(basePath, filterType) {
         console.log(`POPUP: Listing directory contents for path: '${basePath}', filter: ${filterType || 'all'}`);
+        // Check cache first
+        const cacheKey = `${basePath}:${filterType || 'all'}`;
+        if (this.fileCache.has(cacheKey)) {
+            console.log('POPUP: Using cached directory contents');
+            return this.fileCache.get(cacheKey) || null;
+        }
         try {
             const effectivePath = basePath === '/' ? '' : basePath;
             // Ensure trailing slash removed for consistency unless it's root
             const pathForApi = effectivePath.endsWith('/') && effectivePath.length > 1 ? effectivePath.slice(0, -1) : effectivePath;
-            const contents = await this.docManager.services.contents.get(pathForApi || ''); // Use empty string for root
-            if (contents.type === 'directory') {
-                let items = contents.content.map((item) => ({
-                    name: item.name,
-                    path: item.path,
-                    type: item.type === 'directory' ? 'directory' : 'file' // Simplify type
-                }));
-                // Filter only to files and directories (excluding notebooks, etc. if needed later)
-                items = items.filter((item) => item.type === 'file' || item.type === 'directory');
-                // Apply optional filter *if provided*
-                if (filterType) {
-                    items = items.filter((item) => item.type === filterType);
-                }
-                console.log(`POPUP: Directory items for '${basePath}':`, items);
-                return items.sort((a, b) => {
-                    // Sort directories first, then files, then alphabetically
-                    if (a.type === 'directory' && b.type !== 'directory')
-                        return -1;
-                    if (a.type !== 'directory' && b.type === 'directory')
-                        return 1;
-                    return a.name.localeCompare(b.name);
-                });
-            }
-            else {
+            // Result array that will hold all files and directories
+            let allResults = [];
+            // Get the base directory contents (non-recursive)
+            const baseContents = await this.docManager.services.contents.get(pathForApi || '');
+            if (baseContents.type !== 'directory') {
                 console.error('Path is not a directory:', basePath);
                 return null;
             }
+            // Process base directory items
+            for (const item of baseContents.content) {
+                const itemType = item.type === 'directory' ? 'directory' : 'file';
+                // Add directories if we're listing directories or both
+                if (itemType === 'directory' && (filterType === 'directory' || filterType === undefined)) {
+                    allResults.push({
+                        name: item.name,
+                        path: item.path,
+                        type: 'directory',
+                        relativePath: `./${item.name}`
+                    });
+                }
+                // Add files if we're listing files and the extension is allowed
+                if (itemType === 'file' && (filterType === 'file' || filterType === undefined)) {
+                    const fileExt = `.${item.name.split('.').pop()}`.toLowerCase();
+                    if (this.allowedExtensions.includes(fileExt)) {
+                        allResults.push({
+                            name: item.name,
+                            path: item.path,
+                            type: 'file',
+                            relativePath: `./${item.name}`
+                        });
+                    }
+                }
+            }
+            // Sort the results appropriately
+            allResults = allResults.sort((a, b) => {
+                // If listing directories only, sort alphabetically
+                if (filterType === 'directory') {
+                    return a.name.localeCompare(b.name);
+                }
+                // If listing files only, sort alphabetically
+                if (filterType === 'file') {
+                    return a.name.localeCompare(b.name);
+                }
+                // If listing both, sort directories first, then files alphabetically
+                if (a.type === 'directory' && b.type !== 'directory')
+                    return -1;
+                if (a.type !== 'directory' && b.type === 'directory')
+                    return 1;
+                return a.name.localeCompare(b.name);
+            });
+            // Cache the results for future use
+            this.fileCache.set(cacheKey, allResults);
+            console.log(`POPUP: Found ${allResults.length} items for path '${basePath}'`);
+            return allResults;
         }
         catch (error) {
             console.error(`POPUP: Error listing directory contents for '${basePath}':`, error);
-            // Handle specific errors like 404 Not Found if needed
             return null;
         }
     }

@@ -704,6 +704,7 @@
               "singleton": true
             },
             "dompurify": {},
+            "highlight.js": {},
             "marked": {},
             "jupyter-simple-extension": {
               "version": "0.1.0",
