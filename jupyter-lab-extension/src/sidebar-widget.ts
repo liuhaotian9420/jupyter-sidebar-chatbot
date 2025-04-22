@@ -1,81 +1,42 @@
 import { Widget } from '@lumino/widgets';
 import { IDocumentManager } from '@jupyterlab/docmanager';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
-import { extensionIcon } from './icons';
-import { globals } from './globals';
-import { ApiClient } from './api-client';
-import { configureMarked, preprocessMarkdown } from './markdown-config';
-import { PopupMenuManager } from './popup-menu-manager';
-import hljs from 'highlight.js';
-
-// Add image cache object for base64 images - COMMENTED OUT, no longer needed for URL method
-// const imageCache: Record<string, string> = {};
-
-// Configure marked with our settings
-configureMarked();
-
-// COMMENTED OUT: Process HTML content to cache and optimize base64 images
-/*
-function processBase64Images(html: string): string {
-  // Use a DOM parser to find and process <img> tags with base64 src attributes
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const images = doc.querySelectorAll('img[src^="data:image/"]');
-  
-  // Process each base64 image
-  images.forEach(img => {
-    const src = img.getAttribute('src');
-    if (src) {
-      // Cache the base64 data if not already cached
-      if (!imageCache[src]) {
-        console.log('Caching base64 image', src.substring(0, 40) + '...');
-        imageCache[src] = src;
-      }
-      // Use the cached version
-      img.setAttribute('src', imageCache[src]);
-    }
-  });
-  
-  // Return the processed HTML
-  return doc.body.innerHTML;
-}
-*/
+import { extensionIcon } from './core/icons';
+import { ApiClient } from './core/api-client';
+import { PopupMenuManager } from './handlers/popup-menu-manager';
+import { setupShortcuts, removeShortcuts } from './handlers/shortcut-handler';
+import { buildLayout, LayoutElements } from './ui/layout-builder';
+import { createSettingsModalElement, SettingsModalCallbacks } from './ui/settings-modal';
+import {
+  renderUserMessage,
+  renderBotMessage,
+  MessageRendererCallbacks
+} from './ui/message-renderer';
+import { ChatState, ChatHistoryItem, ChatMessage } from './state/chat-state';
+import { SettingsState, AppSettings } from './state/settings-state';
+import { InputHandler } from './handlers/input-handler';
+import { MessageHandler } from './handlers/message-handler';
+import { HistoryHandler } from './handlers/history-handler';
+import { SettingsHandler } from './handlers/settings-handler';
 
 /**
- * Chat history item interface
- */
-interface ChatHistoryItem {
-  id: string;
-  title: string;
-  messages: {
-    text: string;
-    sender: 'user' | 'bot';
-    isMarkdown: boolean;
-  }[];
-}
-
-/**
- * Main sidebar widget for the AI chat interface
+ * Main sidebar widget for the AI chat interface - Now acts as an orchestrator.
  */
 export class SimpleSidebarWidget extends Widget {
-  private messageContainer: HTMLDivElement;
-  private inputField: HTMLTextAreaElement;
-  private isMarkdownMode: boolean = false;
-  private isInputExpanded: boolean = false;
-  private docManager: IDocumentManager;
-  private chatHistory: ChatHistoryItem[] = [];
-  private currentChatId: string = '';
-  private titleInput: HTMLInputElement;
-  private isHistoryViewActive: boolean = false;
-  private historyContainer: HTMLDivElement;
+  // --- NEW Properties: Handlers, State Managers, UI Elements ---
   private apiClient: ApiClient;
-  private keyboardShortcutIndicator: HTMLDivElement;
-  private settingsModalContainer: HTMLDivElement;
+  private chatState: ChatState;
+  private settingsState: SettingsState;
   private popupMenuManager: PopupMenuManager;
-  private bottomBarContainer!: HTMLDivElement;
-  private hasAtSymbol: boolean = false; // Track whether @ symbol is present in input
-  private hasCodeRefListeners: boolean = false; // Track whether code ref listeners are added
+  private inputHandler!: InputHandler;
+  private messageHandler!: MessageHandler;
+  private historyHandler!: HistoryHandler;
+  private settingsHandler!: SettingsHandler;
+  private layoutElements!: LayoutElements;
+  private settingsModalContainer!: HTMLDivElement;
+
+  // Dependencies (JupyterLab services)
+  private docManager: IDocumentManager;
+  private keyboardShortcutIndicator: HTMLDivElement;
 
   constructor(docManager: IDocumentManager) {
     super();
@@ -85,2243 +46,224 @@ export class SimpleSidebarWidget extends Widget {
     this.title.caption = 'AI Chat Interface';
     this.title.icon = extensionIcon;
     this.title.closable = true;
-    
-    // Add the main CSS class for styling
     this.addClass('jp-llm-ext-sidebar');
 
-    // Initialize API client
-    this.apiClient = new ApiClient();
+    // --- 1. Initialize Core Components & State ---
+    this.settingsState = new SettingsState();
+    const initialSettings = this.settingsState.getSettings();
+    this.apiClient = new ApiClient(initialSettings?.apiUrl || undefined);
+    this.chatState = new ChatState();
+    this.popupMenuManager = new PopupMenuManager(this.docManager, this.node, {
+        // TODO: Verify actual callback names in PopupMenuManager and connect to InputHandler/Utils
+        insertCode: (code: string) => this.inputHandler?.appendToInput(`@code ${code}`),
+        insertCell: (content: string) => this.inputHandler?.appendToInput(`@cell ${content}`),
+        insertFilePath: (path: string) => this.inputHandler?.appendToInput(`@file ${path}`),
+        insertDirectoryPath: (path: string) => this.inputHandler?.appendToInput(`@directory ${path}`), // Added missing callback
+        getSelectedText: () => { /* TODO: Call notebook-integration util */ return ''; },
+        getCurrentCellContent: () => { /* TODO: Call notebook-integration util */ return ''; },
+        insertCellByIndex: (index: number) => { /* TODO: Call notebook-integration util */ },
+        insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => {
+            /* TODO: Delegate to InputHandler or code-ref-widget util */
+        }
+    });
 
-    // Initialize container elements before creating layout
-    this.messageContainer = document.createElement('div');
-    this.inputField = document.createElement('textarea');
-    this.titleInput = document.createElement('input');
-    this.historyContainer = document.createElement('div');
+    // --- 2. Define Callbacks to Connect Components ---
+    const sendMessageCallback = (message: string /* removed: , isMarkdown: boolean */) => {
+        this.messageHandler.handleSendMessage(message); // Assuming signature is (message: string)
+    };
+    const sendAutoMessageCallback = (message: string) => {
+        this.messageHandler.handleSendAutoMessage(message);
+    };
+    const toggleHistoryCallback = () => {
+        this.historyHandler.toggleHistoryView();
+    };
+    const loadChatCallback = (chatId: string) => {
+        this.historyHandler.loadChat(chatId);
+    };
+    const createNewChatCallback = () => {
+        const newChat = this.chatState.createNewChat();
+        this.historyHandler.loadChat(newChat.id); // Assume loadChat handles switching view
+    };
+    const updateTitleCallback = (newTitle: string) => {
+        this.chatState.updateCurrentChatTitle(newTitle);
+        // TODO: Verify SettingsHandler method for notifications and signature
+        // this.settingsHandler?.showNotification('Chat title updated');
+    };
+    const showSettingsCallback = () => {
+        // TODO: Verify SettingsHandler method name
+        // this.settingsHandler.showModal();
+    };
+    const messageRendererCallbacks: MessageRendererCallbacks = {
+        showCopyFeedback: (button: HTMLButtonElement) => { /* TODO: Implement via util */ },
+        addMessageToCell: (content: string) => { /* TODO: Call notebook-integration util */ },
+        copyToClipboard: (text: string, feedbackCb: () => void) => { /* TODO: Call clipboard util */ },
+        copyImageToClipboard: (imageUrl: string, feedbackCb: () => void) => { /* TODO: Call clipboard util */ },
+        copyMessageToClipboard: (text: string, feedbackCb: () => void) => { /* TODO: Call clipboard util */ },
+        handleConfirmInterrupt: () => {
+            // TODO: Call public method on MessageHandler if addMessage is private
+            // this.messageHandler.addMessage('confirmed', 'user', false);
+            this.messageHandler.handleSendAutoMessage('confirmed');
+        },
+        handleRejectInterrupt: () => {
+            // TODO: Call public method on MessageHandler if addMessage is private
+            // this.messageHandler.addMessage('rejected', 'user', false);
+            this.messageHandler.handleSendAutoMessage('rejected');
+        }
+    };
+    const settingsModalCallbacks: SettingsModalCallbacks = {
+      // TODO: Verify expected signature for createSettingsModalElement
+      // handleSave: (settings: AppSettings) => this.settingsHandler.saveSettings(settings),
+      handleSave: () => { /* TODO: call appropriate settingsHandler method */ },
+      // TODO: Verify hide method on SettingsHandler
+      // handleCancel: () => this.settingsHandler.hideSettingsModal()
+      handleCancel: () => { /* TODO: call appropriate settingsHandler method */ }
+    };
+    const shortcutCallbacks: any = { // Using any until ShortcutCallbacks type is resolved
+        showIndicator: (text: string) => this.showKeyboardShortcutIndicator(text),
+        appendToInput: (text: string) => this.inputHandler?.appendToInput(text),
+        focusInput: () => this.layoutElements?.inputField?.focus(),
+        showSidebar: () => { if (this.isHidden) { this.show(); } },
+        showPopupMenu: (x: number, y: number) => this.popupMenuManager.showPopupMenu(x, y)
+    };
+
+    // --- 3. Build UI Layout ---
+    this.layoutElements = buildLayout({
+        // TODO: Verify expected callbacks for buildLayout
+        // handleNewChat: createNewChatCallback,
+        handleToggleHistory: toggleHistoryCallback,
+        handleShowSettings: showSettingsCallback,
+        handleShowPopupMenu: (event: MouseEvent, targetButton: HTMLElement) => {
+            const rect = targetButton.getBoundingClientRect();
+            this.popupMenuManager.showPopupMenu(rect.left + 60, rect.top - 20);
+            event.preventDefault();
+            event.stopPropagation();
+            this.showKeyboardShortcutIndicator('Browse cells, code, files, and more');
+        },
+        handleUpdateTitle: () => {
+            const newTitle = this.layoutElements.titleInput.value;
+            updateTitleCallback(newTitle);
+        }
+    });
+    this.settingsModalContainer = createSettingsModalElement(settingsModalCallbacks);
+
+    // --- 4. Initialize Handlers (Inject Dependencies) ---
+    // TODO: Verify constructor signatures for all handlers
+    const messageHandlerDeps: any = {
+        apiClient: this.apiClient,
+        chatState: this.chatState,
+        messageContainer: this.layoutElements.messageContainer,
+        renderers: { renderUserMessage, renderBotMessage },
+        callbacks: messageRendererCallbacks,
+        scrollToBottom: () => this.layoutElements.messageContainer.scrollTop = this.layoutElements.messageContainer.scrollHeight
+    };
+    // this.messageHandler = new MessageHandler(messageHandlerDeps);
+    this.messageHandler = new MessageHandler(
+        this.apiClient,
+        this.chatState,
+        this.layoutElements.messageContainer,
+        { renderUserMessage, renderBotMessage },
+        messageRendererCallbacks
+        // Add other required args based on actual constructor
+    );
+
+    const historyHandlerDeps: any = {
+        chatState: this.chatState,
+        layoutElements: this.layoutElements,
+        loadChatCallback: loadChatCallback,
+    };
+    // this.historyHandler = new HistoryHandler(historyHandlerDeps);
+    this.historyHandler = new HistoryHandler(
+        this.chatState,
+        this.layoutElements,
+        loadChatCallback
+        // Add other required args based on actual constructor
+    );
+
+    // this.inputHandler = new InputHandler({
+    //     inputElement: this.layoutElements.inputField,
+    //     popupMenuManager: this.popupMenuManager,
+    //     sendMessageCallback: sendMessageCallback,
+    //     docManager: this.docManager
+    // });
+    this.inputHandler = new InputHandler(
+        this.layoutElements.inputField,
+        this.popupMenuManager,
+        {
+            sendMessage: sendMessageCallback,
+            // Add other required callbacks
+        }
+        // Add docManager if needed
+    );
+
+    const settingsHandlerDeps: any = {
+        settingsState: this.settingsState,
+        apiClient: this.apiClient,
+        settingsModalContainer: this.settingsModalContainer,
+        widgetNode: this.node,
+        initialSettings: initialSettings
+    };
+    // this.settingsHandler = new SettingsHandler(settingsHandlerDeps);
+    this.settingsHandler = new SettingsHandler(
+        this.settingsState,
+        this.apiClient,
+        this.settingsModalContainer,
+        this.node
+        // Pass initial settings if required by constructor
+    );
+
+    // TODO: Verify setupShortcuts signature
+    setupShortcuts(
+        // this.layoutElements.inputField,
+        this.inputHandler, // Pass InputHandler instance? Check signature
+        this.popupMenuManager,
+        shortcutCallbacks
+    );
+
+    // --- 5. Initial UI State Setup ---
+    // TODO: Verify LayoutElements properties
+    // this.node.appendChild(this.layoutElements.contentWrapper);
+    this.node.appendChild(this.settingsModalContainer);
+
+    // TODO: Verify HistoryHandler initialization method
+    // this.historyHandler.initialize();
+
+    // Setup indicator
     this.keyboardShortcutIndicator = document.createElement('div');
     this.keyboardShortcutIndicator.className = 'jp-llm-ext-keyboard-shortcut-indicator';
     this.node.appendChild(this.keyboardShortcutIndicator);
-
-    // Create settings modal
-    this.settingsModalContainer = this.createSettingsModal();
-    this.node.appendChild(this.settingsModalContainer);
-
-    // Instantiate the PopupMenuManager with callbacks
-    this.popupMenuManager = new PopupMenuManager(this.docManager, this.node, {
-        insertCode: (code: string) => this.appendToInput(`code ${code}`),
-        insertCell: (content: string) => this.appendToInput(`cell ${content}`),
-        insertFilePath: (path: string) => this.appendToInput(`file ${path}`),
-        insertDirectoryPath: (path: string) => this.appendToInput(`directory ${path}`), // If needed
-        getSelectedText: () => this.getSelectedText(),
-        getCurrentCellContent: () => this.getCurrentCellContent(),
-        insertCellByIndex: (index: number) => this.insertCellByIndex(index),
-        insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => 
-            this.insertCollapsedCodeRef(code, cellIndex, lineNumber, notebookName)
-    });
-
-    // Create a new chat on start
-    this.createNewChat();
-
-    this.node.appendChild(this.createLayout());
-    // Pop-up menu will be attached to document.body when shown
-
-    // Add keyboard shortcut listener
-    document.addEventListener('keydown', this.handleKeyDown);
   }
 
   /**
    * Shows a visual indicator for keyboard shortcuts
+   * TODO: This logic might move to a dedicated UI service or ShortcutHandler
    */
   private showKeyboardShortcutIndicator(text: string): void {
     this.keyboardShortcutIndicator.textContent = text;
     this.keyboardShortcutIndicator.classList.add('visible');
-    
-    // Hide after 1 second
     setTimeout(() => {
       this.keyboardShortcutIndicator.classList.remove('visible');
     }, 1000);
   }
 
   /**
-   * Handles keyboard shortcuts
-   */
-  private handleKeyDown = (event: KeyboardEvent): void => {
-    // Check for @ key (for context menu) - changed from Ctrl+@
-    if (event.key === '@') {
-      // Prevent default browser behavior
-      event.preventDefault();
-      event.stopPropagation();
-
-      // Only show menu if input field is focused
-      if (document.activeElement === this.inputField) {
-        // Get cursor position in input field
-        const cursorPosition = this.inputField.selectionStart || 0;
-        const textBeforeCursor = this.inputField.value.substring(0, cursorPosition);
-        
-        // Calculate position to show menu
-        const inputRect = this.inputField.getBoundingClientRect();
-        const lineHeight = parseInt(window.getComputedStyle(this.inputField).lineHeight) || 20;
-        
-        // Count newlines before cursor to determine vertical position
-        const linesBeforeCursor = (textBeforeCursor.match(/\n/g) || []).length;
-        
-        // Calculate cursor position within current line
-        const lastNewline = textBeforeCursor.lastIndexOf('\n');
-        const charsInCurrentLine = lastNewline === -1 ? cursorPosition : cursorPosition - lastNewline - 1;
-        
-        // Estimate horizontal position (using average character width)
-        const charWidth = 8; // Approximate width of a character in pixels
-        const horizontalOffset = charsInCurrentLine * charWidth;
-        
-        // Calculate positions
-        const left = inputRect.left + horizontalOffset;
-        // Calculate the cursor's vertical position
-        const cursorTop = inputRect.top + (linesBeforeCursor * lineHeight);
-        
-        console.log(`Showing popup at cursor position: (${left}, ${cursorTop})`);
-        
-        // Insert @ symbol at cursor position
-        const newValue = 
-          this.inputField.value.substring(0, cursorPosition) + 
-          '@' + 
-          this.inputField.value.substring(cursorPosition);
-        this.inputField.value = newValue;
-        
-        // Update has @ symbol flag
-        this.hasAtSymbol = true;
-        
-        // Move cursor after the @ symbol
-        this.inputField.selectionStart = cursorPosition + 1;
-        this.inputField.selectionEnd = cursorPosition + 1;
-        
-        // Show the popup menu above the cursor position
-        this.popupMenuManager.showPopupMenu(left + 60, cursorTop -20);
-        this.showKeyboardShortcutIndicator('Browse cells, code, files, and more');
-      }
-    }
-    // Check for Ctrl+L (for selected code)
-    else if (event.ctrlKey && event.key.toLowerCase() === 'l') {
-      // Prevent default browser behavior
-      event.preventDefault();
-      event.stopPropagation();
-      
-      // Get the current active cell
-      const cell = globals.notebookTracker?.activeCell;
-      if (!cell || !cell.editor) {
-        return;
-      }
-
-      try {
-        // Get the CodeMirror editor instance
-        const editor = cell.editor;
-        const view = (editor as any).editor;
-        if (!view) {
-          return;
-        }
-
-        // Check if there's a selection
-        const state = view.state;
-        const selection = state.selection;
-        
-        if (!selection.main.empty) {
-          // If there's a selection, use @code
-          const from = selection.main.from;
-          const to = selection.main.to;
-          const selectedText = state.doc.sliceString(from, to);
-          this.appendToInput(`@code ${selectedText}`);
-          this.showKeyboardShortcutIndicator('Selected code inserted');
-        } else {
-          // If no selection, use @cell
-          const cellContext = globals.cellContextTracker?.getCurrentCellContext();
-          if (cellContext) {
-            this.appendToInput(`@cell ${cellContext.text}`);
-            this.showKeyboardShortcutIndicator('Cell content inserted');
-          }
-        }
-
-        // Ensure the sidebar is visible and focused
-        if (this.isHidden) {
-          this.show();
-        }
-        this.inputField.focus();
-      } catch (error) {
-        console.error('Error handling keyboard shortcut:', error);
-      }
-    }
-  };
-
-  /**
    * Disposes all resources
    */
   public dispose(): void {
-    // Remove keyboard shortcut listener
-    document.removeEventListener('keydown', this.handleKeyDown);
-    // Remove keyboard shortcut indicator
-    if (this.keyboardShortcutIndicator.parentNode) {
-      this.keyboardShortcutIndicator.parentNode.removeChild(this.keyboardShortcutIndicator);
+    if (this.isDisposed) {
+      return;
     }
-    // Dispose the popup menu manager
-    if (this.popupMenuManager) {
-      this.popupMenuManager.dispose();
-    }
+    removeShortcuts();
+
+    // TODO: Verify dispose methods on handlers
+    // this.inputHandler?.dispose();
+    // this.messageHandler?.dispose();
+    // this.historyHandler?.dispose();
+    // this.settingsHandler?.dispose();
+    this.popupMenuManager?.dispose();
+
+    this.keyboardShortcutIndicator?.remove();
+
     super.dispose();
   }
 
-  /**
-   * Creates the main layout for the sidebar
-   */
-  private createLayout(): HTMLElement {
-    // Create the main container
-    const mainContent = document.createElement('div');
-    // The main class 'jp-llm-ext-sidebar' is added to this.node in the constructor
-    // This container can have its own class if needed for further nesting/styling
-    mainContent.className = 'jp-llm-ext-content-wrapper';
-
-    // Create title input container
-    const titleContainer = document.createElement('div');
-    titleContainer.className = 'jp-llm-ext-title-container';
-    
-    // Set up title input
-    this.titleInput.className = 'chat-title-input'; // Assuming this is styled correctly in CSS
-    this.titleInput.type = 'text';
-    this.titleInput.placeholder = 'Chat title';
-    this.titleInput.value = 'New Chat';
-    this.titleInput.addEventListener('change', () => this.updateCurrentChatTitle());
-    
-    titleContainer.appendChild(this.titleInput);
-
-    // Create New Chat & History buttons
-    const newChatButton = document.createElement('button');
-    newChatButton.className = 'jp-Button jp-llm-ext-action-button'; 
-    newChatButton.textContent = '+ New Chat';
-    newChatButton.title = 'Start a new chat';
-    newChatButton.addEventListener('click', () => this.createNewChat());
-    
-    const historyButton = document.createElement('button');
-    historyButton.className = 'jp-Button jp-llm-ext-action-button'; 
-    historyButton.textContent = 'History';
-    historyButton.title = 'View chat history';
-    historyButton.addEventListener('click', () => this.toggleHistoryView());
-    
-    // Configure message container
-    this.messageContainer.className = 'jp-llm-ext-message-container';
-
-    // Configure history container
-    this.historyContainer.className = 'jp-llm-ext-history-container';
-    this.historyContainer.style.display = 'none';
-
-    // Configure input field (directly used later)
-    this.inputField.placeholder = 'Ask me anything...';
-    this.inputField.rows = 1;
-    this.inputField.className = 'jp-llm-ext-input-field'; // Add class for styling
-
-    // Add keypress listener to input field
-    this.inputField.addEventListener('keypress', (event) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        this.handleSendMessage();
-      }
-    });
-    
-    // Add input event listener to detect changes to the input field
-    this.inputField.addEventListener('input', () => {
-      // Check if the @ symbol has been removed
-      const cursorPosition = this.inputField.selectionStart;
-      const textBeforeCursor = this.inputField.value.slice(0, cursorPosition);
-      const hasAtNow = textBeforeCursor.endsWith('@') && 
-                     (cursorPosition === 1 || // @ is at start of input
-                      !!textBeforeCursor[cursorPosition - 2].match(/\s/)); // @ follows whitespace
-      if (this.hasAtSymbol && !hasAtNow) {
-        // @ symbol was present but now it's gone, hide the popup
-        this.popupMenuManager.hidePopupMenu();
-      }
-      this.hasAtSymbol = hasAtNow;
-    });
-
-    // Create send button container (directly used later)
-    const inputActionsContainer = document.createElement('div');
-    inputActionsContainer.className = 'jp-llm-ext-input-actions-container';
-
-    // Create send button
-    const sendButton = document.createElement('button');
-    sendButton.className = 'jp-Button jp-llm-ext-send-button';
-    sendButton.textContent = 'Send';
-    sendButton.addEventListener('click', () => this.handleSendMessage());
-    inputActionsContainer.appendChild(sendButton);
-
-    // Create controls container (Markdown toggle, @, etc.) (directly used later)
-    const controlsContainer = this.createControlsContainer(); 
-
-    // Create the new bottom bar container with three rows
-    const bottomBarContainer = document.createElement('div');
-    bottomBarContainer.className = 'jp-llm-ext-bottom-bar-container';
-    this.bottomBarContainer = bottomBarContainer;
-
-    // First row: Controls (Markdown toggle and action buttons)
-    const topRow = document.createElement('div');
-    topRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-controls-row';
-    topRow.appendChild(controlsContainer);
-
-    // Second row: Input field
-    const middleRow = document.createElement('div');
-    middleRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row';
-    middleRow.appendChild(this.inputField);
-
-    // Third row: Action buttons (Send, New Chat, History)
-    const bottomRow = document.createElement('div');
-    bottomRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-buttons-row';
-    
-    // Add all buttons to bottom row
-    bottomRow.appendChild(sendButton);
-    bottomRow.appendChild(newChatButton);
-    bottomRow.appendChild(historyButton);
-
-    // Add all rows to the bottom bar container
-    bottomBarContainer.appendChild(topRow);
-    bottomBarContainer.appendChild(middleRow);
-    bottomBarContainer.appendChild(bottomRow);
-
-    // Assemble all main components
-    mainContent.appendChild(titleContainer);
-    mainContent.appendChild(this.messageContainer);
-    mainContent.appendChild(this.historyContainer);
-    mainContent.appendChild(bottomBarContainer);
-    
-    return mainContent;
-  }
-
-  /**
-   * Creates a new chat session
-   */
-  private createNewChat(): void {
-    // Generate a unique ID for the chat
-    const chatId = `chat-${Date.now()}`;
-    
-    // Create a new chat item
-    const newChat: ChatHistoryItem = {
-      id: chatId,
-      title: 'New Chat',
-      messages: []
-    };
-    
-    // Add to history
-    this.chatHistory.push(newChat);
-    
-    // Set as current chat
-    this.currentChatId = chatId;
-    
-    // Update title input
-    this.titleInput.value = newChat.title;
-    
-    // Clear message container
-    if (this.messageContainer) {
-      this.messageContainer.innerHTML = '';
-    }
-    
-    // Hide history if it's visible
-    if (this.isHistoryViewActive) {
-      this.toggleHistoryView();
-    }
-  }
-
-  /**
-   * Toggles between chat view and history view
-   */
-  private toggleHistoryView(): void {
-    this.isHistoryViewActive = !this.isHistoryViewActive;
-    
-    if (this.isHistoryViewActive) {
-      // Show history view, hide message view and bottom bar
-      this.messageContainer.style.display = 'none';
-      this.historyContainer.style.display = 'block';
-      this.bottomBarContainer.style.display = 'none'; // Use class property directly
-      this.titleInput.style.display = 'none';
-      
-      // Populate history
-      this.renderChatHistory();
-    } else {
-      // Show message view and bottom bar, hide history view
-      this.messageContainer.style.display = 'block';
-      this.historyContainer.style.display = 'none';
-      this.bottomBarContainer.style.display = 'flex'; // Use class property directly
-      this.titleInput.style.display = 'block';
-    }
-  }
-
-  /**
-   * Renders the chat history in the history container
-   */
-  private renderChatHistory(): void {
-    this.historyContainer.innerHTML = '';
-    
-    if (this.chatHistory.length === 0) {
-      const emptyMessage = document.createElement('div');
-      emptyMessage.className = 'jp-llm-ext-empty-history-message';
-      emptyMessage.textContent = 'No chat history yet';
-      this.historyContainer.appendChild(emptyMessage);
-      return;
-    }
-    
-    // Create a list of chat history items
-    this.chatHistory.forEach(chat => {
-      const historyItem = document.createElement('div');
-      historyItem.className = 'jp-llm-ext-history-item';
-      if (chat.id === this.currentChatId) {
-        historyItem.classList.add('jp-llm-ext-active');
-      }
-      
-      // Add title
-      const title = document.createElement('div');
-      title.className = 'jp-llm-ext-history-title';
-      title.textContent = chat.title;
-      
-      // Add message preview
-      const preview = document.createElement('div');
-      preview.className = 'jp-llm-ext-history-preview';
-      const lastMessage = chat.messages[chat.messages.length - 1];
-      preview.textContent = lastMessage 
-        ? `${lastMessage.text.substring(0, 40)}${lastMessage.text.length > 40 ? '...' : ''}`
-        : 'Empty chat';
-      
-      // Add click event
-      historyItem.addEventListener('click', () => this.loadChat(chat.id));
-      
-      historyItem.appendChild(title);
-      historyItem.appendChild(preview);
-      this.historyContainer.appendChild(historyItem);
-    });
-  }
-
-  /**
-   * Loads a chat from history
-   */
-  private loadChat(chatId: string): void {
-    const chat = this.chatHistory.find(c => c.id === chatId);
-    if (!chat) return;
-    
-    // Set as current chat
-    this.currentChatId = chatId;
-    
-    // Update title
-    this.titleInput.value = chat.title;
-    
-    // Clear and re-populate message container
-    this.messageContainer.innerHTML = '';
-    chat.messages.forEach(msg => {
-      this.addMessage(msg.text, msg.sender, msg.isMarkdown, false);
-    });
-    
-    // Switch back to chat view
-    if (this.isHistoryViewActive) {
-      this.toggleHistoryView();
-    }
-  }
-
-  /**
-   * Updates the title of the current chat
-   */
-  private updateCurrentChatTitle(): void {
-    const chat = this.chatHistory.find(c => c.id === this.currentChatId);
-    if (chat) {
-      chat.title = this.titleInput.value;
-      
-      // Add notification that title has been set
-      const notification = document.createElement('div');
-      notification.className = 'jp-llm-ext-toast-notification jp-llm-ext-title-updated';
-      notification.textContent = 'Chat title updated';
-      
-      // Add to the main widget
-      this.node.appendChild(notification);
-      
-      // Animate in
-      setTimeout(() => {
-        notification.classList.add('visible');
-      }, 10);
-      
-      // Remove after delay
-      setTimeout(() => {
-        notification.classList.remove('visible');
-        // Wait for fade out animation to complete before removing
-        setTimeout(() => {
-          notification.remove();
-        }, 300);
-      }, 2000);
-    }
-  }
-
-  /**
-   * Creates the controls container with toggles and action buttons
-   */
-  private createControlsContainer(): HTMLElement {
-    const controlsContainer = document.createElement('div');
-    controlsContainer.className = 'jp-llm-ext-controls-container';
-
-    // Create markdown toggle container
-    const toggleContainer = document.createElement('div');
-    toggleContainer.className = 'jp-llm-ext-toggle-container';
-
-    // Create markdown toggle
-    const markdownToggle = document.createElement('input');
-    markdownToggle.type = 'checkbox';
-    markdownToggle.id = 'markdown-toggle';
-    // markdownToggle.style.marginRight = '5px'; // Style via CSS
-    markdownToggle.addEventListener('change', (e) => {
-      const target = e.target as HTMLInputElement;
-      this.isMarkdownMode = target.checked;
-      this.inputField.placeholder = this.isMarkdownMode ? 
-        'Write markdown here...\n\n# Example heading\n- List item\n\n```code block```' :
-        'Ask me anything...';
-    });
-
-    // Create toggle label
-    const toggleLabel = document.createElement('label');
-    toggleLabel.htmlFor = 'markdown-toggle';
-    toggleLabel.textContent = 'Markdown mode';
-    // toggleLabel.style.fontSize = '12px'; // Style via CSS
-
-    // Add toggle elements to container
-    toggleContainer.appendChild(markdownToggle);
-    toggleContainer.appendChild(toggleLabel);
-
-    // Create action buttons container (@, expand, settings)
-    const actionButtonsContainer = document.createElement('div');
-    actionButtonsContainer.className = 'jp-llm-ext-action-buttons-container';
-
-    // Create all action buttons
-    const buttons = [
-      { 
-        text: '@', 
-        title: 'Browse cells, code, files, and more', 
-        action: (event: MouseEvent) => {
-          // Get the button's position
-          const targetButton = event.currentTarget as HTMLElement;
-          const rect = targetButton.getBoundingClientRect();
-          // Show the popup menu above the button's top edge
-          this.popupMenuManager.showPopupMenu(rect.left + 60, rect.top - 20);
-          event.preventDefault(); 
-          event.stopPropagation();
-        }
-      },
-      { text: '⤢', title: 'Expand input', action: () => this.toggleInputExpansion(actionButtonsContainer.children[3] as HTMLButtonElement) },
-      { text: '⚙️', title: 'Settings', action: (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); this.showSettingsModal(); } },
-    ];
-
-    // Add all buttons to the container
-    buttons.forEach(button => {
-      const btn = this.createButton(button.text, button.title);
-      btn.addEventListener('click', (e) => button.action(e));
-      actionButtonsContainer.appendChild(btn);
-    });
-
-    // Add toggle and action buttons to the controls container
-    // controlsContainer is now just for these inline controls, above the input field
-    controlsContainer.appendChild(toggleContainer);
-    controlsContainer.appendChild(actionButtonsContainer);
-
-    return controlsContainer;
-  }
-
-  /**
-   * Toggles the expansion state of the input field
-   */
-  private toggleInputExpansion(button: HTMLButtonElement): void {
-    this.isInputExpanded = !this.isInputExpanded;
-    if (this.isInputExpanded) {
-      // Adjust height based on a class or CSS variable instead of fixed pixels if possible
-      this.inputField.style.height = '200px'; 
-      this.inputField.style.resize = 'vertical';
-      button.textContent = '⤡';
-      button.title = 'Collapse input';
-    } else {
-      this.inputField.style.height = ''; // Reset height
-      this.inputField.style.resize = 'none';
-      this.inputField.rows = 1; // Ensure it collapses back to 1 row height
-      button.textContent = '⤢';
-      button.title = 'Expand input';
-    }
-  }
-
-  /**
-   * Helper function to create a button with given text and tooltip
-   */
-  private createButton(text: string, tooltip: string): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.textContent = text;
-    button.title = tooltip;
-    button.className = 'jp-Button jp-llm-ext-action-button';
-    return button;
-  }
-
-  /**
-   * Handles sending a message from the input field
-   */
-  private handleSendMessage(): void {
-    const message = this.inputField.value.trim();
-    if (message) {
-      // Process the message to replace code reference placeholders
-      let processedMessage = message;
-      let hasCodeRefs = false;
-      
-      // Check if we have code references
-      if ('_codeRefMap' in this.inputField && (this.inputField as any)._codeRefMap instanceof Map) {
-        const codeRefMap = (this.inputField as any)._codeRefMap as Map<string, string>;
-        hasCodeRefs = codeRefMap.size > 0;
-        
-        // Create a processed message with the placeholders for display
-        // We'll keep the original message for sending to the API
-        processedMessage = message;
-        
-        // No need to actually modify the message since we'll use the DOM for rendering
-      }
-      
-      // Add user message to UI (send as text, not markdown by default for user)
-      this.addMessage(processedMessage, 'user', hasCodeRefs);
-      
-      // Clear input and reset the code reference map
-      this.inputField.value = '';
-      if ('_codeRefMap' in this.inputField) {
-        (this.inputField as any)._codeRefMap = new Map<string, string>();
-      }
-      
-      this.inputField.rows = 1; // Reset rows after sending
-      this.inputField.style.height = ''; // Reset height after sending
-      
-      // Reset expanded state if needed after sending
-      if (this.isInputExpanded) {
-        // Find the expand button to reset its state if needed (this might need adjustment based on final structure)
-        const expandButton = this.node.querySelector('.jp-llm-ext-action-buttons-container button[title*="Collapse"]') as HTMLButtonElement;
-        if (expandButton) {
-          this.toggleInputExpansion(expandButton); // Collapse after sending
-        } else {
-           this.inputField.style.height = ''; // Fallback reset
-           this.inputField.rows = 1;
-        }
-      }
-
-      // Create a temporary message container for the bot's streaming response
-      const botMessageDiv = document.createElement('div');
-      botMessageDiv.className = 'jp-llm-ext-bot-message';
-      
-      const markdownIndicator = document.createElement('div');
-      markdownIndicator.textContent = "MD";
-      markdownIndicator.className = 'markdown-indicator';
-      botMessageDiv.appendChild(markdownIndicator);
-      
-      // Create separate divs for streaming text and final markdown
-      const streamingDiv = document.createElement('div');
-      streamingDiv.className = 'streaming-content';
-      streamingDiv.style.whiteSpace = 'pre-wrap';
-      streamingDiv.style.fontFamily = 'monospace';
-      streamingDiv.style.fontSize = '0.9em';
-      botMessageDiv.appendChild(streamingDiv);
-      
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'markdown-content';
-      contentDiv.style.display = 'none'; // Initially hidden
-      botMessageDiv.appendChild(contentDiv);
-      
-      this.messageContainer.appendChild(botMessageDiv);
-      
-      // Variable to collect the complete response
-      let completeResponse = '';
-      
-      // Get cell context if available
-      const cellContext = globals.cellContextTracker ? 
-        globals.cellContextTracker.getCurrentCellContext() : null;
-      
-      // Stream response from API
-      this.apiClient.streamChat(
-        message,
-        { cellContext },
-        // On each chunk received
-        (chunk: string) => {
-          completeResponse += chunk;
-          streamingDiv.textContent = completeResponse;
-          this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
-        },
-        // On complete
-        () => {
-          // Hide streaming div, show final content div
-          streamingDiv.style.display = 'none';
-          contentDiv.style.display = 'block';
-          
-          // Check if the complete response is an image URL
-          const isImageUrl = completeResponse.startsWith('/images/') && completeResponse.endsWith('.png');
-
-          if (isImageUrl) {
-            // Create a container for the image that allows positioning the buttons
-            const imageContainer = document.createElement('div');
-            imageContainer.className = 'jp-llm-ext-image-container';
-            imageContainer.style.position = 'relative';
-            
-            // Render as an image tag
-            const img = document.createElement('img');
-            const fullImageUrl = `http://127.0.0.1:8000${completeResponse}`; // Construct full URL
-            img.src = fullImageUrl;
-            img.alt = 'Image from bot';
-            img.style.maxWidth = '100%';
-            img.style.height = 'auto';
-            
-            imageContainer.appendChild(img);
-            
-            // Add action buttons for the image
-            const imgActionsDiv = document.createElement('div');
-            imgActionsDiv.className = 'jp-llm-ext-image-actions';
-            imgActionsDiv.style.position = 'absolute';
-            imgActionsDiv.style.bottom = '10px';
-            imgActionsDiv.style.right = '10px';
-            imgActionsDiv.style.display = 'flex';
-            imgActionsDiv.style.gap = '8px';
-            imgActionsDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.6)';
-            imgActionsDiv.style.borderRadius = '4px';
-            imgActionsDiv.style.padding = '4px';
-            
-            // Copy image button
-            const copyImgBtn = document.createElement('button');
-            copyImgBtn.className = 'jp-llm-ext-image-action-button';
-            copyImgBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-            copyImgBtn.title = 'Copy image to clipboard';
-            copyImgBtn.addEventListener('click', (event) => {
-              event.stopPropagation();
-              this.copyImageToClipboard(fullImageUrl);
-            });
-            imgActionsDiv.appendChild(copyImgBtn);
-            
-            // Add file path button
-            const addPathBtn = document.createElement('button');
-            addPathBtn.className = 'jp-llm-ext-image-action-button';
-            addPathBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-            addPathBtn.title = 'Add image path to current cell';
-            addPathBtn.addEventListener('click', (event) => {
-              event.stopPropagation();
-              this.addMessageToCell(completeResponse); // Adds just the image path to the cell
-            });
-            imgActionsDiv.appendChild(addPathBtn);
-            
-            // Add the buttons to the image container
-            imageContainer.appendChild(imgActionsDiv);
-            
-            // Add the image container to the content div
-            contentDiv.appendChild(imageContainer);
-            
-            // Save image URL to history (as text)
-            const chat = this.chatHistory.find(c => c.id === this.currentChatId);
-            if (chat) {
-                chat.messages.push({ 
-                    text: completeResponse, // Store the URL
-                    sender: 'bot', 
-                    isMarkdown: false // Treat it as non-markdown for history
-                });
-            }
-          } else {
-            // Try to render markdown
-            try {
-              const processedText = preprocessMarkdown(completeResponse);
-              const rawHtml = marked.parse(processedText) as string;
-              const sanitizedHtml = DOMPurify.sanitize(rawHtml);
-              contentDiv.innerHTML = sanitizedHtml;
-
-              // Check if this is an interrupt message
-              const isInterrupt = completeResponse.startsWith('**[INTERRUPT]**');
-              if (isInterrupt) {
-                // Create buttons container
-                const buttonsContainer = document.createElement('div');
-                buttonsContainer.className = 'jp-llm-ext-interrupt-buttons';
-                buttonsContainer.style.marginTop = '12px';
-                buttonsContainer.style.display = 'flex';
-                buttonsContainer.style.gap = '8px';
-
-                // Create confirm button
-                const confirmButton = document.createElement('button');
-                confirmButton.className = 'jp-llm-ext-confirm-button';
-                confirmButton.textContent = 'Confirm';
-                confirmButton.style.padding = '6px 12px';
-                confirmButton.style.background = '#4CAF50';
-                confirmButton.style.color = 'white';
-                confirmButton.style.border = 'none';
-                confirmButton.style.borderRadius = '4px';
-                confirmButton.style.cursor = 'pointer';
-                confirmButton.style.fontWeight = 'bold';
-
-                confirmButton.addEventListener('click', () => {
-                  // Disable buttons after click
-                  confirmButton.disabled = true;
-                  rejectButton.disabled = true;
-                  confirmButton.style.opacity = '0.5';
-                  rejectButton.style.opacity = '0.5';
-
-                  // Add "confirmed" message as user 
-                  this.addMessage('confirmed', 'user', false);
-                  
-                  // Add status indicator
-                  const statusIndicator = document.createElement('div');
-                  statusIndicator.className = 'jp-llm-ext-status-indicator';
-                  statusIndicator.innerHTML = `<span class="status-icon confirm-icon">✅</span><span class="status-line"></span><span class="status-text">User confirmed</span><span class="status-line"></span>`;
-                  this.messageContainer.appendChild(statusIndicator);
-
-                  // Send auto message to API without adding a new user message
-                  this.handleSendAutoMessage('confirmed');
-                });
-
-                // Create reject button
-                const rejectButton = document.createElement('button');
-                rejectButton.className = 'jp-llm-ext-reject-button';
-                rejectButton.textContent = 'Reject';
-                rejectButton.style.padding = '6px 12px';
-                rejectButton.style.background = '#F44336';
-                rejectButton.style.color = 'white';
-                rejectButton.style.border = 'none';
-                rejectButton.style.borderRadius = '4px';
-                rejectButton.style.cursor = 'pointer';
-                rejectButton.style.fontWeight = 'bold';
-
-                rejectButton.addEventListener('click', () => {
-                  // Disable buttons after click
-                  confirmButton.disabled = true;
-                  rejectButton.disabled = true;
-                  confirmButton.style.opacity = '0.5';
-                  rejectButton.style.opacity = '0.5';
-
-                  // Add "rejected" message as user
-                  this.addMessage('rejected', 'user', false);
-                  
-                  // Add status indicator
-                  const statusIndicator = document.createElement('div');
-                  statusIndicator.className = 'jp-llm-ext-status-indicator';
-                  statusIndicator.innerHTML = `<span class="status-icon reject-icon">❌</span><span class="status-line"></span><span class="status-text">User rejected</span><span class="status-line"></span>`;
-                  this.messageContainer.appendChild(statusIndicator);
-                  
-                  // Send auto message to API without adding a new user message
-                  this.handleSendAutoMessage('rejected');
-                });
-
-                // Add buttons to container
-                buttonsContainer.appendChild(confirmButton);
-                buttonsContainer.appendChild(rejectButton);
-
-                // Add container below the message
-                contentDiv.appendChild(buttonsContainer);
-              }
-
-              // Enhance code blocks with language detection and action buttons
-              const codeBlocks = contentDiv.querySelectorAll('pre code');
-              codeBlocks.forEach(block => {
-                  // Add standard JupyterLab classes for consistency
-                  block.classList.add('jp-RenderedText');
-                  block.parentElement?.classList.add('jp-RenderedHTMLCommon');
-                  
-                  // Get code content to detect language
-                  const codeContent = block.textContent || '';
-                  
-                  // Create code block header for buttons
-                  const codeHeader = document.createElement('div');
-                  codeHeader.className = 'jp-llm-ext-code-header';
-                  
-                  // Add language indicator if detected
-                  const language = this.detectLanguage(codeContent);
-                  if (language) {
-                      const langIndicator = document.createElement('span');
-                      langIndicator.className = 'jp-llm-ext-code-language';
-                      langIndicator.textContent = language;
-                      codeHeader.appendChild(langIndicator);
-                      
-                      // Add language class for syntax highlighting
-                      block.classList.add(`language-${language}`);
-                      
-                      // Apply syntax highlighting
-                      try {
-                          block.innerHTML = this.highlightCode(codeContent, language);
-                      } catch (error) {
-                          console.error('Error applying syntax highlighting:', error);
-                          // Keep original content if highlighting fails
-                      }
-                  } else {
-                      // Try auto-detection if no specific language detected
-                      try {
-                          block.innerHTML = this.highlightCode(codeContent, '');
-                      } catch (error) {
-                          console.error('Error applying auto syntax highlighting:', error);
-                          // Keep original content if highlighting fails
-                      }
-                  }
-                  
-                  // Add action buttons to the code header
-                  const actionsDiv = document.createElement('div');
-                  actionsDiv.className = 'jp-llm-ext-code-actions';
-                  
-                  // Copy button with icon
-                  const copyButton = document.createElement('button');
-                  copyButton.className = 'jp-llm-ext-code-action-button';
-                  copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-                  copyButton.title = 'Copy code to clipboard';
-                  copyButton.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    this.copyToClipboard(codeContent);
-                  });
-                  actionsDiv.appendChild(copyButton);
-
-                  // Add to button with icon
-                  const addToButton = document.createElement('button');
-                  addToButton.className = 'jp-llm-ext-code-action-button';
-                  addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-                  addToButton.title = 'Add code to current cell';
-                  addToButton.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    this.addMessageToCell(codeContent);
-                  });
-                  actionsDiv.appendChild(addToButton);
-                  
-                  // Add the actions to the header
-                  codeHeader.appendChild(actionsDiv);
-                  
-                  // Insert the header before the code block
-                  if (block.parentElement) {
-                      block.parentElement.insertBefore(codeHeader, block);
-                  }
-              });
-
-              // Add action buttons for the bot message (Copy, Add to Cell)
-              console.log('Adding action buttons to streamed bot message');
-              const actionsDiv = document.createElement('div');
-              actionsDiv.className = 'jp-llm-ext-message-actions';
-              actionsDiv.style.display = 'flex'; // Ensure display is set
-
-              // Copy button
-              const copyButton = document.createElement('button');
-              copyButton.className = 'jp-llm-ext-message-action-button';
-              copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-              copyButton.title = 'Copy message to clipboard';
-              copyButton.addEventListener('click', (event) => {
-                event.stopPropagation();
-                this.copyMessageToClipboard(completeResponse); // Copy the original markdown
-              });
-              actionsDiv.appendChild(copyButton);
-
-              // Add to Cell button
-              const addToButton = document.createElement('button');
-              addToButton.className = 'jp-llm-ext-message-action-button';
-              addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-              addToButton.title = 'Add message to current cell';
-              addToButton.addEventListener('click', (event) => {
-                event.stopPropagation();
-                this.addMessageToCell(completeResponse); // Add the original markdown
-              });
-              actionsDiv.appendChild(addToButton);
-
-              botMessageDiv.appendChild(actionsDiv);
-              console.log('Action buttons added to bot message:', actionsDiv);
-
-            } catch (error) {
-                contentDiv.textContent = completeResponse;
-                console.error('Failed to render markdown:', error);
-            }
-            
-            // Save markdown to chat history
-            const chat = this.chatHistory.find(c => c.id === this.currentChatId);
-            if (chat) {
-                chat.messages.push({ 
-                text: completeResponse, 
-                sender: 'bot', 
-                isMarkdown: true // It's markdown
-                });
-            }
-          }
-          
-          this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
-        },
-        // On error
-        (error: Error) => {
-          streamingDiv.style.display = 'none';
-          contentDiv.style.display = 'block';
-          contentDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
-          console.error('API Error:', error);
-        }
-      );
-    }
-  }
-
-  /**
-   * Handles sending an automatic message (like confirmed/rejected) from the UI
-   */
-  private handleSendAutoMessage(message: string): void {
-    if (!message.trim()) return;
-
-    // Skip adding user message - the calling function will handle this
-    // Prevent duplication of messages when called from confirm/reject buttons
-    
-    // Add a confirmation/rejection status indicator line only if not already added
-    // by the calling function (checking if this is a direct call)
-    const statusIndicator = document.createElement('div');
-    statusIndicator.className = 'jp-llm-ext-status-indicator';
-    
-    // Set the appropriate icon and text based on the message
-    if (message.toLowerCase() === 'confirmed') {
-      statusIndicator.innerHTML = `<span class="status-icon confirm-icon">✅</span><span class="status-line"></span><span class="status-text">User confirmed</span><span class="status-line"></span>`;
-    } else if (message.toLowerCase() === 'rejected') {
-      statusIndicator.innerHTML = `<span class="status-icon reject-icon">❌</span><span class="status-line"></span><span class="status-text">User rejected</span><span class="status-line"></span>`;
-    }
-    
-    // Create a temporary message container for the bot's streaming response
-    const botMessageDiv = document.createElement('div');
-    botMessageDiv.className = 'jp-llm-ext-bot-message';
-    
-    const markdownIndicator = document.createElement('div');
-    markdownIndicator.textContent = "MD";
-    markdownIndicator.className = 'markdown-indicator';
-    botMessageDiv.appendChild(markdownIndicator);
-    
-    // Create separate divs for streaming text and final markdown
-    const streamingDiv = document.createElement('div');
-    streamingDiv.className = 'streaming-content';
-    streamingDiv.style.whiteSpace = 'pre-wrap';
-    streamingDiv.style.fontFamily = 'monospace';
-    streamingDiv.style.fontSize = '0.9em';
-    botMessageDiv.appendChild(streamingDiv);
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'markdown-content';
-    contentDiv.style.display = 'none'; // Initially hidden
-    botMessageDiv.appendChild(contentDiv);
-    
-    this.messageContainer.appendChild(botMessageDiv);
-    
-    // Variable to collect the complete response
-    let completeResponse = '';
-    
-    // Get cell context if available
-    const cellContext = globals.cellContextTracker ? 
-      globals.cellContextTracker.getCurrentCellContext() : null;
-    
-    // Stream response from API
-    this.apiClient.streamChat(
-      message, // This will be 'confirmed' or 'rejected'
-      { cellContext },
-      // On each chunk received
-      (chunk: string) => {
-        completeResponse += chunk;
-        streamingDiv.textContent = completeResponse;
-        this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
-      },
-      // On complete
-      () => {
-        // Hide streaming div, show final content div
-        streamingDiv.style.display = 'none';
-        contentDiv.style.display = 'block';
-        
-        // Check if the complete response is an image URL
-        const isImageUrl = completeResponse.trim().startsWith('/images/') && 
-                          (completeResponse.trim().endsWith('.png') || 
-                           completeResponse.trim().endsWith('.jpg') || 
-                           completeResponse.trim().endsWith('.jpeg') || 
-                           completeResponse.trim().endsWith('.gif'));
-
-        if (isImageUrl) {
-          // Create a container for the image
-          const imageContainer = document.createElement('div');
-          imageContainer.className = 'jp-llm-ext-image-container';
-          imageContainer.style.position = 'relative';
-          
-          // Render as an image tag
-          const img = document.createElement('img');
-          const fullImageUrl = `http://127.0.0.1:8000${completeResponse.trim()}`; // Construct full URL
-          img.src = fullImageUrl;
-          img.alt = 'Image from bot';
-          img.style.maxWidth = '100%';
-          img.style.height = 'auto';
-          
-          imageContainer.appendChild(img);
-          
-          // Add action buttons for the image
-          const imgActionsDiv = document.createElement('div');
-          imgActionsDiv.className = 'jp-llm-ext-image-actions';
-          imgActionsDiv.style.position = 'absolute';
-          imgActionsDiv.style.bottom = '10px';
-          imgActionsDiv.style.right = '10px';
-          imgActionsDiv.style.display = 'flex';
-          imgActionsDiv.style.gap = '8px';
-          imgActionsDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.6)';
-          imgActionsDiv.style.borderRadius = '4px';
-          imgActionsDiv.style.padding = '4px';
-          
-          // Copy image button
-          const copyImgBtn = document.createElement('button');
-          copyImgBtn.className = 'jp-llm-ext-image-action-button';
-          copyImgBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-          copyImgBtn.title = 'Copy image to clipboard';
-          copyImgBtn.addEventListener('click', (event) => {
-            event.stopPropagation();
-            this.copyImageToClipboard(fullImageUrl);
-          });
-          imgActionsDiv.appendChild(copyImgBtn);
-          
-          // Add file path button
-          const addPathBtn = document.createElement('button');
-          addPathBtn.className = 'jp-llm-ext-image-action-button';
-          addPathBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-          addPathBtn.title = 'Add image path to current cell';
-          addPathBtn.addEventListener('click', (event) => {
-            event.stopPropagation();
-            this.addMessageToCell(fullImageUrl); // Use the full image URL
-          });
-          imgActionsDiv.appendChild(addPathBtn);
-          
-          // Add the buttons to the image container
-          imageContainer.appendChild(imgActionsDiv);
-          
-          // Add the image container to the content div
-          contentDiv.appendChild(imageContainer);
-          
-          // Save image URL to history (as text)
-          const chat = this.chatHistory.find(c => c.id === this.currentChatId);
-          if (chat) {
-            chat.messages.push({ 
-              text: completeResponse.trim(), // Store the URL
-              sender: 'bot', 
-              isMarkdown: false // Treat it as non-markdown for history
-            });
-          }
-        } else {
-          // Try to render markdown
-          try {
-            const processedText = preprocessMarkdown(completeResponse);
-            const rawHtml = marked.parse(processedText) as string;
-            const sanitizedHtml = DOMPurify.sanitize(rawHtml);
-            contentDiv.innerHTML = sanitizedHtml;
-
-            // Check if this is an interrupt message
-            const isInterrupt = completeResponse.startsWith('**[INTERRUPT]**');
-            if (isInterrupt) {
-              // Add confirm/reject buttons (same as in addMessage method)
-              // Create buttons container
-              const buttonsContainer = document.createElement('div');
-              buttonsContainer.className = 'jp-llm-ext-interrupt-buttons';
-              buttonsContainer.style.marginTop = '12px';
-              buttonsContainer.style.display = 'flex';
-              buttonsContainer.style.gap = '8px';
-
-              // Create confirm button
-              const confirmButton = document.createElement('button');
-              confirmButton.className = 'jp-llm-ext-confirm-button';
-              confirmButton.textContent = 'Confirm';
-              confirmButton.style.padding = '6px 12px';
-              confirmButton.style.background = '#4CAF50';
-              confirmButton.style.color = 'white';
-              confirmButton.style.border = 'none';
-              confirmButton.style.borderRadius = '4px';
-              confirmButton.style.cursor = 'pointer';
-              confirmButton.style.fontWeight = 'bold';
-
-              confirmButton.addEventListener('click', () => {
-                // Disable buttons after click
-                confirmButton.disabled = true;
-                rejectButton.disabled = true;
-                confirmButton.style.opacity = '0.5';
-                rejectButton.style.opacity = '0.5';
-
-                // Add "confirmed" message as user 
-                this.addMessage('confirmed', 'user', false);
-                
-                // Add status indicator
-                const statusIndicator = document.createElement('div');
-                statusIndicator.className = 'jp-llm-ext-status-indicator';
-                statusIndicator.innerHTML = `<span class="status-icon confirm-icon">✅</span><span class="status-line"></span><span class="status-text">User confirmed</span><span class="status-line"></span>`;
-                this.messageContainer.appendChild(statusIndicator);
-
-                // Send auto message to API without adding a new user message
-                this.handleSendAutoMessage('confirmed');
-              });
-
-              // Create reject button
-              const rejectButton = document.createElement('button');
-              rejectButton.className = 'jp-llm-ext-reject-button';
-              rejectButton.textContent = 'Reject';
-              rejectButton.style.padding = '6px 12px';
-              rejectButton.style.background = '#F44336';
-              rejectButton.style.color = 'white';
-              rejectButton.style.border = 'none';
-              rejectButton.style.borderRadius = '4px';
-              rejectButton.style.cursor = 'pointer';
-              rejectButton.style.fontWeight = 'bold';
-
-              rejectButton.addEventListener('click', () => {
-                // Disable buttons after click
-                confirmButton.disabled = true;
-                rejectButton.disabled = true;
-                confirmButton.style.opacity = '0.5';
-                rejectButton.style.opacity = '0.5';
-
-                // Add "rejected" message as user
-                this.addMessage('rejected', 'user', false);
-                
-                // Add status indicator
-                const statusIndicator = document.createElement('div');
-                statusIndicator.className = 'jp-llm-ext-status-indicator';
-                statusIndicator.innerHTML = `<span class="status-icon reject-icon">❌</span><span class="status-line"></span><span class="status-text">User rejected</span><span class="status-line"></span>`;
-                this.messageContainer.appendChild(statusIndicator);
-                
-                // Send auto message to API without adding a new user message
-                this.handleSendAutoMessage('rejected');
-              });
-
-              // Add buttons to container
-              buttonsContainer.appendChild(confirmButton);
-              buttonsContainer.appendChild(rejectButton);
-
-              // Add container below the message
-              contentDiv.appendChild(buttonsContainer);
-            }
-
-            // Enhance code blocks (existing code)
-            const codeBlocks = contentDiv.querySelectorAll('pre code');
-            codeBlocks.forEach(block => {
-                // Add standard JupyterLab classes for consistency
-                block.classList.add('jp-RenderedText');
-                block.parentElement?.classList.add('jp-RenderedHTMLCommon');
-                
-                // Get code content to detect language
-                const codeContent = block.textContent || '';
-                
-                // Create code block header for buttons
-                const codeHeader = document.createElement('div');
-                codeHeader.className = 'jp-llm-ext-code-header';
-                
-                // Add language indicator if detected
-                const language = this.detectLanguage(codeContent);
-                if (language) {
-                    const langIndicator = document.createElement('span');
-                    langIndicator.className = 'jp-llm-ext-code-language';
-                    langIndicator.textContent = language;
-                    codeHeader.appendChild(langIndicator);
-                    
-                    // Add language class for syntax highlighting
-                    block.classList.add(`language-${language}`);
-                    
-                    // Apply syntax highlighting
-                    try {
-                        block.innerHTML = this.highlightCode(codeContent, language);
-                    } catch (error) {
-                        console.error('Error applying syntax highlighting:', error);
-                        // Keep original content if highlighting fails
-                    }
-                } else {
-                    // Try auto-detection if no specific language detected
-                    try {
-                        block.innerHTML = this.highlightCode(codeContent, '');
-                    } catch (error) {
-                        console.error('Error applying auto syntax highlighting:', error);
-                        // Keep original content if highlighting fails
-                    }
-                }
-                
-                // Add action buttons to the code header
-                const actionsDiv = document.createElement('div');
-                actionsDiv.className = 'jp-llm-ext-code-actions';
-                
-                // Copy button with icon
-                const copyButton = document.createElement('button');
-                copyButton.className = 'jp-llm-ext-code-action-button';
-                copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-                copyButton.title = 'Copy code to clipboard';
-                copyButton.addEventListener('click', (event) => {
-                  event.stopPropagation();
-                  this.copyToClipboard(codeContent);
-                });
-                actionsDiv.appendChild(copyButton);
-
-                // Add to button with icon
-                const addToButton = document.createElement('button');
-                addToButton.className = 'jp-llm-ext-code-action-button';
-                addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-                addToButton.title = 'Add code to current cell';
-                addToButton.addEventListener('click', (event) => {
-                  event.stopPropagation();
-                  this.addMessageToCell(codeContent);
-                });
-                actionsDiv.appendChild(addToButton);
-                
-                // Add the actions to the header
-                codeHeader.appendChild(actionsDiv);
-                
-                // Insert the header before the code block
-                if (block.parentElement) {
-                    block.parentElement.insertBefore(codeHeader, block);
-                }
-            });
-          } catch (error) {
-            contentDiv.textContent = completeResponse;
-            console.error('Failed to render markdown:', error);
-          }
-          
-          // Save markdown to chat history
-          const chat = this.chatHistory.find(c => c.id === this.currentChatId);
-          if (chat) {
-            chat.messages.push({ 
-              text: completeResponse, 
-              sender: 'bot', 
-              isMarkdown: true // It's markdown
-            });
-          }
-        }
-        
-        this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
-      },
-      // On error
-      (error: Error) => {
-        streamingDiv.style.display = 'none';
-        contentDiv.style.display = 'block';
-        contentDiv.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
-        console.error('API Error:', error);
-      }
-    );
-  }
-
-  /**
-   * Adds a message to the chat interface
-   */
-  private addMessage(text: string, sender: 'user' | 'bot', isMarkdown: boolean = false, saveToHistory: boolean = true): void {
-    console.log('Adding message:', { sender, isMarkdown });
-
-    const messageDiv = document.createElement('div');
-    messageDiv.className = sender === 'user' ? 'jp-llm-ext-user-message' : 'jp-llm-ext-bot-message';
-
-    // Check if the message is an image URL from our backend
-    const isImageUrl = sender === 'bot' && text.trim().startsWith('/images/') && 
-                      (text.trim().endsWith('.png') || 
-                       text.trim().endsWith('.jpg') || 
-                       text.trim().endsWith('.jpeg') || 
-                       text.trim().endsWith('.gif'));
-
-    if (isImageUrl) {
-      // Create a container for the image that allows positioning the buttons
-      const imageContainer = document.createElement('div');
-      imageContainer.className = 'jp-llm-ext-image-container';
-      imageContainer.style.position = 'relative';
-      
-      // Render as an image tag
-      const img = document.createElement('img');
-      // Construct full URL assuming backend is at http://127.0.0.1:8000
-      // TODO: Make backend URL configurable
-      const fullImageUrl = `http://127.0.0.1:8000${text.trim()}`;
-      img.src = fullImageUrl;
-      img.alt = 'Image from bot';
-      img.style.maxWidth = '100%'; // Ensure image fits within the container
-      img.style.height = 'auto';
-      
-      imageContainer.appendChild(img);
-      
-      // Add action buttons for the image
-      const imgActionsDiv = document.createElement('div');
-      imgActionsDiv.className = 'jp-llm-ext-image-actions';
-      imgActionsDiv.style.position = 'absolute';
-      imgActionsDiv.style.bottom = '10px';
-      imgActionsDiv.style.right = '10px';
-      imgActionsDiv.style.display = 'flex';
-      imgActionsDiv.style.gap = '8px';
-      imgActionsDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.6)';
-      imgActionsDiv.style.borderRadius = '4px';
-      imgActionsDiv.style.padding = '4px';
-      
-      // Copy image button
-      const copyImgBtn = document.createElement('button');
-      copyImgBtn.className = 'jp-llm-ext-image-action-button';
-      copyImgBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-      copyImgBtn.title = 'Copy image to clipboard';
-      copyImgBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        this.copyImageToClipboard(fullImageUrl);
-      });
-      imgActionsDiv.appendChild(copyImgBtn);
-      
-      // Add file path button
-      const addPathBtn = document.createElement('button');
-      addPathBtn.className = 'jp-llm-ext-image-action-button';
-      addPathBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-      addPathBtn.title = 'Add image path to current cell';
-      addPathBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        this.addMessageToCell(fullImageUrl); // Use the full image URL
-      });
-      imgActionsDiv.appendChild(addPathBtn);
-      
-      // Add the buttons to the image container
-      imageContainer.appendChild(imgActionsDiv);
-      
-      // Add the image container to the message div
-      messageDiv.appendChild(imageContainer);
-    } else if (sender === 'user' && isMarkdown) {
-      // Special case: User message with code references
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'user-content-with-refs';
-      
-      // Process the text to replace code reference placeholders
-      let processedText = text;
-      
-      // Check if we have a code reference map attached to the input field
-      if ('_codeRefMap' in this.inputField && (this.inputField as any)._codeRefMap instanceof Map) {
-        const codeRefMap = (this.inputField as any)._codeRefMap as Map<string, string>;
-        
-        // If we have code reference widgets to render
-        if (codeRefMap.size > 0) {
-          // Create a document fragment to avoid multiple reflows
-          const fragment = document.createDocumentFragment();
-          
-          // Split the text by code reference placeholders and create the widgets
-          const regex = /\[CodeRef:([^\]]+)\]/g;
-          let lastIndex = 0;
-          let match;
-          
-          while ((match = regex.exec(processedText)) !== null) {
-            // Add the text before the placeholder
-            const textBefore = processedText.substring(lastIndex, match.index);
-            if (textBefore) {
-              const textNode = document.createTextNode(textBefore);
-              fragment.appendChild(textNode);
-            }
-            
-            // Get the placeholder and its corresponding HTML
-            const placeholder = match[0];
-            const widgetHtml = codeRefMap.get(placeholder);
-            
-            if (widgetHtml) {
-              // Create a temporary container for the HTML
-              const tempContainer = document.createElement('div');
-              tempContainer.innerHTML = widgetHtml;
-              
-              // Append the code reference widget
-              while (tempContainer.firstChild) {
-                fragment.appendChild(tempContainer.firstChild);
-              }
-            } else {
-              // If widget HTML not found, just add the placeholder text
-              const placeholderNode = document.createTextNode(placeholder);
-              fragment.appendChild(placeholderNode);
-            }
-            
-            lastIndex = match.index + placeholder.length;
-          }
-          
-          // Add any remaining text after the last placeholder
-          if (lastIndex < processedText.length) {
-            const textAfter = processedText.substring(lastIndex);
-            const textNode = document.createTextNode(textAfter);
-            fragment.appendChild(textNode);
-          }
-          
-          // Add the processed content to the message
-          contentDiv.appendChild(fragment);
-          
-          // Add click event handlers for the code reference widgets
-          const toggleButtons = contentDiv.querySelectorAll('.jp-llm-ext-code-ref-toggle');
-          toggleButtons.forEach(button => {
-            button.addEventListener('click', (event) => {
-              const target = event.target as HTMLElement;
-              const widget = target.closest('.jp-llm-ext-code-ref-widget') as HTMLElement;
-              const content = widget?.querySelector('.jp-llm-ext-code-ref-content') as HTMLElement;
-              
-              if (content) {
-                const isVisible = content.style.display !== 'none';
-                content.style.display = isVisible ? 'none' : 'block';
-                target.textContent = isVisible ? '⯈' : '⯆';
-              }
-              
-              event.preventDefault();
-              event.stopPropagation();
-            });
-          });
-        } else {
-          // Just plain text without code references
-          contentDiv.textContent = processedText;
-        }
-      } else {
-        // No code reference map, just add the text
-        contentDiv.textContent = processedText;
-      }
-      
-      messageDiv.appendChild(contentDiv);
-    } else if (isMarkdown || sender === 'bot') {
-      // Render as markdown (existing logic)
-      const markdownIndicator = document.createElement('div');
-      markdownIndicator.textContent = "MD";
-      markdownIndicator.className = 'markdown-indicator';
-      messageDiv.appendChild(markdownIndicator);
-      
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'markdown-content';
-      
-      try {
-        // Process the text to handle common markdown issues
-        const processedText = preprocessMarkdown(text);
-        
-        // Parse markdown to HTML
-        const rawHtml = marked.parse(processedText) as string;
-        
-        // Sanitize HTML to prevent XSS
-        const sanitizedHtml = DOMPurify.sanitize(rawHtml);
-        
-        // Set content
-        contentDiv.innerHTML = sanitizedHtml;
-        
-        // Enhance code blocks with language detection and action buttons
-        const codeBlocks = contentDiv.querySelectorAll('pre code');
-        codeBlocks.forEach(block => {
-            // Add standard JupyterLab classes for consistency
-            block.classList.add('jp-RenderedText');
-            block.parentElement?.classList.add('jp-RenderedHTMLCommon');
-            
-            // Get code content to detect language
-            const codeContent = block.textContent || '';
-            
-            // Create code block header for buttons
-            const codeHeader = document.createElement('div');
-            codeHeader.className = 'jp-llm-ext-code-header';
-            
-            // Add language indicator if detected
-            const language = this.detectLanguage(codeContent);
-            if (language) {
-                const langIndicator = document.createElement('span');
-                langIndicator.className = 'jp-llm-ext-code-language';
-                langIndicator.textContent = language;
-                codeHeader.appendChild(langIndicator);
-                
-                // Add language class for syntax highlighting
-                block.classList.add(`language-${language}`);
-                
-                // Apply syntax highlighting
-                try {
-                    block.innerHTML = this.highlightCode(codeContent, language);
-                } catch (error) {
-                    console.error('Error applying syntax highlighting:', error);
-                    // Keep original content if highlighting fails
-                }
-            } else {
-                // Try auto-detection if no specific language detected
-                try {
-                    block.innerHTML = this.highlightCode(codeContent, '');
-                } catch (error) {
-                    console.error('Error applying auto syntax highlighting:', error);
-                    // Keep original content if highlighting fails
-                }
-            }
-            
-            // Add action buttons to the code header
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'jp-llm-ext-code-actions';
-            
-            // Copy button with icon
-            const copyButton = document.createElement('button');
-            copyButton.className = 'jp-llm-ext-code-action-button';
-            copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-            copyButton.title = 'Copy code to clipboard';
-            copyButton.addEventListener('click', (event) => {
-              event.stopPropagation();
-              this.copyToClipboard(codeContent);
-            });
-            actionsDiv.appendChild(copyButton);
-
-            // Add to button with icon
-            const addToButton = document.createElement('button');
-            addToButton.className = 'jp-llm-ext-code-action-button';
-            addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-            addToButton.title = 'Add code to current cell';
-            addToButton.addEventListener('click', (event) => {
-              event.stopPropagation();
-              this.addMessageToCell(codeContent);
-            });
-            actionsDiv.appendChild(addToButton);
-            
-            // Add the actions to the header
-            codeHeader.appendChild(actionsDiv);
-            
-            // Insert the header before the code block
-            if (block.parentElement) {
-                block.parentElement.insertBefore(codeHeader, block);
-            }
-        });
-      } catch (error) {
-        contentDiv.textContent = text;
-        console.error('Failed to render markdown:', error);
-      }
-      
-      messageDiv.appendChild(contentDiv);
-
-      // Add action buttons for bot messages (only for the whole message, not code blocks)
-      if (sender === 'bot') {
-        console.log('Adding action buttons to bot message'); // Debug log
-        
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'jp-llm-ext-message-actions';
-        
-        // Copy button with icon
-        const copyButton = document.createElement('button');
-        copyButton.className = 'jp-llm-ext-message-action-button';
-        copyButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-        copyButton.title = 'Copy message to clipboard';
-        copyButton.addEventListener('click', (event) => {
-          event.stopPropagation();
-          this.copyMessageToClipboard(text);
-        });
-        actionsDiv.appendChild(copyButton);
-
-        // Add to button with icon
-        const addToButton = document.createElement('button');
-        addToButton.className = 'jp-llm-ext-message-action-button';
-        addToButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M12 11v6"></path><path d="M9 14h6"></path></svg>';
-        addToButton.title = 'Add message to current cell';
-        addToButton.addEventListener('click', (event) => {
-          event.stopPropagation();
-          this.addMessageToCell(text);
-        });
-        actionsDiv.appendChild(addToButton);
-
-        // Add buttons to message
-        messageDiv.appendChild(actionsDiv);
-        console.log('Action buttons added to message:', actionsDiv); // Debug log
-      }
-    } else {
-      messageDiv.textContent = text;
-    }
-
-    this.messageContainer.appendChild(messageDiv);
-    this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
-    
-    // Save to chat history
-    if (saveToHistory) {
-      const chat = this.chatHistory.find(c => c.id === this.currentChatId);
-      if (chat) {
-        chat.messages.push({ 
-          text, 
-          sender, 
-          isMarkdown: isMarkdown || sender === 'bot' 
-        });
-      }
-    }
-  }
-
-  /**
-   * Copies message content to clipboard
-   */
-  private copyMessageToClipboard(text: string): void {
-    try {
-      navigator.clipboard.writeText(text).then(() => {
-        console.log('Content copied to clipboard');
-        
-        // Find the button element that was clicked
-        const buttons = document.querySelectorAll('.jp-llm-ext-message-action-button');
-        let clickedButton: HTMLButtonElement | null = null;
-        
-        for (let i = 0; i < buttons.length; i++) {
-          const button = buttons[i] as HTMLButtonElement;
-          if (button.title === 'Copy message to clipboard' && button === document.activeElement) {
-            clickedButton = button;
-            break;
-          }
-        }
-        
-        // Show visual feedback if we found the button
-        if (clickedButton) {
-          const originalHTML = clickedButton.innerHTML;
-          clickedButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>';
-          setTimeout(() => {
-            clickedButton!.innerHTML = originalHTML;
-          }, 2000);
-        }
-      }).catch(err => {
-        console.error('Failed to copy text: ', err);
-      });
-    } catch (error) {
-      console.error('Error copying to clipboard:', error);
-    }
-  }
-
-  /**
-   * Adds message content to the current cell
-   */
-  private addMessageToCell(text: string): void {
-    const cell = globals.notebookTracker?.activeCell;
-    if (!cell || !cell.editor) {
-      return;
-    }
-
-    try {
-      const editor = cell.editor;
-      const view = (editor as any).editor;
-      if (!view) {
-        return;
-      }
-
-      // Get current cursor position
-      const state = view.state;
-      const selection = state.selection;
-      const cursorPos = selection.main.head;
-
-      // Insert newline and message content at cursor position
-      const transaction = state.update({
-        changes: {
-          from: cursorPos,
-          insert: `\n${text}`
-        },
-        selection: { anchor: cursorPos + text.length + 1 }
-      });
-
-      view.dispatch(transaction);
-    } catch (error) {
-      console.error('Error adding message to cell:', error);
-    }
-  }
-
-  /**
-   * Gets the currently selected text from the active notebook cell.
-   * (Helper for PopupMenuManager callback)
-   */
-  private getSelectedText(): string | null {
-    const cell = globals.notebookTracker?.activeCell;
-    if (cell?.editor) {
-      const editor = cell.editor; // IEditor
-      // Access CodeMirror editor instance if possible
-      const cmEditor = (editor as any).editor;
-      if (cmEditor && cmEditor.state) {
-        const state = cmEditor.state;
-        const selection = state.selection.main; // Get the main selection
-        if (selection.empty) {
-          return null; // No text selected
-        }
-        return state.doc.sliceString(selection.from, selection.to);
-      }
-      console.warn("Could not access CodeMirror state to get selection.");
-      // Avoid using getRange as it's confirmed not to exist on IEditor
-      return null;
-    } else {
-       // Attempt to get selection from document if no notebook active (e.g., text editor)
-       const activeWidget = globals.app?.shell?.currentWidget;
-       if (activeWidget && 'content' in activeWidget && (activeWidget.content as any).editor) {
-            const editor = (activeWidget.content as any).editor;
-            const cmEditor = (editor as any).editor;
-            if (cmEditor && cmEditor.state) {
-                const state = cmEditor.state;
-                const selection = state.selection.main;
-                if (selection.empty) {
-                    return null;
-                }
-                return state.doc.sliceString(selection.from, selection.to);
-            }
-            console.warn("Could not access CodeMirror state for non-notebook editor selection.");
-            return null; // Avoid getRange
-       }
-    }
-    return null;
-  }
-
-  /**
-   * Gets the content of the currently active notebook cell.
-   * (Helper for PopupMenuManager callback)
-   */
-  private getCurrentCellContent(): string | null {
-    const activeCell = globals.notebookTracker?.activeCell;
-    if (activeCell?.model) {
-      // Try using sharedModel first (more robust)
-      if (activeCell.model.sharedModel && typeof activeCell.model.sharedModel.getSource === 'function') {
-        return activeCell.model.sharedModel.getSource();
-      }
-      // Fallback: Try using toJSON().source
-      const cellJson = activeCell.model.toJSON();
-      if (typeof cellJson?.source === 'string') {
-        return cellJson.source;
-      } else if (Array.isArray(cellJson?.source)) {
-        // If source is an array of strings, join them
-        return cellJson.source.join('\n');
-      }
-      console.warn("Could not get cell content via model.value.text or toJSON().source");
-      return null;
-    }
-    // Fallback for non-notebook editors if needed
-    const activeWidget = globals.app?.shell?.currentWidget;
-    if (activeWidget && 'content' in activeWidget && (activeWidget.content as any).model) {
-        return (activeWidget.content as any).model.value.text;
-    }
-    return null;
-  }
-
-  /**
-   * Appends text to the input field with proper spacing
-   */
-  private appendToInput(text: string): void {
-    try {
-      const currentValue = this.inputField.value;
-      if (currentValue) {
-        // add a space between the current value and the new text
-        this.inputField.value = `${currentValue}${text}`;
-      } else {
-        this.inputField.value = text;
-      }
-      
-      // Focus the input field and move cursor to end
-      this.inputField.focus();
-      this.inputField.setSelectionRange(
-        this.inputField.value.length,
-        this.inputField.value.length
-      );
-    } catch (error) {
-      console.error('Error appending to input:', error);
-    }
-  }
-
-  // Settings modal methods
-  private createSettingsModal(): HTMLDivElement {
-    const modal = document.createElement('div');
-    modal.className = 'jp-llm-ext-settings-modal';
-    modal.style.display = 'none'; // Keep this inline style for toggling visibility
-
-    const content = document.createElement('div');
-    content.className = 'jp-llm-ext-settings-content';
-
-    const title = document.createElement('h2');
-    title.className = 'jp-llm-ext-settings-title';
-    title.textContent = 'Settings';
-    content.appendChild(title);
-
-    const form = document.createElement('form');
-    form.className = 'jp-llm-ext-settings-form';
-
-    // Provider selection
-    const providerLabel = document.createElement('label');
-    providerLabel.className = 'jp-llm-ext-settings-label';
-    providerLabel.textContent = 'API Provider:';
-    form.appendChild(providerLabel);
-
-    const providerSelect = document.createElement('select');
-    providerSelect.className = 'jp-llm-ext-settings-select';
-    providerSelect.id = 'settings-provider';
-    ['OpenAI', 'HuggingFace', 'Local'].forEach(opt => {
-      const option = document.createElement('option');
-      option.value = opt;
-      option.textContent = opt;
-      providerSelect.appendChild(option);
-    });
-    form.appendChild(providerSelect);
-
-    // API Key input
-    const apiKeyLabel = document.createElement('label');
-    apiKeyLabel.className = 'jp-llm-ext-settings-label';
-    apiKeyLabel.textContent = 'API Key:';
-    form.appendChild(apiKeyLabel);
-
-    const apiKeyInput = document.createElement('input');
-    apiKeyInput.className = 'jp-llm-ext-settings-input';
-    apiKeyInput.type = 'password';
-    apiKeyInput.id = 'settings-api-key';
-    form.appendChild(apiKeyInput);
-
-    // API URL input
-    const apiUrlLabel = document.createElement('label');
-    apiUrlLabel.className = 'jp-llm-ext-settings-label';
-    apiUrlLabel.textContent = 'API URL (optional):';
-    form.appendChild(apiUrlLabel);
-
-    const apiUrlInput = document.createElement('input');
-    apiUrlInput.className = 'jp-llm-ext-settings-input';
-    apiUrlInput.type = 'text';
-    apiUrlInput.id = 'settings-api-url';
-    form.appendChild(apiUrlInput);
-
-    // Rules input
-    const rulesLabel = document.createElement('label');
-    rulesLabel.className = 'jp-llm-ext-settings-label';
-    rulesLabel.textContent = 'Custom Rules (optional):';
-    form.appendChild(rulesLabel);
-
-    const rulesInput = document.createElement('textarea');
-    rulesInput.className = 'jp-llm-ext-settings-textarea';
-    rulesInput.id = 'settings-rules';
-    form.appendChild(rulesInput);
-
-    // Buttons container
-    const btnContainer = document.createElement('div');
-    btnContainer.className = 'jp-llm-ext-settings-buttons';
-
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'jp-llm-ext-settings-button jp-llm-ext-settings-save-button';
-    saveBtn.textContent = 'Save';
-    saveBtn.addEventListener('click', (event: MouseEvent) => {
-      event.preventDefault();  // Add this line
-      const provider = (document.getElementById('settings-provider') as HTMLSelectElement).value;
-      const key = (document.getElementById('settings-api-key') as HTMLInputElement).value;
-      const url = (document.getElementById('settings-api-url') as HTMLInputElement).value;
-      const rules = (document.getElementById('settings-rules') as HTMLTextAreaElement).value;
-      
-      // Save settings to localStorage for persistence
-      const settings = { provider, key, url, rules };
-      localStorage.setItem('jp-llm-ext-settings', JSON.stringify(settings));
-      
-      console.log('Settings saved:', settings);
-      this.hideSettingsModal();
-      this.popSaveSuccess();
-      
-      // Update API client with new settings if needed
-      if (url) {
-        this.apiClient = new ApiClient(url);
-      }
-    });
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'jp-llm-ext-settings-button jp-llm-ext-settings-cancel-button';
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.addEventListener('click', (event: MouseEvent ) => {
-      event.preventDefault();  // Add this line
-      this.hideSettingsModal();
-    });
-
-    btnContainer.appendChild(saveBtn);
-    btnContainer.appendChild(cancelBtn);
-    form.appendChild(btnContainer);
-
-    content.appendChild(form);
-    modal.appendChild(content);
-    return modal;
-  }
-
-  private showSettingsModal(): void {
-    // Load saved settings from localStorage
-    this.loadSavedSettings();
-    this.settingsModalContainer.style.display = 'flex';
-  }
-
-  private loadSavedSettings(): void {
-    const savedSettings = localStorage.getItem('jp-llm-ext-settings');
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings);
-        
-        // Update UI with saved settings
-        if (settings.provider) {
-          (document.getElementById('settings-provider') as HTMLSelectElement).value = settings.provider;
-        }
-        
-        if (settings.key) {
-          (document.getElementById('settings-api-key') as HTMLInputElement).value = settings.key;
-        }
-        
-        if (settings.url) {
-          (document.getElementById('settings-api-url') as HTMLInputElement).value = settings.url;
-        }
-        
-        if (settings.rules) {
-          (document.getElementById('settings-rules') as HTMLTextAreaElement).value = settings.rules;
-        }
-      } catch (error) {
-        console.error('Error loading saved settings:', error);
-      }
-    }
-  }
-
-  private hideSettingsModal(): void {
-    this.settingsModalContainer.style.display = 'none';
-  }
-  private popSaveSuccess(): void {
-    // Create a toast notification container
-    const toast = document.createElement('div');
-    toast.className = 'jp-llm-ext-toast-notification jp-llm-ext-settings-success';
-    toast.textContent = 'Settings saved successfully';
-    
-    // Add to the main widget (not the modal which is hidden)
-    this.node.appendChild(toast);
-    
-    // Animate in
-    setTimeout(() => {
-      toast.classList.add('visible');
-    }, 10);
-    
-    // Remove after delay
-    setTimeout(() => {
-      toast.classList.remove('visible');
-      // Wait for fade out animation to complete before removing
-      setTimeout(() => {
-        toast.remove();
-      }, 300);
-    }, 3000);
-  }
-
-  /**
-   * Gets cell content by index from the current notebook and inserts it into the input field
-   */
-  private insertCellByIndex(index: number): void {
-    try {
-      if (!globals.notebookTracker || !globals.notebookTracker.currentWidget) {
-        console.error('No active notebook found');
-        return;
-      }
-
-      const notebookPanel = globals.notebookTracker.currentWidget;
-      const model = notebookPanel.content.model;
-      
-      if (!model || !model.cells || index >= model.cells.length) {
-        console.error(`Invalid cell index: ${index}`);
-        return;
-      }
-      
-      const cell = model.cells.get(index);
-      let cellContent = '';
-      
-      // Get cell content - handle different ways content might be stored
-      if (cell.sharedModel && typeof cell.sharedModel.getSource === 'function') {
-        cellContent = cell.sharedModel.getSource();
-      } else {
-        const cellJson = cell.toJSON();
-        if (typeof cellJson?.source === 'string') {
-          cellContent = cellJson.source;
-        } else if (Array.isArray(cellJson?.source)) {
-          cellContent = cellJson.source.join('\n');
-        }
-      }
-      
-      // Insert cell reference with content, without type indicator or execution count
-      this.appendToInput(`cell ${cellContent}`);
-    } catch (error) {
-      console.error('Error inserting cell by index:', error);
-    }
-  }
-
-  /**
-   * Detects the programming language from code block content
-   */
-  private detectLanguage(code: string): string {
-    try {
-      // Try auto detection first
-      const result = hljs.highlightAuto(code, [
-        'python', 'javascript', 'typescript', 'java', 
-        'html', 'css', 'cpp', 'csharp', 'sql', 'rust', 
-        'php', 'bash', 'json', 'xml', 'markdown'
-      ]);
-      
-      // If confidence is high enough, use that language
-      if (result.relevance > 5) {
-        return result.language || '';
-      }
-      
-      // Fall back to pattern matching for better accuracy
-      if (/^(?:\s*)?(?:import\s+[^;]+;|package\s+[^;]+;|public\s+class)/.test(code)) {
-        return 'java';
-      } else if (/^(?:\s*)?(import|from|def|class|if __name__)\s/.test(code)) {
-        return 'python';
-      } else if (/^(?:\s*)?(?:function|const|let|var|import)\s/.test(code)) {
-        return 'javascript';
-      } else if (/^(?:\s*)?(?:<!DOCTYPE|<html|<head|<body)/.test(code)) {
-        return 'html';
-      } else if (/^(?:\s*)?#include/.test(code)) {
-        return 'cpp';
-      } else if (/^(?:\s*)?(?:using\s+System|namespace|public\s+static\s+void\s+Main)/.test(code)) {
-        return 'csharp';
-      } else if (/^(?:\s*)?(?:\$|SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)\s/i.test(code)) {
-        return 'sql';
-      } else if (/^(?:\s*)?(?:module|fn|let|struct|enum|trait|impl)\s/.test(code)) {
-        return 'rust';
-      } else if (/^(?:\s*)?(?:<?php|use\s+[\w\\]+;)/.test(code)) {
-        return 'php';
-      } else if (/^(?:\s*)?(?:#\s*!\/usr\/bin\/env|require|module\.exports|console\.)/.test(code)) {
-        return 'bash';
-      }
-      
-      return '';
-    } catch (error) {
-      console.error('Error detecting language:', error);
-      return '';
-    }
-  }
-
-  /**
-   * Highlights code with appropriate syntax highlighting
-   */
-  private highlightCode(code: string, language: string): string {
-    try {
-      if (!language) {
-        // Try to auto-detect if no language specified
-        return hljs.highlightAuto(code).value;
-      }
-      
-      if (hljs.getLanguage(language)) {
-        return hljs.highlight(code, { language }).value;
-      } else {
-        // Fallback to auto-detection if specified language isn't available
-        return hljs.highlightAuto(code).value;
-      }
-    } catch (error) {
-      console.error('Error highlighting code:', error);
-      return code; // Return original code on error
-    }
-  }
-
-  // Helper function to copy text to clipboard with visual feedback
-  private copyToClipboard(text: string): void {
-    try {
-      navigator.clipboard.writeText(text).then(() => {
-        console.log('Content copied to clipboard');
-        
-        // Show a temporary notification
-        const notification = document.createElement('div');
-        notification.className = 'jp-llm-ext-toast-notification jp-llm-ext-copy-success';
-        notification.textContent = 'Copied to clipboard';
-        
-        // Add to the main widget
-        this.node.appendChild(notification);
-        
-        // Animate in
-        setTimeout(() => {
-          notification.classList.add('visible');
-        }, 10);
-        
-        // Remove after delay
-        setTimeout(() => {
-          notification.classList.remove('visible');
-          // Wait for fade out animation to complete before removing
-          setTimeout(() => {
-            notification.remove();
-          }, 300);
-        }, 1500);
-        
-      }).catch(err => {
-        console.error('Failed to copy text: ', err);
-      });
-    } catch (error) {
-      console.error('Error copying to clipboard:', error);
-    }
-  }
-
-  /**
-   * Copies an image to the clipboard
-   */
-  private copyImageToClipboard(imageUrl: string): void {
-    try {
-      // Fetch the image
-      fetch(imageUrl)
-        .then(response => response.blob())
-        .then(blob => {
-          // Create a ClipboardItem with the image blob
-          const item = new ClipboardItem({
-            [blob.type]: blob
-          });
-          
-          // Copy the image to clipboard
-          navigator.clipboard.write([item]).then(() => {
-            console.log('Image copied to clipboard');
-            // Show visual feedback
-            const notification = document.createElement('div');
-            notification.className = 'jp-llm-ext-toast-notification jp-llm-ext-copy-success';
-            notification.textContent = 'Image copied to clipboard';
-            
-            // Add to the main widget
-            this.node.appendChild(notification);
-            
-            // Animate in
-            setTimeout(() => {
-              notification.classList.add('visible');
-            }, 10);
-            
-            // Remove after delay
-            setTimeout(() => {
-              notification.classList.remove('visible');
-              // Wait for fade out animation to complete before removing
-              setTimeout(() => {
-                notification.remove();
-              }, 300);
-            }, 1500);
-          })
-          .catch(err => {
-            console.error('Failed to copy image: ', err);
-            alert('Failed to copy image: ' + err.message);
-          });
-        })
-        .catch(err => {
-          console.error('Failed to fetch image: ', err);
-          alert('Failed to fetch image: ' + err.message);
-        });
-    } catch (error) {
-      console.error('Error copying image to clipboard:', error);
-      alert('Error copying image to clipboard: ' + error);
-    }
-  }
-
-  /**
-   * Inserts a collapsible code reference widget in the input area
-   */
-  private insertCollapsedCodeRef(code: string, cellIndex: number, lineNumber: number, notebookName: string): void {
-    try {
-      // Create a unique ID for this reference
-      const refId = `code-ref-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-      
-      // Format the reference as "notebook-name:cell-index-line-number"
-      const codeRef = `${notebookName}:${cellIndex}-${lineNumber}`;
-      
-      // Create the collapsible widget HTML
-      const widgetHtml = `<span class="jp-llm-ext-code-ref-widget" data-ref-id="${refId}" data-code="${encodeURIComponent(code)}" data-ref="${codeRef}">
-        <span class="jp-llm-ext-code-ref-label">${codeRef}</span>
-        <button class="jp-llm-ext-code-ref-toggle" title="Expand/collapse code">⯈</button>
-        <span class="jp-llm-ext-code-ref-content" style="display:none;">${code}</span>
-      </span>`;
-      
-      // Insert at cursor position or append to end
-      const cursorPos = this.inputField.selectionStart || 0;
-      const textBeforeCursor = this.inputField.value.substring(0, cursorPos);
-      const textAfterCursor = this.inputField.value.substring(cursorPos);
-      
-      // Insert widget placeholder text in the textarea
-      const placeholderText = `[CodeRef:${codeRef}]`;
-      this.inputField.value = textBeforeCursor + placeholderText + textAfterCursor;
-      
-      // Store the HTML to replace the placeholder when rendering
-      let elementMap: Map<string, string>;
-      if (!('_codeRefMap' in this.inputField)) {
-        elementMap = new Map<string, string>();
-        (this.inputField as any)._codeRefMap = elementMap;
-      } else {
-        elementMap = (this.inputField as any)._codeRefMap;
-      }
-      
-      // Store the HTML to replace the placeholder when rendering
-      elementMap.set(placeholderText, widgetHtml);
-      
-      // Focus the input field and move cursor to after the inserted widget
-      this.inputField.focus();
-      this.inputField.setSelectionRange(
-        cursorPos + placeholderText.length,
-        cursorPos + placeholderText.length
-      );
-      
-      // Add event listener for expanding/collapsing (delegated to parent)
-      if (!this.hasCodeRefListeners) {
-        this.inputField.addEventListener('click', this.handleCodeRefClick.bind(this));
-        this.hasCodeRefListeners = true;
-      }
-    } catch (error) {
-      console.error('Error inserting collapsed code reference:', error);
-      // Fallback to inserting code directly
-      this.appendToInput(`code ${code}`);
-    }
-  }
-  
-  /**
-   * Handle clicks on code reference expand/collapse buttons
-   */
-  private handleCodeRefClick(event: MouseEvent): void {
-    const target = event.target as HTMLElement;
-    
-    // Check if it's the toggle button
-    if (target.classList.contains('jp-llm-ext-code-ref-toggle')) {
-      // Find the parent widget
-      const widget = target.closest('.jp-llm-ext-code-ref-widget') as HTMLElement;
-      if (!widget) return;
-      
-      // Find the content element
-      const content = widget.querySelector('.jp-llm-ext-code-ref-content') as HTMLElement;
-      if (!content) return;
-      
-      // Toggle the content visibility
-      const isVisible = content.style.display !== 'none';
-      content.style.display = isVisible ? 'none' : 'block';
-      
-      // Update the toggle button text
-      target.textContent = isVisible ? '⯈' : '⯆';
-      
-      // Stop event propagation
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  }
-}
+} // End of SimpleSidebarWidget class

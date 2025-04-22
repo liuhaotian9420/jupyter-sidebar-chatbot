@@ -1,6 +1,6 @@
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { NotebookPanel } from '@jupyterlab/notebook'; 
-import { globals } from './globals'; 
+import { globals } from '../core/globals'; 
 
 /**
  * Interface for actions to be performed when a menu item is selected.

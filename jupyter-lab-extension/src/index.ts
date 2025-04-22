@@ -9,7 +9,7 @@ import { INotebookTracker } from '@jupyterlab/notebook';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 
 import { SimpleSidebarWidget } from './sidebar-widget';
-import { initGlobals, globals } from './globals';
+import { initGlobals, globals } from './core/globals';
 import { registerCommands } from './commands';
 import { CellContextTracker } from './cell-context-tracker';
 // import { ApiClient } from './api-client';
@@ -18,7 +18,7 @@ import { CellContextTracker } from './cell-context-tracker';
 import '../style/index.css';
 
 // Export ApiClient for use by other components
-export { ApiClient } from './api-client';
+export { ApiClient } from './core/api-client';
 
 /**
  * Initialization data for the jupyter-simple-extension extension.
