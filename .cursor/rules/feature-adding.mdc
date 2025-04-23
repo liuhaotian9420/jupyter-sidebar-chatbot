@@ -18,3 +18,12 @@ Before implementing a new feature, please follow these steps:
 4.  **Leverage Existing Code:** Prioritize extending or modifying existing components and functions over creating entirely new ones whenever feasible. This promotes code reuse and maintainability.
 5.  **Plan for Testing:** Add specific testing tasks for the new feature to the testing checklist: [TESTING_TODO.md](mdc:TESTING_TODO.md). Ensure unit, integration, and UI tests are considered.
 
+
+# Feature Implementation Workflow
+
+While adding features or implementing requests documented in [FEAT_TODO.md](mdc:FEAT_TODO.md):
+
+1.  **Complete One Task:** Focus on implementing one task from the feature list at a time, prioritizing based on the plan (e.g., P0, P1).
+2.  **Seek Confirmation:** After successfully implementing a single task, pause and explicitly ask the user for confirmation before proceeding to the next task.
+3.  **Update TODO List:** Once the user confirms the task completion, update the corresponding checklist item in [FEAT_TODO.md](mdc:FEAT_TODO.md) by marking it as done (e.g., `[x]`).
+4.  **Commit Changes:** After updating [FEAT_TODO.md](mdc:FEAT_TODO.md), use git to commit the changes related to the completed task. The commit message should follow the format: `feat:{feature name}-{task short name}`. Replace `{feature name}` with the relevant feature identifier (e.g., `inline-ref-widgets`) and `{task short name}` with a concise description of the task (e.g., `detect-at-symbol`).

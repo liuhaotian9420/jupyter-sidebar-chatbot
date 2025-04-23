@@ -361,7 +361,8 @@ export class SimpleSidebarWidget extends Widget {
         showPopupMenu: (left: number, top: number) => this.popupMenuManager.showPopupMenu(left, top),
         hidePopupMenu: () => this.popupMenuManager.hidePopupMenu(),
         updatePlaceholder: (isMarkdown: boolean) => {
-            this.layoutElements.inputField.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
+            // Use dataset for data-placeholder attribute
+            this.layoutElements.inputField.dataset.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
         },
         toggleInputExpansionUI: (isExpanded: boolean) => {
             const button = this.layoutElements.expandButton;

@@ -1,7 +1,6 @@
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook'; 
 import { globals } from '../core/globals'; 
-import { Range } from '@lumino/domutils';
 
 /**
  * Interface for actions to be performed when a menu item is selected.

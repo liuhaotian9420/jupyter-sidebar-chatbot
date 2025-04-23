@@ -3,7 +3,7 @@ import {
   createButton,
   createInputElement,
   createLabelElement,
-  createTextArea
+  // createTextArea // Replaced with createDiv for input field
 } from './dom-elements';
 
 // --- Interfaces for Callbacks and Returned Elements ---
@@ -26,7 +26,7 @@ export interface LayoutElements {
   titleInput: HTMLInputElement;
   messageContainer: HTMLDivElement;
   historyContainer: HTMLDivElement;
-  inputField: HTMLTextAreaElement;
+  inputField: HTMLDivElement;
   bottomBarContainer: HTMLDivElement;
   sendButton: HTMLButtonElement;
   newChatButton: HTMLButtonElement;
@@ -121,15 +121,21 @@ export function buildLayout(callbacks: LayoutCallbacks = {}): LayoutElements {
 
   // Row 2: Input Field
   const inputRow = createDiv({ classes: 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row' });
-  const inputField = createTextArea({
+  const inputField = createDiv({
     classes: 'jp-llm-ext-input-field',
-    attributes: { placeholder: 'Ask me anything...', rows: '1' }
+    attributes: {
+      contenteditable: 'true',
+      role: 'textbox',
+      'aria-multiline': 'true',
+      'data-placeholder': 'Ask me anything...'
+    },
+    style: { minHeight: '20px', overflowY: 'hidden' }
   });
   if (callbacks.onInputFieldKeyPress) {
     inputField.addEventListener('keypress', callbacks.onInputFieldKeyPress);
   }
   if (callbacks.onInputFieldValueChange) {
-    inputField.addEventListener('input', () => callbacks.onInputFieldValueChange!(inputField.value));
+    inputField.addEventListener('input', () => callbacks.onInputFieldValueChange!(inputField.textContent || ''));
   }
   inputRow.appendChild(inputField);
 

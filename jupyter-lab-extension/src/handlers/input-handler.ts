@@ -1,3 +1,5 @@
+import { getCaretPosition, setCaretPosition } from '../utils/content-editable-utils'; // Helper needed
+
 // Interface for callbacks provided to the InputHandler
 export interface InputHandlerCallbacks {
   handleSendMessage: (message: string, isMarkdown: boolean) => void;
@@ -16,7 +18,7 @@ export interface InputHandlerCallbacks {
  * Handles events and logic related to the chat input field.
  */
 export class InputHandler {
-  private chatInput: HTMLTextAreaElement;
+  private chatInput: HTMLDivElement;
   private callbacks: InputHandlerCallbacks;
   // private uiManager: UIManager; // Removed unused member
 
@@ -30,7 +32,7 @@ export class InputHandler {
   private isInputExpanded: boolean = false; // Internal state, potentially synced with UIManager
 
   constructor(
-    chatInput: HTMLTextAreaElement,
+    chatInput: HTMLDivElement,
     callbacks: InputHandlerCallbacks
     // uiManager: UIManager // Removed unused parameter
   ) {
@@ -58,26 +60,42 @@ export class InputHandler {
    */
   public appendToInput(text: string): void {
     try {
-      const currentValue = this.chatInput.value;
-      const start = this.chatInput.selectionStart;
-      const end = this.chatInput.selectionEnd;
-      let newValue = '';
-      let newCursorPos = 0;
-
-      // Check if the character immediately before the cursor is '@'
-      if (start > 0 && currentValue[start - 1] === '@') {
-        // Replace the '@' and append the new text
-        newValue = currentValue.slice(0, start - 1) + text + currentValue.slice(end);
-        newCursorPos = (start - 1) + text.length;
-      } else {
-        // Standard insertion: Insert text at cursor position
-        newValue = currentValue.slice(0, start) + text + currentValue.slice(end);
-        newCursorPos = start + text.length;
+      this.chatInput.focus(); // Ensure focus first
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        console.error('Cannot append to input: No selection found.');
+        // Fallback: append to end
+        this.chatInput.textContent = (this.chatInput.textContent || '') + text;
+        return;
       }
 
-      this.chatInput.value = newValue;
-      this.chatInput.focus();
-      this.chatInput.setSelectionRange(newCursorPos, newCursorPos);
+      const range = selection.getRangeAt(0);
+      const { startContainer, startOffset } = range;
+
+      let currentTextContent = this.chatInput.textContent || ''; // Use textContent
+      let insertPos = getCaretPosition(this.chatInput); // Get linear position
+
+      // Simple check: if the character before the linear caret position is '@'
+      if (insertPos > 0 && currentTextContent[insertPos - 1] === '@') {
+        // Replace the '@' - more complex with DOM manipulation,
+        // For simplicity, we'll replace in textContent and reset
+        const before = currentTextContent.slice(0, insertPos - 1);
+        const after = currentTextContent.slice(insertPos);
+        this.chatInput.textContent = before + text + after;
+        // Set cursor position after the inserted text
+        setCaretPosition(this.chatInput, (insertPos - 1) + text.length);
+      } else {
+        // Standard insertion - more complex with DOM manipulation
+        // For simplicity, we'll insert in textContent and reset
+        const before = currentTextContent.slice(0, insertPos);
+        const after = currentTextContent.slice(insertPos);
+        this.chatInput.textContent = before + text + after;
+        // Set cursor position after the inserted text
+        setCaretPosition(this.chatInput, insertPos + text.length);
+      }
+
+      // Trigger input event manually since we're changing textContent directly
+      this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
 
     } catch (error) {
       console.error('Error appending to input:', error);
@@ -88,17 +106,21 @@ export class InputHandler {
    * Clears the input field and resets associated state after sending.
    */
   public clearInput(): void {
-     this.chatInput.value = '';
+     // Use textContent for div
+     this.chatInput.textContent = '';
      // Directly reset internal state instead of relying on callback
-     this.resetCodeReferences(); 
-     this.chatInput.rows = 1;
+     this.resetCodeReferences();
+     // Remove rows manipulation
+     // this.chatInput.rows = 1;
      this.chatInput.style.height = ''; // Reset height
      this.hasAtSymbol = false; // Reset @ state
-      
+
      // Reset expand button state if it was expanded
      if (this.isInputExpanded) {
          this.toggleInputExpansion(false); // Collapse input
      }
+     // Trigger input event manually after clearing
+     this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
   }
 
   /**
@@ -119,12 +141,17 @@ export class InputHandler {
   public toggleInputExpansion(forceState?: boolean): void {
     this.isInputExpanded = forceState !== undefined ? forceState : !this.isInputExpanded;
     if (this.isInputExpanded) {
+      // Use max-height or height for div
       this.chatInput.style.height = '200px'; // Example height
+      // Allow vertical resizing if desired, or keep as 'none'
       this.chatInput.style.resize = 'vertical';
+      this.chatInput.style.overflowY = 'auto'; // Ensure scrollbar appears if needed
     } else {
       this.chatInput.style.height = ''; // Reset height
       this.chatInput.style.resize = 'none';
-      this.chatInput.rows = 1; // Ensure it collapses back to 1 row height
+      // Remove rows manipulation
+      // this.chatInput.rows = 1; // Ensure it collapses back to 1 row height
+      this.chatInput.style.overflowY = 'hidden'; // Hide scrollbar when collapsed
     }
     // Notify UIManager/LayoutBuilder to update button appearance
     this.callbacks.toggleInputExpansionUI(this.isInputExpanded);
@@ -195,7 +222,8 @@ export class InputHandler {
     // Handle Enter key (send message)
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      const rawMessage = this.chatInput.value.trim();
+      // Use textContent for div
+      const rawMessage = this.chatInput.textContent?.trim() || '';
       if (rawMessage) {
           // Resolve code references BEFORE sending
           const resolvedMessage = this.resolveCodeReferences(rawMessage);
@@ -211,23 +239,52 @@ export class InputHandler {
   };
 
   private _handleInput = (): void => {
-    // Handle @ symbol removal to hide popup
-    const cursorPosition = this.chatInput.selectionStart;
-    if (cursorPosition === null) return; // Type guard
+    // Handle @ symbol removal to hide popup using selection API
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
 
-    const textBeforeCursor = this.chatInput.value.slice(0, cursorPosition);
+    const range = selection.getRangeAt(0);
+    // Check if the input field contains the start of the range
+    if (!this.chatInput.contains(range.startContainer)) return;
+
+    const cursorPosition = getCaretPosition(this.chatInput); // Use helper
+    if (cursorPosition === null) return;
+
+    const textContent = this.chatInput.textContent || '';
+    const textBeforeCursor = textContent.slice(0, cursorPosition);
+
     // Check if the character immediately before the cursor is '@'
     // and if it's preceded by whitespace or is at the start of the input.
     const isAtSymbolContext = textBeforeCursor.endsWith('@') &&
-                           (cursorPosition === 1 || 
-                            /\s/.test(textBeforeCursor[cursorPosition - 2]));
+                           (cursorPosition === 1 ||
+                            cursorPosition > 1 && /\s/.test(textBeforeCursor[cursorPosition - 2]));
 
     if (this.hasAtSymbol && !isAtSymbolContext) {
       // @ symbol context was present but now it's gone, hide the popup
       this.callbacks.hidePopupMenu();
     }
     // Update the state *after* checking the previous state
-    this.hasAtSymbol = isAtSymbolContext; 
+    this.hasAtSymbol = isAtSymbolContext;
+
+    // --- Auto-resize logic (optional) ---
+    // Simple auto-resize based on scroll height (might need refinement)
+    if (!this.isInputExpanded) { // Only auto-resize if not manually expanded
+        this.chatInput.style.height = 'auto'; // Temporarily shrink to content
+        const scrollHeight = this.chatInput.scrollHeight;
+        // Set a max height to prevent infinite growth, e.g., 150px
+        const maxHeight = 150;
+        const newHeight = Math.min(scrollHeight, maxHeight);
+         // Only update height if it actually changes to avoid flicker
+        if (this.chatInput.offsetHeight < newHeight) {
+             this.chatInput.style.height = `${newHeight}px`;
+             this.chatInput.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+        } else if (scrollHeight <= this.chatInput.clientHeight) {
+            // Shrink if content height is less than current height
+            this.chatInput.style.height = `${scrollHeight}px`;
+            this.chatInput.style.overflowY = 'hidden';
+        }
+    }
+    // -----------------------------------
   };
   
   /**

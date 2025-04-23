@@ -65,20 +65,14 @@ export class UIManager {
     ) {
         this.popupMenuManager = popupMenuManager;
         this.callbacks = callbacks;
-        this.layoutElements = layoutElements; // Store the layout elements
+        this.layoutElements = layoutElements; // Store the layout elements passed in
 
-        // Ensure DOM elements are created before trying to access them
-        const uiElements = this.createLayout();
-
-        // Assign created elements to class properties
-        this.inputField = uiElements.inputField;
-        this.messageContainer = uiElements.messageContainer;
-        this.historyContainer = uiElements.historyContainer;
-        this.titleInput = uiElements.titleInput;
-        this.bottomBarContainer = uiElements.bottomBarContainer;
-
-        // Append the main layout to the provided layout container
-        this.layoutElements.container.appendChild(uiElements.mainLayout);
+        // Assign class properties directly from the passed layoutElements
+        this.inputField = layoutElements.inputField; // Use provided input field
+        this.messageContainer = layoutElements.messageContainer;
+        this.historyContainer = layoutElements.historyContainer;
+        this.titleInput = layoutElements.titleInput;
+        this.bottomBarContainer = layoutElements.bottomBarContainer;
 
         // Initialize and append the keyboard shortcut indicator
         this.keyboardShortcutIndicator = document.createElement('div');
@@ -86,13 +80,16 @@ export class UIManager {
         this.keyboardShortcutIndicator.style.display = 'none'; // Hidden by default
 
         // Append the indicator to the main layout or another appropriate place
-        // Ensure mainLayout exists before appending
-        if (uiElements.mainLayout) {
+        // Ensure the necessary element (e.g., bottomBarContainer) exists before appending
+        if (this.bottomBarContainer) { // Check if bottomBarContainer exists from layoutElements
              // Prepend within the main content wrapper, before other elements
              // Or append to bottom bar, depending on desired position
+             // Appending after bottomBarContainer seems reasonable
              this.bottomBarContainer.insertAdjacentElement('afterend', this.keyboardShortcutIndicator);
         } else {
-             console.error('UIManager: Main layout element not found during indicator initialization.');
+             // If bottomBarContainer is not available, maybe append to mainElement? 
+             // Or log an error if it's essential.
+             console.error('UIManager: bottomBarContainer element not found during indicator initialization.');
         }
     }
 
@@ -181,7 +178,7 @@ export class UIManager {
                     (potentialWidget as HTMLElement).classList.contains('jp-llm-ext-ref-widget')
                 ) {
                     event.preventDefault(); // Stop default backspace
-                    potentialWidget.remove(); // Remove the entire widget node
+                    (potentialWidget as Element).remove(); // Remove the entire widget node
                     // Manually trigger input event for consistency?
                     this.inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
                     return; // Stop further processing for this keydown
