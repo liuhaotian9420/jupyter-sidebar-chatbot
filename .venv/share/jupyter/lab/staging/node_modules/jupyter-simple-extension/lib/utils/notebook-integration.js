@@ -2,6 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.addMessageToCell = addMessageToCell;
 exports.getSelectedText = getSelectedText;
+exports.isInNotebookCell = isInNotebookCell;
+exports.isInNotebookCellAndEditorFocused = isInNotebookCellAndEditorFocused;
+exports.isCodeCell = isCodeCell;
+exports.isOutputArea = isOutputArea;
 exports.getCurrentCellContent = getCurrentCellContent;
 exports.insertCellContentByIndex = insertCellContentByIndex;
 const globals_1 = require("../core/globals");
@@ -43,10 +47,17 @@ function addMessageToCell(text) {
     }
 }
 /**
- * Gets the currently selected text from the active notebook cell or text editor.
+ * Gets the currently selected text from:
+ *  - the active notebook cell
+ *  - the text editor
+ *  - the output area of a code cell
  */
 function getSelectedText() {
     var _a, _b, _c;
+    // if (isOutputArea()) {
+    //   // TODO: return what's selected in the output area
+    //   return null;
+    // }
     const cell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
     if (cell === null || cell === void 0 ? void 0 : cell.editor) {
         const editor = cell.editor;
@@ -75,6 +86,70 @@ function getSelectedText() {
         }
     }
     return null;
+}
+/**
+ * Checks whether we are currently in a notebook cell.
+*/
+function isInNotebookCell() {
+    var _a;
+    const activeCell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
+    return activeCell !== null;
+}
+/**
+ * Checks whether we are currently in a notebook cell and the editor is focused:
+ * meaning that the cursor is in the editor.
+*/
+function isInNotebookCellAndEditorFocused() {
+    var _a;
+    const activeCell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
+    if (activeCell === null || activeCell === void 0 ? void 0 : activeCell.editor) {
+        const editor = activeCell.editor;
+        const cmEditor = editor.editor; // Access CodeMirror editor instance
+        return cmEditor && cmEditor.state;
+    }
+    return false;
+}
+/**
+ * Check whether the currently active cell is a code cell.
+*/
+function isCodeCell() {
+    var _a, _b;
+    const activeCell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
+    return ((_b = activeCell === null || activeCell === void 0 ? void 0 : activeCell.model) === null || _b === void 0 ? void 0 : _b.type) === 'code';
+}
+/**
+ * Check whether the cursor is in the output area of a code cell.
+ * This function specifically checks if we're in a code cell's output area,
+ * not just any output area.
+ */
+function isOutputArea() {
+    var _a;
+    const activeCell = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.activeCell;
+    if (!(activeCell === null || activeCell === void 0 ? void 0 : activeCell.model))
+        return false;
+    // First check if it's a code cell
+    if (activeCell.model.type !== 'code')
+        return false;
+    // Then check if we're in the output area
+    const editor = activeCell.editor;
+    if (!editor)
+        return false;
+    const cmEditor = editor.editor;
+    if (!(cmEditor === null || cmEditor === void 0 ? void 0 : cmEditor.state))
+        return false;
+    // Get the editor's DOM element
+    const editorElement = cmEditor.dom;
+    if (!editorElement)
+        return false;
+    // Check if the active element is within the output area
+    const activeElement = document.activeElement;
+    if (!activeElement)
+        return false;
+    // The output area is typically a sibling of the editor element
+    const outputArea = editorElement.nextElementSibling;
+    if (!outputArea)
+        return false;
+    return outputArea.contains(activeElement);
 }
 /**
  * Gets the content of the currently active notebook cell or text editor.

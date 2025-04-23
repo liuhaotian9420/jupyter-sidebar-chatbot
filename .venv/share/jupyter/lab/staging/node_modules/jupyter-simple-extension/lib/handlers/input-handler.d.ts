@@ -72,6 +72,7 @@ export declare class InputHandler {
      * @returns The message string with placeholders resolved.
      */
     private resolveCodeReferences;
+    handleInsertCodeReferenceFromShortcut(selectedText: string): void;
     private _handleKeyPress;
     private _handleInput;
     /**

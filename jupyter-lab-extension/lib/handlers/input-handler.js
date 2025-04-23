@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.InputHandler = void 0;
 const content_editable_utils_1 = require("../utils/content-editable-utils"); // Helper needed
+const globals_1 = require("../core/globals"); // Import globals
 /**
  * Handles events and logic related to the chat input field.
  */
@@ -17,7 +18,6 @@ class InputHandler {
         this.hasAtSymbol = false;
         this.isMarkdownMode = false; // Internal state, potentially synced with UIManager
         this.isInputExpanded = false; // Internal state, potentially synced with UIManager
-        // -----------------------------
         // --- Private Event Handlers ---
         this._handleKeyPress = (event) => {
             // Handle Enter key press (send message)
@@ -238,6 +238,64 @@ class InputHandler {
             }
         });
         return resolvedMessage;
+    }
+    // NEW method specifically for Ctrl+L shortcut
+    handleInsertCodeReferenceFromShortcut(selectedText) {
+        var _a, _b, _c;
+        const currentNotebookWidget = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.currentWidget;
+        const activeCell = (_b = globals_1.globals.notebookTracker) === null || _b === void 0 ? void 0 : _b.activeCell;
+        const editor = activeCell === null || activeCell === void 0 ? void 0 : activeCell.editor;
+        const cmEditor = editor ? editor.editor : null; // CodeMirror view
+        if (!currentNotebookWidget || !activeCell || !editor || !cmEditor || !cmEditor.state) {
+            console.error('Cannot insert code reference: Missing notebook, cell, or editor context.');
+            // Optionally show an indicator via callbacks?
+            return;
+        }
+        try {
+            // 1. Gather Context
+            const notebookPath = currentNotebookWidget.context.path;
+            const notebookName = ((_c = notebookPath.split('/').pop()) === null || _c === void 0 ? void 0 : _c.split('.')[0]) || 'notebook';
+            const cellIndex = currentNotebookWidget.content.activeCellIndex;
+            const state = cmEditor.state;
+            const selection = state.selection.main;
+            const startLine = state.doc.lineAt(selection.from).number; // 1-based
+            const endLine = state.doc.lineAt(selection.to).number; // 1-based
+            if (cellIndex === undefined || cellIndex === null) {
+                console.error('Cannot insert code reference: Could not determine active cell index.');
+                return;
+            }
+            // 2. Add Code Reference to Map
+            const refId = this.addCodeReference(selectedText, notebookName, cellIndex, startLine, endLine);
+            // 3. Insert Representation into Input Field
+            const displayLines = startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`;
+            // Format consistent with addCodeReference log and likely widget display
+            const refDisplayText = `@code(${notebookName}:Cell ${cellIndex + 1}:${displayLines})`;
+            this.chatInput.focus(); // Ensure focus
+            const winSelection = window.getSelection();
+            if (!winSelection || winSelection.rangeCount === 0) {
+                console.error('Cannot insert reference display text: No window selection found.');
+                // Fallback: append (though cursor position might be wrong)
+                this.appendToInput(refDisplayText + ' ');
+                return;
+            }
+            const range = winSelection.getRangeAt(0);
+            // Assuming the shortcut handler WILL NOT insert '@code ' anymore,
+            // we insert the refDisplayText at the current cursor position.
+            const textNode = document.createTextNode(refDisplayText + ' '); // Add trailing space
+            range.deleteContents(); // Clear any existing selection in the input field
+            range.insertNode(textNode);
+            // Move cursor after inserted text
+            range.setStartAfter(textNode);
+            range.setEndAfter(textNode);
+            winSelection.removeAllRanges();
+            winSelection.addRange(range);
+            // --- End Insertion Logic ---
+            // Trigger input event manually
+            this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        }
+        catch (error) {
+            console.error('Error handling insert code reference from shortcut:', error);
+        }
     }
     /**
       // Handle @ symbol removal to hide popup using selection API

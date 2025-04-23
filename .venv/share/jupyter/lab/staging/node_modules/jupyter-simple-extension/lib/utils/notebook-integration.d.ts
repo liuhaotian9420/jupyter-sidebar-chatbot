@@ -3,9 +3,31 @@
  */
 export declare function addMessageToCell(text: string): void;
 /**
- * Gets the currently selected text from the active notebook cell or text editor.
+ * Gets the currently selected text from:
+ *  - the active notebook cell
+ *  - the text editor
+ *  - the output area of a code cell
  */
 export declare function getSelectedText(): string | null;
+/**
+ * Checks whether we are currently in a notebook cell.
+*/
+export declare function isInNotebookCell(): boolean;
+/**
+ * Checks whether we are currently in a notebook cell and the editor is focused:
+ * meaning that the cursor is in the editor.
+*/
+export declare function isInNotebookCellAndEditorFocused(): boolean;
+/**
+ * Check whether the currently active cell is a code cell.
+*/
+export declare function isCodeCell(): boolean;
+/**
+ * Check whether the cursor is in the output area of a code cell.
+ * This function specifically checks if we're in a code cell's output area,
+ * not just any output area.
+ */
+export declare function isOutputArea(): boolean;
 /**
  * Gets the content of the currently active notebook cell or text editor.
  */

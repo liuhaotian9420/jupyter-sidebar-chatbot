@@ -166,20 +166,15 @@ export function setupShortcuts(
             let handled = false;
             // Priority 1: Selected text in an active cell editor
             if (isCellFocused && selected) {
-                // Mimic selecting '@code'
-                // Insert the basic reference text. The full metadata handling
-                // should ideally be triggered elsewhere if needed (e.g., InputHandler based on text).
-                appendToInput(`@code `); // Insert '@code ' (maybe add selection later if needed by InputHandler logic?)
-                // TODO: Potentially call inputHandler.addCodeReference here if required by the flow
-                // This would need notebookName, cellIndex, startLine, endLine.
-                showIndicator('Code reference initiated'); // Indicate action started
+                // Call the new InputHandler method to create the reference and insert its representation
+                inputHandler.handleInsertCodeReferenceFromShortcut(selected);
+                showIndicator('Code reference inserted'); // Updated indicator message
                 handled = true;
             // Priority 2: Active cell selected (not necessarily editor focus)
             } else if (isCellSelected && activeCellIndex !== undefined && activeCellIndex !== null) {
-                // Mimic selecting '@Cells' -> clicking a cell
-                // Insert reference like "@Cell 3" (using 1-based index for display)
-                appendToInput(`@Cell ${activeCellIndex + 1} `); // Add trailing space
-                showIndicator('Cell reference inserted');
+                // Call the new InputHandler method to create the reference and insert its representation
+                inputHandler.handleInsertCellReferenceFromShortcut(); 
+                showIndicator('Cell reference inserted'); // Message remains the same
                 handled = true;
             } else {
                 // Invalid context for the shortcut

@@ -1,4 +1,5 @@
 import { getCaretPosition, setCaretPosition } from '../utils/content-editable-utils'; // Helper needed
+import { globals } from '../core/globals'; // Import globals
 
 // Interface for callbacks provided to the InputHandler
 export interface InputHandlerCallbacks {
@@ -16,11 +17,12 @@ export interface InputHandlerCallbacks {
 
 // NEW Interface for storing code reference metadata
 export interface CodeRefData {
-  code: string;
+  type: 'code' | 'cell'; // Add type
+  content: string;       // Rename 'code' to 'content'
   notebookName: string;
   cellIndex: number;
-  lineNumber: number; // Represents the START line number (1-based)
-  lineEndNumber: number; // Add END line number (1-based)
+  lineNumber?: number; // Make optional for cell refs (Represents START, 1-based)
+  lineEndNumber?: number; // Make optional for cell refs (Represents END, 1-based)
 }
 
 /**
@@ -169,7 +171,7 @@ export class InputHandler {
   // --- Code Reference Methods ---
   /**
    * Adds a code reference to the internal map and returns its ID.
-   * @param code The actual code content.
+   * @param codeContent The actual code content.
    * @param notebookName The name of the notebook the code is from.
    * @param cellIndex The index of the cell the code is from (0-based).
    * @param lineNumber The starting line number of the code within the cell (1-based).
@@ -177,24 +179,29 @@ export class InputHandler {
    * @returns The generated reference ID (e.g., "ref-1").
    */
   public addCodeReference(
-    code: string,
+    codeContent: string, // Renamed parameter
     notebookName: string,
     cellIndex: number,
     lineNumber: number, // Start line
     lineEndNumber: number // End line
   ): string {
       const refId = `ref-${this.nextRefId++}`;
-      // Store both start and end line numbers
-      const refData: CodeRefData = { code, notebookName, cellIndex, lineNumber, lineEndNumber }; 
-      // Store the ACTUAL CodeRefData object in the map
+      // Store type and use 'content' field
+      const refData: CodeRefData = { 
+          type: 'code', 
+          content: codeContent, // Use content field
+          notebookName, 
+          cellIndex, 
+          lineNumber, 
+          lineEndNumber 
+      }; 
       this.codeRefMap.set(refId, refData); 
-      // Log the details separately
       console.log(
         'Added code reference:',
         refId, 
         '->',
         `(${notebookName}, Cell ${cellIndex + 1}, Line ${lineNumber}${lineNumber !== lineEndNumber ? '_' + lineEndNumber : ''}) ` + 
-        code.substring(0, 30) + '...' // Log metadata too
+        codeContent.substring(0, 30) + '...' // Use codeContent
       ); 
       return refId;
   }
@@ -230,24 +237,213 @@ export class InputHandler {
       }
       
       // Regex to find placeholders like [ref-1], [ref-12], etc.
-      const placeholderRegex = /\[(ref-\d+)\]/g;
+      // Adjusted regex slightly to be non-greedy if needed, though current format is fine.
+      const placeholderRegex = /@(?:code|Cell)\[(ref-\d+)\]|@code\((?:[^)]+)\)\[(ref-\d+)\]|\[(ref-\d+)\]/g;
       
-      let resolvedMessage = message.replace(placeholderRegex, (match, refId) => {
-          // Access the .code property from the stored object
+      let resolvedMessage = message.replace(placeholderRegex, (match, refId1, refId2, refId3) => {
+          const refId = refId1 || refId2 || refId3; // Get the captured refId
+          if (!refId) return match; // If somehow no refId captured, return original match
+
           const refData = this.codeRefMap.get(refId);
           if (refData) {
-              console.log('Resolving code reference:', refId); // Debug log
-              // Add context around the replaced code
-              return `\n\`\`\`\n${refData.code}\n\`\`\`\n`; // Use refData.code
+              console.log(`Resolving ${refData.type} reference:`, refId); // Debug log type
+              // Use refData.content (renamed from refData.code)
+              // Add context based on type?
+              const prefix = refData.type === 'cell' ? 
+                  `\n--- Start Cell ${refData.cellIndex + 1} (${refData.notebookName}) ---\n` : 
+                  `\n--- Start Code (${refData.notebookName}:Cell ${refData.cellIndex + 1}:L${refData.lineNumber}-${refData.lineEndNumber}) ---\n`;
+              const suffix = refData.type === 'cell' ? 
+                  `\n--- End Cell ${refData.cellIndex + 1} ---` : 
+                  `\n--- End Code ---`;
+
+              return `${prefix}${refData.content}${suffix}`; 
           } else {
-              console.warn('Could not find code for reference:', refId); // Warn if ref ID not found
+              console.warn('Could not find data for reference:', refId); // Warn if ref ID not found
               return match; // Keep the placeholder if not found
           }
       });
       
       return resolvedMessage;
   }
-  // -----------------------------
+
+  // NEW method specifically for Ctrl+L shortcut
+  public handleInsertCodeReferenceFromShortcut(selectedText: string): void {
+    const currentNotebookWidget = globals.notebookTracker?.currentWidget;
+    const activeCell = globals.notebookTracker?.activeCell;
+    const editor = activeCell?.editor;
+    const cmEditor = editor ? (editor as any).editor : null; // CodeMirror view
+
+    if (!currentNotebookWidget || !activeCell || !editor || !cmEditor || !cmEditor.state) {
+      console.error('Cannot insert code reference: Missing notebook, cell, or editor context.');
+      // Optionally show an indicator via callbacks?
+      return;
+    }
+
+    try {
+      // 1. Gather Context
+      const notebookPath = currentNotebookWidget.context.path;
+      const notebookName = notebookPath.split('/').pop()?.split('.')[0] || 'notebook';
+      const cellIndex = currentNotebookWidget.content.activeCellIndex;
+
+      const state = cmEditor.state;
+      const selection = state.selection.main;
+      const startLine = state.doc.lineAt(selection.from).number; // 1-based
+      const endLine = state.doc.lineAt(selection.to).number; // 1-based
+
+      if (cellIndex === undefined || cellIndex === null) {
+        console.error('Cannot insert code reference: Could not determine active cell index.');
+        return;
+      }
+
+      // 2. Add Code Reference to Map
+      const refId = this.addCodeReference(
+        selectedText,
+        notebookName,
+        cellIndex,
+        startLine,
+        endLine
+      );
+
+      // 3. Insert Representation into Input Field
+      const displayLines = startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`;
+      // Format consistent with addCodeReference log and likely widget display
+      const refDisplayText = `@code(${notebookName}:Cell ${cellIndex + 1}:${displayLines})`; 
+
+      this.chatInput.focus(); // Ensure focus
+      const winSelection = window.getSelection();
+      if (!winSelection || winSelection.rangeCount === 0) {
+        console.error('Cannot insert reference display text: No window selection found.');
+        // Fallback: append (though cursor position might be wrong)
+        this.appendToInput(refDisplayText + ' '); 
+        return;
+      }
+
+      const range = winSelection.getRangeAt(0);
+      
+      // Assuming the shortcut handler WILL NOT insert '@code ' anymore,
+      // we insert the refDisplayText at the current cursor position.
+
+      const textNode = document.createTextNode(refDisplayText + ' '); // Add trailing space
+      range.deleteContents(); // Clear any existing selection in the input field
+      range.insertNode(textNode);
+
+      // Move cursor after inserted text
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      winSelection.removeAllRanges();
+      winSelection.addRange(range);
+      // --- End Insertion Logic ---
+
+      // Trigger input event manually
+      this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+    } catch (error) {
+      console.error('Error handling insert code reference from shortcut:', error);
+    }
+  }
+
+  // NEW: Method to add a cell reference
+  public addCellReference(
+    notebookName: string,
+    cellIndex: number
+  ): string | null { // Return null if cell content cannot be fetched
+    const notebookPanel = globals.notebookTracker?.currentWidget;
+    if (!notebookPanel || !notebookPanel.content.model || !notebookPanel.content.model.cells) {
+        console.error('Cannot add cell reference: Notebook or cells not found.');
+        return null;
+    }
+    const model = notebookPanel.content.model;
+    if (cellIndex < 0 || cellIndex >= model.cells.length) {
+        console.error(`Cannot add cell reference: Invalid cell index ${cellIndex}`);
+        return null;
+    }
+    const cell = model.cells.get(cellIndex);
+    let cellContent = '';
+    // Get cell content - handle different ways content might be stored
+    if (cell.sharedModel && typeof cell.sharedModel.getSource === 'function') {
+      cellContent = cell.sharedModel.getSource();
+    } else {
+      const cellJson = cell.toJSON();
+      const source = cellJson?.source;
+      if (typeof source === 'string') {
+        cellContent = source;
+      } else if (Array.isArray(source)) {
+        cellContent = source.join('\n'); // Corrected: Use actual newline
+      }
+    }
+
+    const refId = `ref-${this.nextRefId++}`;
+    const refData: CodeRefData = { 
+        type: 'cell', 
+        content: cellContent, 
+        notebookName, 
+        cellIndex 
+        // lineNumber/lineEndNumber are omitted
+    };
+    this.codeRefMap.set(refId, refData);
+    // Combine console.log into one line
+    console.log(`Added cell reference: ${refId} -> (${notebookName}, Cell ${cellIndex + 1}) ${cellContent.substring(0, 30)}...`);
+    return refId;
+  }
+
+  // NEW method specifically for Ctrl+L shortcut (Cell)
+  public handleInsertCellReferenceFromShortcut(): void {
+    const currentNotebookWidget = globals.notebookTracker?.currentWidget;
+    const activeCell = globals.notebookTracker?.activeCell;
+
+    if (!currentNotebookWidget || !activeCell) {
+      console.error('Cannot insert cell reference: Missing notebook or cell context.');
+      return;
+    }
+
+    try {
+        // 1. Gather Context
+        const notebookPath = currentNotebookWidget.context.path;
+        const notebookName = notebookPath.split('/').pop()?.split('.')[0] || 'notebook';
+        const cellIndex = currentNotebookWidget.content.activeCellIndex;
+
+        if (cellIndex === undefined || cellIndex === null) {
+            console.error('Cannot insert cell reference: Could not determine active cell index.');
+            return;
+        }
+
+        // 2. Add Cell Reference to Map
+        const refId = this.addCellReference(notebookName, cellIndex);
+
+        if (!refId) {
+            console.error('Failed to add cell reference to map.');
+            return; // Stop if we couldn't create the reference data
+        }
+
+        // 3. Insert Representation into Input Field (using user's format)
+        const refDisplayText = `@Cell[${cellIndex + 1}]`; 
+
+        this.chatInput.focus(); // Ensure focus
+        const winSelection = window.getSelection();
+        if (!winSelection || winSelection.rangeCount === 0) {
+            console.error('Cannot insert reference display text: No window selection found.');
+            this.appendToInput(refDisplayText + ' '); // Fallback
+            return;
+        }
+
+        const range = winSelection.getRangeAt(0);
+        const textNode = document.createTextNode(refDisplayText + ' '); // Add trailing space
+        range.deleteContents(); // Clear any existing selection in the input field
+        range.insertNode(textNode);
+
+        // Move cursor after inserted text
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        winSelection.removeAllRanges();
+        winSelection.addRange(range);
+
+        // Trigger input event manually
+        this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+    } catch (error) {
+        console.error('Error handling insert cell reference from shortcut:', error);
+    }
+  }
 
   // --- Private Event Handlers ---
 

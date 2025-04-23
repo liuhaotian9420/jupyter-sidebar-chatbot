@@ -193,6 +193,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 const refText = `@Cell[${oneBasedIndex}]`;
                 (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(refText);
             },
+            // TODO: insertCollapsedCodeRef should later be merged with insertCode
+            // as we only expect one kind of behavior from the input handler.
+            // this change will also involve ui changes
             insertCollapsedCodeRef: (code, cellIndex, lineNumber, notebookName) => {
                 // Handle reference from cursor position (assume start/end line are the same)
                 if (!this.inputHandler)

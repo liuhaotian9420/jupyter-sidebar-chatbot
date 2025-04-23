@@ -31,5 +31,5 @@
 **Tasks:**
 - [x] **(P0)** Modify `Ctrl+L` logic in `shortcut-handler.ts` to call the appropriate handler function (likely on `InputHandler`) for `@code` and `@cell` references instead of `appendToInput`.
 - [x] **(P1)** Add a warning indicator via `showIndicator` in `shortcut-handler.ts` if `Ctrl+L` is pressed when neither code is selected nor a cell is active.
-- [ ] **(P2)** Update `FEAT_TODO.md` (this task).
+- [x] **(P2)** Update `FEAT_TODO.md` (this task).
 - [ ] **(P2)** Update `TESTING_TODO.md` with testing tasks for the new shortcut behavior.

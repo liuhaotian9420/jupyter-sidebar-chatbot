@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupShortcuts = setupShortcuts;
 exports.removeShortcuts = removeShortcuts;
 const notebook_integration_1 = require("../utils/notebook-integration");
+const globals_1 = require("../core/globals"); // Import globals to get cell index etc.
 let _handleKeyDown = null;
 /**
  * Sets up global keyboard shortcuts for the extension.
@@ -18,6 +19,7 @@ popupMenuManager, callbacks) {
         removeShortcuts();
     }
     _handleKeyDown = (event) => {
+        var _a, _b, _c;
         const { showIndicator, appendToInput, showWidget, focusInput } = callbacks;
         // Check for @ key - event.key should correctly report '@' even with Shift
         // Also check for SHIFT+2 as an alternative way to trigger '@'
@@ -28,8 +30,8 @@ popupMenuManager, callbacks) {
                 inputField.getAttribute('contenteditable') === 'true' &&
                 inputField.classList.contains('jp-llm-ext-input-field');
             // Handle the case where the input field is NOT the active element first
-            if (isContentEditableInput) {
-                console.log("SHORTCUT HANDLER: Input field IS active element. Letting default behavior proceed.");
+            if (!isContentEditableInput) { // Only handle if NOT our input field
+                console.log("SHORTCUT HANDLER: Input field is NOT active element. Handling '@' globally.");
                 // If not in our input field, prevent default, show widget, focus, insert '@', and show popup.
                 event.preventDefault();
                 event.stopPropagation();
@@ -124,12 +126,9 @@ popupMenuManager, callbacks) {
                 }, 50); // Outer timeout remains 50ms
             }
             else {
-                console.log("SHORTCUT HANDLER: Input field is NOT active element. Handling '@' globally.");
-                // If the input field is already focused, DO NOTHING here.
-                // The default browser behavior will insert the '@'.
-                // The 'input' event listener in UIManager will then detect the '@'
-                // and trigger the popup via handleInputForReference.
-                // We do NOT preventDefault or stopPropagation.
+                // Input field IS focused. Let default '@' insertion happen.
+                // The 'input' listener in UIManager should handle the popup.
+                console.log("SHORTCUT HANDLER: Input field IS active element. Letting default '@' behavior proceed.");
             }
         }
         // Check for Ctrl+L (insert selection or cell)
@@ -137,20 +136,36 @@ popupMenuManager, callbacks) {
             event.preventDefault();
             event.stopPropagation();
             const selected = (0, notebook_integration_1.getSelectedText)();
-            if (selected) {
-                appendToInput(`@code ${selected}`); // Use callback
-                showIndicator('Selected code inserted');
+            // const cellContent = getCurrentCellContent(); // We don't need the content itself anymore
+            const isCellFocused = (0, notebook_integration_1.isInNotebookCellAndEditorFocused)(); // If the cursor is in the editor mode
+            const isCellSelected = (0, notebook_integration_1.isInNotebookCell)(); // If the cursor is in the notebook cell
+            const activeCellIndex = (_c = (_b = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.currentWidget) === null || _b === void 0 ? void 0 : _b.content) === null || _c === void 0 ? void 0 : _c.activeCellIndex; // Get index
+            let handled = false;
+            // Priority 1: Selected text in an active cell editor
+            if (isCellFocused && selected) {
+                // Call the new InputHandler method to create the reference and insert its representation
+                inputHandler.handleInsertCodeReferenceFromShortcut(selected);
+                showIndicator('Code reference inserted'); // Updated indicator message
+                handled = true;
+                // Priority 2: Active cell selected (not necessarily editor focus)
+            }
+            else if (isCellSelected && activeCellIndex !== undefined && activeCellIndex !== null) {
+                // Mimic selecting '@Cells' -> clicking a cell
+                // Insert reference like "@Cell 3" (using 1-based index for display)
+                appendToInput(`@Cell[${activeCellIndex + 1}]`); // Add trailing space
+                showIndicator('Cell reference inserted');
+                handled = true;
             }
             else {
-                const cellContent = (0, notebook_integration_1.getCurrentCellContent)();
-                if (cellContent) {
-                    appendToInput(`@cell ${cellContent}`); // Use callback
-                    showIndicator('Cell content inserted');
-                }
+                // Invalid context for the shortcut
+                showIndicator('Cannot insert reference: Select code or an active cell.');
+                handled = true; // Still handled the shortcut, just showed a warning
             }
-            // Ensure the sidebar is visible and input is focused
-            showWidget(); // Use callback
-            focusInput(); // Use callback
+            // Ensure the sidebar is visible and input is focused only if an action was taken
+            if (handled) {
+                showWidget(); // Use callback
+                focusInput(); // Use callback
+            }
         }
     };
     // Add the event listener to the document
