@@ -1,0 +1,20 @@
+---
+name: Feature Adding Workflow
+trigger:
+  onIntent: Add Feature
+description: Guides the process for adding new features, emphasizing planning, testing and code reusability.
+---
+# Feature Adding Workflow
+
+Before implementing a new feature, please follow these steps:
+
+1.  **Understand the Context:** Review the project structure and component interactions detailed in the main project documentation: [docs/README.md](mdc:docs/README.md). This file also links to detailed documentation for specific modules.
+2.  **Be Mindful of Paths:** Remember the current workspace root and the relative paths to key directories like `backend/src/` and `jupyter-lab-extension/src/`.
+3.  **Plan and Prioritize:**
+    *   Break down the feature into smaller, manageable tasks.
+    *   Evaluate the priority of each task (e.g., P0, P1, P2).
+    *   Record the feature by a designated name that should be approved by the user
+    *   Document these tasks and their priorities in [FEAT_TODO.md](mdc:FEAT_TODO.md) with the current timestamp
+4.  **Leverage Existing Code:** Prioritize extending or modifying existing components and functions over creating entirely new ones whenever feasible. This promotes code reuse and maintainability.
+5.  **Plan for Testing:** Add specific testing tasks for the new feature to the testing checklist: [TESTING_TODO.md](mdc:TESTING_TODO.md). Ensure unit, integration, and UI tests are considered.
+

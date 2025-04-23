@@ -1,0 +1,16 @@
+---
+name: General Coding Style
+trigger:
+  onIntent: Write Code
+  onIntent: Edit Code
+  onFileChange:
+    - "**/*.py"
+    - "**/*.ts"
+description: General guidelines for coding style and conventions.
+---
+# General Coding Style Guidelines
+
+When writing or modifying code, please adhere to the following principles:
+
+1.  **Track Progress with TODOs:** If work is incomplete or requires future attention, leave a `TODO` comment in the code. Briefly document the purpose or next steps associated with the TODO, either in the comment itself or linked to an issue/task tracker if applicable.
+2.  **Preserve Potentially Used Code:** Exercise caution before deleting code that appears unused. It might be conditionally used, part of a feature branch, or referenced dynamically. If unsure, comment it out with an explanation or confirm its redundancy thoroughly before removal.

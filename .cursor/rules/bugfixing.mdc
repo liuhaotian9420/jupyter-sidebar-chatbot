@@ -1,0 +1,13 @@
+---
+name: Frontend Bugfix Build
+trigger:
+  onIntent: Fix Bug
+  onFileChange:
+    - jupyter-lab-extension/**
+description: Reminds to build the frontend after bugfixes.
+---
+# Frontend Bugfix Build Reminder
+
+When fixing bugs, especially those involving changes within the `jupyter-lab-extension/` directory:
+
+1.  **Rebuild the Extension:** After making changes to the TypeScript frontend code ([jupyter-lab-extension/src](mdc:jupyter-lab-extension/src)), remember to rebuild the extension using the command `jlpm build` in the `jupyter-lab-extension` directory to see the effects.

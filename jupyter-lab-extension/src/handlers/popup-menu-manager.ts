@@ -14,6 +14,7 @@ export interface MenuActionCallbacks {
     getCurrentCellContent: () => string | null;
     insertCellByIndex: (index: number) => void; // New callback for cell selection
     insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => void; // New callback for collapsed references
+    insertReferenceText: (refText: string) => void; // NEW callback for inserting @ref text
 }
 
 /**
@@ -601,17 +602,27 @@ export class PopupMenuManager {
             case 'select-cell':
                 if (path) {
                     const cellIndex = parseInt(path);
-                    if (!isNaN(cellIndex) && this.callbacks.insertCellByIndex) {
-                        this.callbacks.insertCellByIndex(cellIndex);
+                    if (!isNaN(cellIndex)) {
+                        // Construct the reference text (e.g., "@Cell 3")
+                        const refText = `@Cell ${cellIndex + 1}`; // Use 1-based index for display
+                        this.callbacks.insertReferenceText(refText);
+                        // Original action (optional, maybe remove if only inline needed):
+                        // this.callbacks.insertCellByIndex(cellIndex);
                         this.hidePopupMenu();
                     } else {
-                        console.error('POPUP: Invalid cell index or callback missing.');
+                        console.error('POPUP: Invalid cell index.');
                     }
+                } else {
+                     console.error('POPUP: Cell selected but index (path) is missing.');
                 }
                 break;
             case 'select-file':
                 if (path) {
-                    this.callbacks.insertFilePath(path); 
+                    // Construct the reference text (e.g., "@file path/to/file.py")
+                    const refText = `@file ${path}`;
+                    this.callbacks.insertReferenceText(refText);
+                    // Original action (optional, maybe remove if only inline needed):
+                    // this.callbacks.insertFilePath(path); 
                     this.hidePopupMenu();
                 } else {
                     console.error('POPUP: File selected but path is missing.');
@@ -634,7 +645,11 @@ export class PopupMenuManager {
                 break;
             case 'select-directory-callback': // New action to select dir when in directory view
                 if (path) {
-                    this.callbacks.insertDirectoryPath(path); // Use the callback
+                    // Construct the reference text (e.g., "@dir path/to/directory")
+                    const refText = `@dir ${path}`;
+                     this.callbacks.insertReferenceText(refText);
+                    // Original action (optional, maybe remove if only inline needed):
+                    // this.callbacks.insertDirectoryPath(path); // Use the callback
                     this.hidePopupMenu();
                 } else {
                     console.error('POPUP: Directory selected for callback but path is missing.');
@@ -1073,6 +1088,13 @@ export class PopupMenuManager {
         this.popupMenuContainer.style.top = `${anchorY - gap - menuHeight}px`;
         
         console.log(`POPUP: Positioned menu at height ${menuHeight}px with bottom at ${anchorY - gap}px`);
+    }
+
+    /**
+     * Checks if the popup menu is currently visible.
+     */
+    public isPopupMenuVisible(): boolean {
+        return this.popupMenuContainer.style.display !== 'none';
     }
 
     // Add other necessary methods related to the popup menu here...

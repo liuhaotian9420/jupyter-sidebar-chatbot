@@ -7,7 +7,7 @@ import { LayoutElements } from './layout-builder';
 export interface UIManagerCallbacks {
     handleNewChat: () => void;
     handleToggleHistory: () => void;
-    handleSendMessage: () => void;
+    handleSendMessage: (message: string) => void;
     handleShowSettings: (event: MouseEvent) => void;
     handleShowPopupMenu: (event: MouseEvent, targetButton: HTMLElement) => void;
     handleUpdateTitle: () => void;
@@ -20,7 +20,7 @@ export interface UIManagerCallbacks {
 export interface UIElements {
     mainLayout: HTMLElement;
     messageContainer: HTMLDivElement;
-    inputField: HTMLTextAreaElement;
+    inputField: HTMLDivElement;
     titleInput: HTMLInputElement;
     historyContainer: HTMLDivElement;
     bottomBarContainer: HTMLDivElement;
@@ -39,7 +39,7 @@ export class UIManager {
     private keyboardShortcutIndicator!: HTMLDivElement; // Add property for the indicator
 
     // References to managed elements
-    private inputField!: HTMLTextAreaElement;
+    private inputField!: HTMLDivElement;
     private messageContainer!: HTMLDivElement;
     private historyContainer!: HTMLDivElement;
     private titleInput!: HTMLInputElement;
@@ -145,30 +145,53 @@ export class UIManager {
         // Input Row
         const middleRow = document.createElement('div');
         middleRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row';
-        this.inputField = document.createElement('textarea');
-        this.inputField.placeholder = 'Ask me anything...';
-        this.inputField.rows = 1;
+        this.inputField = document.createElement('div');
+        this.inputField.setAttribute('contenteditable', 'true');
+        this.inputField.setAttribute('role', 'textbox');
+        this.inputField.setAttribute('aria-multiline', 'true');
+        this.inputField.setAttribute('data-placeholder', 'Ask me anything...');
         this.inputField.className = 'jp-llm-ext-input-field';
-        // Send on Enter (handled by callbacks.handleSendMessage)
-        this.inputField.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                this.callbacks.handleSendMessage();
+        this.inputField.addEventListener('keydown', (event: KeyboardEvent) => {
+            const selection = window.getSelection();
+
+            // --- Backspace handling for widgets ---
+            if (event.key === 'Backspace' && selection && selection.isCollapsed) {
+                const range = selection.getRangeAt(0);
+                const nodeBefore = range.startContainer.childNodes[range.startOffset - 1] || range.startContainer.previousSibling; 
+                
+                // Check nodeBefore more carefully
+                 let potentialWidget: Node | null = null;
+                 if (range.startOffset > 0 && range.startContainer.childNodes.length >= range.startOffset) {
+                     potentialWidget = range.startContainer.childNodes[range.startOffset - 1];
+                 } else if (range.startOffset === 0 && range.startContainer.previousSibling) {
+                     potentialWidget = range.startContainer.previousSibling;
+                 } else if (range.startContainer !== this.inputField && range.startContainer.parentNode === this.inputField && range.startOffset === 0) {
+                     // Cursor might be at the start of a text node following a widget
+                     potentialWidget = range.startContainer.previousSibling;
+                 }
+
+                if (
+                    potentialWidget && 
+                    potentialWidget.nodeType === Node.ELEMENT_NODE && 
+                    (potentialWidget as HTMLElement).classList.contains('jp-llm-ext-ref-widget')
+                ) {
+                    event.preventDefault(); // Stop default backspace
+                    potentialWidget.remove(); // Remove the entire widget node
+                    // Manually trigger input event for consistency?
+                    this.inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                    return; // Stop further processing for this keydown
+                }
             }
-        });
-        // Input listener (e.g., for hiding '@' popup - might move to InputHandler later)
-        this.inputField.addEventListener('input', () => {
-             // Basic logic for hiding popup if @ removed - refine later
-            const cursorPosition = this.inputField.selectionStart;
-            const textBeforeCursor = this.inputField.value.slice(0, cursorPosition);
-            const hasAtNow = textBeforeCursor.endsWith('@') &&
-                             (cursorPosition === 1 ||
-                              !!textBeforeCursor[cursorPosition - 2]?.match(/\s/));
-            // This needs the widget's `hasAtSymbol` state or similar
-            // For now, this logic might be incomplete or moved.
-             if (!hasAtNow) {
-                 this.popupMenuManager.hidePopupMenu();
-             }
+            // --- End Backspace handling ---
+
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Prevent default newline insertion
+                const message = this.getSerializedInput();
+                if (message.trim()) {
+                    this.callbacks.handleSendMessage(message);
+                    this.clearInputField();
+                }
+            }
         });
         middleRow.appendChild(this.inputField);
 
@@ -177,7 +200,13 @@ export class UIManager {
         bottomRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-buttons-row';
         const sendButton = this.createButton('Send', 'Send message');
         sendButton.classList.add('jp-llm-ext-send-button'); // Specific class for send
-        sendButton.addEventListener('click', this.callbacks.handleSendMessage);
+        sendButton.addEventListener('click', () => {
+            const message = this.getSerializedInput();
+            if (message.trim()) {
+                 this.callbacks.handleSendMessage(message);
+                 this.clearInputField();
+            }
+        });
         const newChatButton = this.createButton('+ New Chat', 'Start a new chat');
         newChatButton.addEventListener('click', this.callbacks.handleNewChat);
         const historyButton = this.createButton('History', 'View chat history');
@@ -224,11 +253,12 @@ export class UIManager {
         this.markdownToggle.addEventListener('change', (e) => {
             const target = e.target as HTMLInputElement;
             this.isMarkdownMode = target.checked;
-            // Update placeholder based on mode
-            this.inputField.placeholder = this.isMarkdownMode
+            const placeholderText = this.isMarkdownMode
                 ? 'Write markdown here...\\n\\n# Example heading\\n- List item\\n\\n```code block```'
                 : 'Ask me anything...';
-            // Future: Notify widget/handler if needed: this.callbacks.handleToggleMarkdown(this.isMarkdownMode);
+            this.inputField.setAttribute('data-placeholder', placeholderText);
+            this.inputField.blur();
+            this.inputField.focus();
         });
         const toggleLabel = document.createElement('label');
         toggleLabel.htmlFor = 'markdown-toggle';
@@ -243,8 +273,7 @@ export class UIManager {
         // '@' Button
         const atButton = this.createButton('@', 'Browse cells, code, files, and more');
         atButton.addEventListener('click', (event: MouseEvent) => {
-            // Pass event and button to the callback for positioning
-             this.callbacks.handleShowPopupMenu(event, event.currentTarget as HTMLElement);
+            this.callbacks.handleShowPopupMenu(event, event.currentTarget as HTMLElement);
         });
 
         // Expand Button (store reference)
@@ -275,14 +304,13 @@ export class UIManager {
 
         this.isInputExpanded = !this.isInputExpanded;
         if (this.isInputExpanded) {
-            this.inputField.style.height = '200px'; // Use CSS classes ideally
-            this.inputField.style.resize = 'vertical';
+            this.inputField.style.height = '200px'; // Keep for now, consider CSS classes
+            this.inputField.style.resize = 'vertical'; // Works on divs too (if overflow visible/auto)
             this.expandButton.textContent = '⤡';
             this.expandButton.title = 'Collapse input';
         } else {
             this.inputField.style.height = ''; // Reset height
             this.inputField.style.resize = 'none';
-            this.inputField.rows = 1; // Ensure collapse
             this.expandButton.textContent = '⤢';
             this.expandButton.title = 'Expand input';
         }
@@ -453,6 +481,97 @@ export class UIManager {
          if (this.notificationTimeout) {
             clearTimeout(this.notificationTimeout);
             this.notificationTimeout = null;
+        }
+    }
+
+    /**
+     * Serializes the content of the contenteditable input field.
+     * Converts divs/brs used for line breaks into newline characters.
+     * In the future, this will handle custom ref-text widgets.
+     * @returns The serialized string content.
+     */
+    public getSerializedInput(): string {
+        if (!this.inputField) {
+            return '';
+        }
+
+        let content = '';
+        const nodes = this.inputField.childNodes;
+
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+
+            if (node.nodeType === Node.TEXT_NODE) {
+                content += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node as HTMLElement;
+                // Handle line breaks: Treat divs and brs as newlines
+                if (element.tagName === 'DIV' || element.tagName === 'BR') {
+                    // Add newline only if the previous content didn't end with one
+                    // or if it's the very first element
+                    if (i > 0 && !content.endsWith('\n')) {
+                         content += '\n';
+                    }
+                    // Recursively serialize content within divs (handles nested structures)
+                    if (element.tagName === 'DIV') {
+                        content += this.serializeNodeChildren(element); // Use helper for children
+                    }
+                } else if (element.hasAttribute('data-ref-text')) { // Future widget handling
+                     // Check for our custom widget attribute
+                    content += element.getAttribute('data-ref-text') || '';
+                } else {
+                    // For other inline elements (like span from formatting), get their text content
+                    content += element.textContent;
+                }
+            }
+        }
+        // Trim leading/trailing whitespace and normalize multiple newlines
+        return content.trim().replace(/\n{2,}/g, '\n\n');
+    }
+
+    /**
+     * Helper function to recursively serialize child nodes of an element.
+     * Used by getSerializedInput to handle nested structures like divs.
+     */
+    private serializeNodeChildren(parentNode: Node): string {
+        let childContent = '';
+        const nodes = parentNode.childNodes;
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            if (node.nodeType === Node.TEXT_NODE) {
+                childContent += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node as HTMLElement;
+                if (element.tagName === 'DIV' || element.tagName === 'BR') {
+                    if (i > 0 && !childContent.endsWith('\n')) {
+                         childContent += '\n';
+                    }
+                    if (element.tagName === 'DIV') {
+                         childContent += this.serializeNodeChildren(element);
+                    }
+                } else if (element.hasAttribute('data-ref-text')) {
+                    childContent += element.getAttribute('data-ref-text') || '';
+                } else {
+                    childContent += element.textContent;
+                }
+            }
+        }
+        return childContent;
+    }
+
+    /**
+     * Clears the content of the input field.
+     */
+    public clearInputField(): void {
+        if (this.inputField) {
+            this.inputField.innerHTML = '';
+            // Optional: Reset any expansion state if needed
+            if (this.isInputExpanded) {
+                 // Maybe toggle expansion off or just reset height?
+                 // For now, just clearing content.
+            }
+            // Re-focus might be desired
+            this.inputField.focus();
         }
     }
 

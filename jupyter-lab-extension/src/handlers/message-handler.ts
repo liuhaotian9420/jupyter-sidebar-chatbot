@@ -44,7 +44,7 @@ export class MessageHandler {
         this.addMessage(message, 'user', isMarkdown); // Pass isMarkdown here
 
         // Clear input via InputHandler (which uses UIManager)
-        this.inputHandler.clearInput(); // Corrected method name
+        // REMOVED: this.inputHandler.clearInput(); // Input clearing is now handled by UIManager after the callback
 
         // Send message to backend API and handle streaming response
         this.streamAndRenderResponse(message); 

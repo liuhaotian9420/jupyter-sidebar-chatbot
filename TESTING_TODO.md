@@ -116,4 +116,20 @@ This list tracks the progress of testing the refactored Jupyter LLM Extension ba
 - [x] Inspect input field area (bar, input, buttons) structure and classes.
 - [x] Inspect history panel structure and classes.
 - [x] Inspect settings modal structure and classes.
-- [x] Verify all `jp-llm-ext-*` classes match elements as defined in `style/index.css`. 
+- [x] Verify all `jp-llm-ext-*` classes match elements as defined in `style/index.css`.
+
+## Feature: Inline Ref-Text Widgets
+- **Unit Tests:**
+  - Test serialization function (extracts text and @ref from contenteditable div).
+  - Test widget creation/replacement logic.
+  - Test backspace handling for deleting widgets.
+- **UI/Integration Tests:**
+  - Verify typing regular text works as expected.
+  - Verify typing markdown works as expected.
+  - Verify inserting a reference using "@" creates a visible, non-editable widget.
+  - Verify deleting a reference widget using backspace removes the entire widget.
+  - Verify sending a message correctly serializes text and reference widgets.
+  - Verify copy/paste behavior with text and widgets.
+  - Verify Shift+Enter creates a newline in the input div.
+  - Verify Enter (without Shift) triggers message sending.
+  - Verify the contenteditable div visually resembles the previous textarea. 

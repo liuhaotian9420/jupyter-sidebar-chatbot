@@ -59,21 +59,21 @@ export class SimpleSidebarWidget extends Widget {
       console.log('Handle Toggle History clicked');
       this.historyHandler.toggleHistoryView(); 
   };
-  private handleSendMessage = () => {
+  private handleSendMessage = (message: string) => {
     // 1. Get the current text from the input field via UIManager or LayoutElements
-    const text = this.layoutElements.inputField.value; 
-    if (!text.trim()) return; // Don't send empty messages
+    // const text = this.layoutElements.inputField.value; // No longer needed, text is passed in
+    if (!message.trim()) return; // Don't send empty messages (check the passed message)
 
     // 2. Get the markdown state from UIManager
     const isMarkdown = this.uiManager.getIsMarkdownMode(); 
 
-    console.log(`[Widget] handleSendMessage: Text='${text}', Markdown=${isMarkdown}`); // Debug log
+    console.log(`[Widget] handleSendMessage: Text='${message}', Markdown=${isMarkdown}`); // Debug log using passed message
 
     // 3. Call the MessageHandler's send method with text and state
-    this.messageHandler.handleSendMessage(text, isMarkdown); 
+    this.messageHandler.handleSendMessage(message, isMarkdown); // Pass the received message
 
-    // NOTE: No need to dispatch event anymore. 
-    // The input clearing is handled inside messageHandler.handleSendMessage now.
+    // NOTE: Input clearing is now handled by UIManager after this callback returns.
+    // Do NOT clear input here or in MessageHandler.
   };
   private handleShowSettings = (event: MouseEvent) => { 
       console.log('Handle Show Settings clicked');
@@ -89,6 +89,152 @@ export class SimpleSidebarWidget extends Widget {
       console.log('Handle Update Title called:', newTitle);
       this.chatState.updateCurrentChatTitle(newTitle);
   };
+
+  /**
+   * Callback implementation for inserting reference text into the input field.
+   * Called by PopupMenuManager when a reference item is selected.
+   */
+  private insertReferenceText = (refText: string) => {
+    if (!this.uiManager) return;
+    const inputDiv = this.uiManager.getUIElements().inputField;
+    if (!inputDiv) return;
+
+    inputDiv.focus(); // Ensure the input field has focus
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+
+    // --- Logic to find and replace the @ trigger ---
+    // 1. Get the text node and cursor position where the popup was likely triggered.
+    const container = range.startContainer;
+    const offset = range.startOffset;
+
+    if (container.nodeType === Node.TEXT_NODE) {
+        const textNode = container as Text;
+        let textContent = textNode.textContent || '';
+
+        // 2. Find the '@' symbol before the current cursor position that triggered the popup.
+        //    This assumes the cursor hasn't moved significantly since typing '@'.
+        //    A more robust approach might involve marking the range when '@' is typed.
+        let atIndex = -1;
+        for (let i = offset - 1; i >= 0; i--) {
+            if (textContent[i] === '@') {
+                // Check if it's preceded by whitespace or is the start of the node
+                if (i === 0 || textContent[i - 1]?.match(/\s/)) {
+                    atIndex = i;
+                    break;
+                }
+            }
+             // Stop searching if we hit whitespace before finding a valid '@'
+             if (textContent[i]?.match(/\s/)) {
+                 break;
+             }
+        }
+
+        if (atIndex !== -1) {
+            // 3. Replace the text from '@' up to the current cursor position with the selected refText.
+            const textBeforeAt = textContent.substring(0, atIndex);
+            // Potentially add a space after the inserted text if not already present
+            const suffix = refText.endsWith(' ') ? '' : ' '; 
+            const textAfterCursor = textContent.substring(offset);
+            
+            textNode.textContent = textBeforeAt + refText + suffix + textAfterCursor;
+
+            // 4. Move the cursor to the end of the inserted text.
+            range.setStart(textNode, (textBeforeAt + refText + suffix).length);
+            range.setEnd(textNode, (textBeforeAt + refText + suffix).length);
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+             // --- TODO: NEXT STEP - Replace inserted text with widget --- 
+             // Find the inserted refText range and replace it with a non-editable span
+             // this.createWidgetSpan(textNode, startOffset, endOffset, refText);
+
+             // Find the range of the inserted text
+            const widgetRange = document.createRange();
+            widgetRange.setStart(textNode, atIndex);
+            widgetRange.setEnd(textNode, (textBeforeAt + refText + suffix).length);
+            
+            // Replace the text range with a widget span
+            this.createWidgetSpan(widgetRange, refText);
+
+        } else {
+            // Fallback: Insert text at the current cursor position if '@' not found reliably.
+            range.deleteContents(); // Delete any selected text
+            const textNodeToInsert = document.createTextNode(refText + ' ');
+            range.insertNode(textNodeToInsert);
+            range.setStartAfter(textNodeToInsert);
+            range.setEndAfter(textNodeToInsert);
+            selection.removeAllRanges();
+            selection.addRange(range);
+             console.warn('Could not find trigger @, inserted ref text at cursor.');
+            // --- Replace the fallback inserted text with a widget span ---
+            const widgetRange = document.createRange();
+            widgetRange.selectNode(textNodeToInsert);
+            this.createWidgetSpan(widgetRange, refText); // Pass the original refText
+        }
+    } else {
+        // Fallback if cursor isn't in a text node (e.g., empty input field)
+        range.deleteContents();
+        const textNodeToInsert = document.createTextNode(refText + ' ');
+        range.insertNode(textNodeToInsert);
+        range.setStartAfter(textNodeToInsert);
+        range.setEndAfter(textNodeToInsert);
+        selection.removeAllRanges();
+        selection.addRange(range);
+         console.warn('Cursor not in text node, inserted ref text at cursor.');
+        // --- Replace the fallback inserted text with a widget span ---
+        const widgetRange = document.createRange();
+        widgetRange.selectNode(textNodeToInsert);
+        this.createWidgetSpan(widgetRange, refText); // Pass the original refText
+    }
+
+    // Hide the popup menu after insertion
+    this.popupMenuManager.hidePopupMenu();
+    // Trigger an input event manually so other listeners (like placeholder logic) update
+    inputDiv.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+  };
+
+  /**
+   * Helper function to replace a text range with a non-editable widget span.
+   */
+  private createWidgetSpan(range: Range, refText: string): void {
+    if (!range) return;
+
+    // Extract a display-friendly version (e.g., filename from path)
+    let displayLabel = refText;
+    if (refText.startsWith('@file ') || refText.startsWith('@dir ')) {
+        const parts = refText.split(' ');
+        if (parts.length > 1) {
+            const pathParts = parts[1].split(/[\\/]/);
+            displayLabel = pathParts[pathParts.length - 1] || parts[1]; // Use last part of path or full path
+        }
+    } else if (refText.startsWith('@Cell ')) {
+         displayLabel = refText.substring(1); // Remove leading '@'
+    } // Add more conditions for other types if needed
+
+    // Create the widget span
+    const span = document.createElement('span');
+    span.className = 'jp-llm-ext-ref-widget'; // Class for styling
+    span.setAttribute('contenteditable', 'false'); // Make it non-editable
+    span.setAttribute('data-ref-text', refText); // Store original text for serialization
+    span.textContent = displayLabel; // Set visible text
+
+    // Replace the range content with the span
+    range.deleteContents(); 
+    range.insertNode(span);
+
+    // Move cursor after the inserted span
+    const selection = window.getSelection();
+    if (selection) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(span);
+        newRange.setEndAfter(span);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+    }
+  }
 
   constructor(docManager: IDocumentManager) {
     super();
@@ -118,7 +264,8 @@ export class SimpleSidebarWidget extends Widget {
             const refId = this.inputHandler.addCodeReference(code);
             const placeholder = createCodeRefPlaceholder(refId, notebookName, lineNumber);
             this.inputHandler.appendToInput(placeholder);
-        }
+        },
+        insertReferenceText: this.insertReferenceText
     });
 
     // --- 2. Define Callbacks (used by buildLayout and Handlers) ---
