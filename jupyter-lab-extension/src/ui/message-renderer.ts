@@ -9,12 +9,9 @@ import {
   // createImageElement // Removed unused
 } from './dom-elements';
 // Removed unused import block for code-ref-widget
-// import {
-//   CodeRefData,
-//   createCodeRefWidgetHTML,
-//   attachCodeRefEventListeners,
-//   defaultCodeRefToggleLogic
-// } from './code-ref-widget';
+import { CodeRefData } from '../handlers/input-handler'; // Import CodeRefData
+import { INotebookModel, CodeCellModel } from '@jupyterlab/notebook'; // Import notebook types
+import { globals } from '../core/globals'; // Import globals
 
 // Removed unused import block for clipboard utils (used via callbacks)
 // import { copyToClipboard, copyImageToClipboard, copyMessageToClipboard } from '../utils/clipboard';
@@ -35,6 +32,11 @@ export interface MessageRendererCallbacks {
   handleConfirmInterrupt: () => void;
   handleRejectInterrupt: () => void;
   // Potentially others: handleCodeRefClick if we move that logic here
+
+  // NEW: Callback to get code reference data
+  getCodeRefData?: (refId: string) => CodeRefData | undefined;
+  // NEW: Callback to get current notebook context (simplified for now)
+  getCurrentNotebookContext?: () => { name: string; path: string; } | undefined;
 }
 
 /**
@@ -96,13 +98,199 @@ export function renderUserMessage(
 
   } else {
     // Non-Markdown user message (plain text)
-    // TODO: Integrate Code Reference rendering for plain text messages here too
-    messageDiv.textContent = text;
+    // Replace simple textContent assignment with ref-aware rendering
+    // messageDiv.textContent = text;
+    renderMessageContentWithRefs(messageDiv, text, callbacks);
   }
 
   // TODO: Add user message specific actions if needed (e.g., copy text)
 
   return messageDiv;
+}
+
+/**
+ * NEW: Renders message content, replacing @references with widgets.
+ */
+function renderMessageContentWithRefs(
+  container: HTMLElement,
+  text: string,
+  callbacks: Partial<MessageRendererCallbacks>
+): void {
+  // Regex to find @file, @dir, @Cell, @code references
+  // Matches: @type[value]
+  const refRegex = /(@(file|dir|Cell|code)\[([^\]]+?)\])/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = refRegex.exec(text)) !== null) {
+    // Append text before the match
+    if (match.index > lastIndex) {
+      container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+    }
+
+    // Process the matched reference
+    const fullMatch = match[0]; // e.g., @file[path/to/file.py]
+    const type = match[2] as 'file' | 'dir' | 'Cell' | 'code'; // e.g., file
+    const value = match[3]; // e.g., path/to/file.py or ref-1 or 1
+
+    try {
+      const widget = createRefWidget(type, value, fullMatch, callbacks);
+      container.appendChild(widget);
+    } catch (error) {
+      console.error(`Failed to create widget for reference: ${fullMatch}`, error);
+      // Fallback: append the original reference text
+      container.appendChild(document.createTextNode(fullMatch));
+    }
+
+    lastIndex = refRegex.lastIndex;
+  }
+
+  // Append any remaining text after the last match
+  if (lastIndex < text.length) {
+    container.appendChild(document.createTextNode(text.substring(lastIndex)));
+  }
+}
+
+/**
+ * NEW: Creates a reference widget span.
+ */
+function createRefWidget(
+  type: 'file' | 'dir' | 'Cell' | 'code',
+  value: string,
+  originalRefText: string, // The full @type[value] string
+  callbacks: Partial<MessageRendererCallbacks>
+): HTMLSpanElement {
+  const widget = document.createElement('span');
+  widget.className = `jp-llm-ext-ref-widget ref-${type.toLowerCase()}`;
+  widget.setAttribute('contenteditable', 'false');
+  widget.dataset.refText = originalRefText; // Store the original reference
+
+  let displayText = '';
+  let titleText = originalRefText; // Default tooltip
+
+  switch (type) {
+    case 'file':
+      displayText = value.split(/[\\\\/]/).pop() || value; // Extract filename
+      titleText = `File: ${value}`;
+      break;
+    case 'dir':
+      displayText = value.split(/[\\\\/]/).pop() || value || '/'; // Extract dirname, handle root
+      titleText = `Directory: ${value}`;
+      break;
+    case 'Cell': {
+      const cellIndex = parseInt(value) - 1; // Convert back to 0-based index
+      const notebookContext = callbacks.getCurrentNotebookContext ? callbacks.getCurrentNotebookContext() : undefined;
+      const notebookName = notebookContext?.name || 'notebook';
+      let cellTypeChar = '?';
+
+      if (notebookContext && globals.notebookTracker) {
+        const currentNotebookPanel = globals.notebookTracker.find(widget => widget.context.path === notebookContext.path);
+        if (currentNotebookPanel && currentNotebookPanel.model) {
+          const cellModel = currentNotebookPanel.model.cells.get(cellIndex);
+          if (cellModel) {
+            cellTypeChar = cellModel.type === 'markdown' ? 'M' : 'C';
+          }
+        }
+      }
+      
+      displayText = `${notebookName}-${cellTypeChar}-${value}`; // value is 1-based index
+      titleText = `Cell ${value} (${cellTypeChar === 'M' ? 'Markdown' : 'Code'}) in ${notebookName}`;
+      break;
+    }
+    case 'code': {
+      const refId = value;
+      const refData = callbacks.getCodeRefData ? callbacks.getCodeRefData(refId) : undefined;
+      if (refData) {
+        displayText = `${refData.notebookName}-${refData.cellIndex + 1}-${refData.lineNumber}`;
+        titleText = `Code Reference: ${refData.notebookName}, Cell ${refData.cellIndex + 1}, Line ${refData.lineNumber}`;
+      } else {
+        displayText = `code-ref-${refId}`; // Fallback display
+        titleText = `Code Reference ID: ${refId} (Data not found)`;
+      }
+      break;
+    }
+  }
+
+  widget.textContent = displayText;
+  widget.title = titleText; // Add tooltip
+
+  return widget;
+}
+
+/**
+ * NEW: Recursively finds and replaces @references within text nodes of an element.
+ */
+function renderRefsInElement(
+  element: HTMLElement,
+  callbacks: Partial<MessageRendererCallbacks>
+): void {
+  const refRegex = /(@(file|dir|Cell|code)\[([^\]]+?)\])/g; // Same regex as renderMessageContentWithRefs
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_TEXT, // Only consider text nodes
+    null // No custom filter
+    // false // deprecated
+  );
+
+  let node;
+  const nodesToProcess: Text[] = [];
+  // First, collect all text nodes to avoid issues with modifying the DOM while iterating
+  while ((node = walker.nextNode())) {
+    // Check if node is a Text node and its content matches the regex
+    // Also ensure the node isn't already inside a widget (prevents double processing)
+    if (
+      node instanceof Text && 
+      node.textContent && 
+      !(node.parentElement && node.parentElement.closest('.jp-llm-ext-ref-widget')) &&
+      refRegex.test(node.textContent)
+    ) {
+       // Reset regex lastIndex before testing
+       refRegex.lastIndex = 0;
+       nodesToProcess.push(node);
+    }
+  }
+
+  // Now, process the collected text nodes
+  nodesToProcess.forEach(textNode => {
+    const parent = textNode.parentNode;
+    if (!parent) return; // Should not happen, but safety check
+
+    const text = textNode.textContent || '';
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+    let match;
+    refRegex.lastIndex = 0; // Reset regex state for each node
+
+    while ((match = refRegex.exec(text)) !== null) {
+      // Append text before the match
+      if (match.index > lastIndex) {
+        fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+      }
+
+      // Process the matched reference
+      const fullMatch = match[0];
+      const type = match[2] as 'file' | 'dir' | 'Cell' | 'code';
+      const value = match[3];
+
+      try {
+        const widget = createRefWidget(type, value, fullMatch, callbacks);
+        fragment.appendChild(widget);
+      } catch (error) {
+        console.error(`Failed to create widget for reference: ${fullMatch}`, error);
+        fragment.appendChild(document.createTextNode(fullMatch)); // Fallback
+      }
+
+      lastIndex = refRegex.lastIndex;
+    }
+
+    // Append any remaining text after the last match
+    if (lastIndex < text.length) {
+      fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+    }
+
+    // Replace the original text node with the fragment containing text and widgets
+    parent.replaceChild(fragment, textNode);
+  });
 }
 
 /**
@@ -143,7 +331,11 @@ export function renderBotMessage(
       const sanitizedHtml = DOMPurify.sanitize(rawHtml);
       contentDiv.innerHTML = sanitizedHtml;
 
-      // Enhance code blocks after setting innerHTML
+      // --- NEW: Render references within the sanitized HTML --- 
+      renderRefsInElement(contentDiv, callbacks);
+      // --- End NEW ---
+
+      // Enhance code blocks after setting innerHTML and rendering refs
       const codeBlocks = contentDiv.querySelectorAll('pre code');
       codeBlocks.forEach(block => {
         enhanceCodeBlock(block as HTMLElement, callbacks);
@@ -347,6 +539,10 @@ export function renderBotMessageFinal(
           const rawHtml = marked.parse(processedText) as string;
           const sanitizedHtml = DOMPurify.sanitize(rawHtml);
           contentDiv.innerHTML = sanitizedHtml;
+
+          // --- NEW: Render references within the sanitized HTML --- 
+          renderRefsInElement(contentDiv, effectiveCallbacks);
+          // --- End NEW ---
 
           // --- Interrupt Handling ---
           const isInterrupt = completeResponse.startsWith('**[INTERRUPT]**');
