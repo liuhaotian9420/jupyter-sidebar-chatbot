@@ -155,3 +155,16 @@ This list tracks the progress of testing the refactored Jupyter LLM Extension ba
 - [x] **Edge Cases:** Test inserting multiple references in one message.
 - [ ] **Edge Cases:** Test references in different notebooks.
 - [ ] **Edge Cases:** Test cell references when cells are added/deleted in the notebook after the reference is created (how should this behave?).
+
+### Feature: shortcut-context-ref
+
+**Goal:** Ensure the `Ctrl+L` shortcut correctly inserts code or cell references with associated data, and the `@` key handling is correct.
+
+**Testing Tasks:**
+- [ ] Test `Ctrl+L` with text selected in a code cell editor -> Check if reference data (type: 'code', content, notebook, cell, lines) is added to `InputHandler.codeRefMap` and `@code(...)` text is inserted into the input field.
+- [ ] Test `Ctrl+L` with a notebook cell selected (but editor not focused) -> Check if reference data (type: 'cell', content, notebook, cell) is added to `InputHandler.codeRefMap` and `@Cell[...]` text is inserted into the input field.
+- [ ] Test `Ctrl+L` outside a notebook cell (e.g., in file browser or text editor tab) -> Check if warning indicator appears ("Cannot insert reference...") and no text is inserted.
+- [ ] Test `Ctrl+L` in a markdown cell editor with text selected -> Check if warning indicator appears ("Cannot insert reference...") and no text is inserted.
+- [ ] Test `Ctrl+L` in a code cell editor *without* text selected -> Check if warning indicator appears ("Cannot insert reference...") and no text is inserted.
+- [ ] Test `@` key when chat input field *is* focused -> Verify `@` is inserted and reference popup appears (should be handled by `UIManager`'s input listener).
+- [ ] Test `@` key when chat input field is *not* focused -> Verify chat input gains focus, `@` is inserted, and reference popup appears (handled by `ShortcutHandler`).
