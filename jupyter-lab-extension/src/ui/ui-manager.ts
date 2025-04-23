@@ -55,6 +55,11 @@ export class UIManager {
     private isInputExpanded: boolean = false;
     private isMarkdownMode: boolean = false;
 
+    // Add this getter method
+    public getIsMarkdownMode(): boolean {
+        return this.isMarkdownMode;
+    }
+
     constructor(
         // docManager: IDocumentManager, // Commented out - unused parameter
         popupMenuManager: PopupMenuManager,
@@ -66,7 +71,25 @@ export class UIManager {
         this.popupMenuManager = popupMenuManager; // Needed for '@' button action
         // this.widgetNode = widgetNode; // Commented out - unused assignment
         this.callbacks = callbacks; // Callbacks to trigger widget/handler logic
-        this.layoutElements = layoutElements;
+        this.layoutElements = layoutElements; // Keep reference if needed elsewhere
+
+        // --- Assign internal references from provided layoutElements ---
+        if (!layoutElements.messageContainer || !layoutElements.inputField || 
+            !layoutElements.titleInput || !layoutElements.historyContainer || 
+            !layoutElements.bottomBarContainer || !layoutElements.markdownToggleButton || 
+            !layoutElements.expandButton) {
+            console.error('UIManager: Critical layout elements missing during initialization!');
+            // Potentially throw an error or handle gracefully
+            return; 
+        }
+        this.messageContainer = layoutElements.messageContainer;
+        this.inputField = layoutElements.inputField;
+        this.titleInput = layoutElements.titleInput;
+        this.historyContainer = layoutElements.historyContainer;
+        this.bottomBarContainer = layoutElements.bottomBarContainer;
+        this.markdownToggle = layoutElements.markdownToggleButton; // Use markdownToggleButton
+        this.expandButton = layoutElements.expandButton;
+        // --------------------------------------------------------------
 
         // Initialize elements that are created outside createLayout if any
         // In this case, all core elements are created within createLayout

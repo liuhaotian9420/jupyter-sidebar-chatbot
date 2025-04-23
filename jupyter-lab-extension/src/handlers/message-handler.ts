@@ -1,7 +1,7 @@
 import { ApiClient } from '../core/api-client';
 import { ChatState, ChatMessage } from '../state/chat-state';
 import { UIManager } from '../ui/ui-manager';
-import { renderBotMessage, MessageRendererCallbacks } from '../ui/message-renderer';
+import { renderBotMessage, MessageRendererCallbacks, renderUserMessage } from '../ui/message-renderer';
 import { getCurrentCellContent } from '../utils/notebook-integration';
 import { InputHandler } from './input-handler'; // Assuming InputHandler is in the same directory
 
@@ -33,35 +33,58 @@ export class MessageHandler {
     /**
      * Processes and sends a user-initiated message.
      * Also handles adding the user message to the UI and clearing the input.
+     * Accepts the message text and whether it was entered in Markdown mode.
      */
-    public handleSendMessage(message: string): void {
-        if (!message) return;
+    public handleSendMessage(message: string, isMarkdown: boolean): void {
+        if (!message.trim()) return;
 
-        // 1. Add user message to UI and state
-        // TODO: Process message for code refs (e.g., replace placeholders)
-        const processedMessage = message; // Placeholder for now
-        const hasCodeRefs = false; // TODO: Determine this based on processing
-        this.addMessage(processedMessage, 'user', hasCodeRefs, true);
+        console.log(`[MessageHandler] Handling send: "${message}", Markdown: ${isMarkdown}`);
 
-        // 2. Clear the input field (using InputHandler)
-        this.inputHandler.clearInput(); 
+        // Add user message to UI FIRST, using the isMarkdown flag
+        this.addMessage(message, 'user', isMarkdown); // Pass isMarkdown here
 
-        // 3. Send message to backend and handle streaming response
-        this.streamAndRenderResponse(processedMessage);
+        // Clear input via InputHandler (which uses UIManager)
+        this.inputHandler.clearInput(); // Corrected method name
+
+        // Send message to backend API and handle streaming response
+        this.streamAndRenderResponse(message); 
     }
 
     /**
      * Sends an automatic message (e.g., 'confirmed', 'rejected')
      * to the backend and handles the streaming response.
-     * Also adds the user's confirmation/rejection action to the UI.
+     * Also adds the user's confirmation/rejection action and a separator to the UI.
      */
     public handleSendAutoMessage(message: string): void {
         if (!message.trim()) return;
 
         // Add the user's action ('Confirmed' or 'Rejected') to the UI immediately
-        // Use a slightly more descriptive, capitalized text for the UI display.
         const userDisplayMessage = message.charAt(0).toUpperCase() + message.slice(1);
-        this.addMessage(userDisplayMessage, 'user', true, true); // Add the user message to UI and state
+        // Explicitly false for isMarkdown, true for isAuto
+        this.addMessage(userDisplayMessage, 'user', false, true); 
+
+        // Create and add the separator element
+        console.log('[MessageHandler] Creating action separator element...'); // Debug log
+        const separatorDiv = document.createElement('div');
+        separatorDiv.className = 'jp-llm-ext-action-separator'; // Add a class for potential styling
+        separatorDiv.style.textAlign = 'center'; // Basic styling
+        separatorDiv.style.margin = '10px 0';   // Add some vertical space
+        separatorDiv.style.fontSize = '0.9em';
+        separatorDiv.style.color = 'var(--jp-ui-font-color2, grey)'; // Use JupyterLab theme variable
+
+        if (message === 'confirmed') {
+            separatorDiv.textContent = '--------✅ Confirmed--------';
+        } else if (message === 'rejected') {
+            separatorDiv.textContent = '--------❌ Rejected--------';
+        } else {
+            // Optional: Handle unexpected messages? Or just don't add a separator.
+            separatorDiv.textContent = `--------${userDisplayMessage}--------`; 
+        }
+        
+        // Add the separator directly to the UI Manager's container
+        console.log('[MessageHandler] Attempting to add separator element:', separatorDiv); // Debug log
+        this.uiManager.addChatMessageElement(separatorDiv); 
+        console.log('[MessageHandler] Separator element should be added.'); // Debug log
 
         // Send the technical message ('confirmed' or 'rejected') to the backend
         // and handle the streaming response from the backend.
@@ -70,35 +93,33 @@ export class MessageHandler {
 
     /**
      * Adds a message to the UI via UIManager and saves to ChatState.
-     * (Helper method, potentially could live in UIManager or be part of its callback)
      */
-    private addMessage(text: string, sender: 'user' | 'bot', isMarkdown: boolean, saveToHistory: boolean): void {
-        // Note: This duplicates the logic from the old SimpleSidebarWidget.addMessage
-        // It might be better to have UIManager expose a method to add a rendered message
-        // and ChatState handle saving directly.
-        // For now, keep it here for clarity of message flow.
-
-        // TODO: Call actual render functions from message-renderer.ts when available
-        // Instead of just adding a div directly.
+    private addMessage(
+        text: string, 
+        sender: 'user' | 'bot', 
+        isMarkdown: boolean = false, // Default false, overridden below
+        isAuto: boolean = false // Flag for auto messages like confirm/reject
+    ): void {
+        console.log(`[MessageHandler] Adding message: Sender=${sender}, Markdown=${isMarkdown}, Auto=${isAuto}`);
+        
         let messageElement: HTMLElement;
         if (sender === 'user') {
-            // Replace with renderUserMessage call
-            messageElement = document.createElement('div');
-            messageElement.className = 'jp-llm-ext-user-message'; // Example class
-            messageElement.textContent = text; // Basic rendering for now
+             // Pass the isMarkdown option to the renderer
+            messageElement = renderUserMessage(text, { isMarkdown }, this.rendererCallbacks);
         } else {
-             // renderBotMessage is used after streaming, this part might be redundant
-             // or only needed if we add non-streaming bot messages.
-             messageElement = document.createElement('div');
-             messageElement.className = 'jp-llm-ext-bot-message'; // Example class
-             messageElement.textContent = text; // Basic rendering for now
+            // Bot messages usually are markdown unless specified otherwise
+            // Handle auto messages specifically if they shouldn't be parsed as markdown
+            const botIsMarkdown = !isAuto; // Assume auto messages aren't markdown
+            messageElement = renderBotMessage(text, { isMarkdown: botIsMarkdown }, this.rendererCallbacks);
         }
 
         this.uiManager.addChatMessageElement(messageElement);
 
-        if (saveToHistory) {
-            const messageData: ChatMessage = { text, sender, isMarkdown };
-            this.chatState.addMessageToCurrentChat(messageData);
+        // Don't save internal 'confirmed'/'rejected' messages to history
+        if (!isAuto) {
+            // Add isMarkdown back to the saved message state
+            const chatMessage: ChatMessage = { sender, text, isMarkdown }; 
+            this.chatState.addMessageToCurrentChat(chatMessage);
         }
     }
 

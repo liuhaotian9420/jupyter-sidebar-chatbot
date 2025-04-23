@@ -1,5 +1,5 @@
 export interface InputHandlerCallbacks {
-    handleSendMessage: (message: string) => void;
+    handleSendMessage: (message: string, isMarkdown: boolean) => void;
     showPopupMenu: (left: number, top: number) => void;
     hidePopupMenu: () => void;
     updatePlaceholder: (isMarkdown: boolean) => void;
@@ -24,7 +24,7 @@ export declare class InputHandler {
      */
     dispose(): void;
     /**
-     * Appends text to the input field with proper spacing and focus.
+     * Appends text to the input field, potentially replacing a preceding '@' symbol.
      */
     appendToInput(text: string): void;
     /**

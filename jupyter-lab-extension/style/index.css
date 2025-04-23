@@ -239,6 +239,7 @@
   overflow: visible; /* Change from hidden to allow content to flow properly */
   max-width: 85%;
   flex-shrink: 0; /* Prevent shrinking */
+  width: fit-content; /* Add this line */
 }
 
 /* Markdown content styling */
@@ -1868,3 +1869,17 @@
 }
 
 /* Add highlight.js theme styles - based on a light theme compatible with JupyterLab */
+
+/* Action separator styling */
+.jp-llm-ext-action-separator {
+  width: 100%; /* Make it span the full width */
+  text-align: center;
+  margin: 15px 0; /* Increase vertical margin for better separation */
+  padding: 5px 0; /* Add some padding */
+  font-size: 0.85em; /* Slightly smaller font */
+  color: var(--jp-ui-font-color2, grey);
+  background-color: var(--jp-layout-color2, #f0f0f0); /* Add a subtle background */
+  border-top: 1px solid var(--jp-border-color2, #e0e0e0); /* Add top border */
+  border-bottom: 1px solid var(--jp-border-color2, #e0e0e0); /* Add bottom border */
+  box-sizing: border-box; /* Include padding and border in the element's total width and height */
+}

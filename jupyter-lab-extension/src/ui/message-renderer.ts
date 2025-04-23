@@ -64,17 +64,43 @@ export function renderUserMessage(
 ): HTMLDivElement {
   const messageDiv = createMessageDiv('user');
 
-  // Handle user message with code references (logic to be moved from addMessage)
-  if (options.isMarkdown) { 
-    // Special case: User message with code references (placeholder)
+  if (options.isMarkdown) {
+    // TODO: Integrate Code Reference rendering properly here
+    // For now, render the whole body as Markdown
     const contentDiv = document.createElement('div');
-    contentDiv.className = 'user-content-with-refs';
-    // TODO: Move code reference widget creation logic here
-    contentDiv.textContent = `[Code Refs Placeholder] ${text}`;
+    // Use 'markdown-content' class for consistent styling
+    contentDiv.className = 'markdown-content'; 
+
+    try {
+      // Preprocess, parse, and sanitize like in bot messages
+      const processedText = preprocessMarkdown(text); 
+      const rawHtml = marked.parse(processedText) as string;
+      const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+      contentDiv.innerHTML = sanitizedHtml;
+
+      // Enhance code blocks if user messages can contain them
+      const codeBlocks = contentDiv.querySelectorAll('pre code');
+      codeBlocks.forEach(block => {
+        // Pass only relevant callbacks if needed for user code blocks
+        enhanceCodeBlock(block as HTMLElement, { 
+          // e.g., showCopyFeedback: callbacks.showCopyFeedback 
+        }); 
+      });
+
+    } catch (error) {
+      console.error('Failed to render user markdown:', error);
+      // Fallback to plain text if Markdown rendering fails
+      contentDiv.textContent = text; 
+    }
     messageDiv.appendChild(contentDiv);
+
   } else {
+    // Non-Markdown user message (plain text)
+    // TODO: Integrate Code Reference rendering for plain text messages here too
     messageDiv.textContent = text;
   }
+
+  // TODO: Add user message specific actions if needed (e.g., copy text)
 
   return messageDiv;
 }

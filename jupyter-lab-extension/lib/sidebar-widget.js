@@ -15,6 +15,7 @@ const message_handler_1 = require("./handlers/message-handler");
 const history_handler_1 = require("./handlers/history-handler");
 const settings_handler_1 = require("./handlers/settings-handler");
 const ui_manager_1 = require("./ui/ui-manager");
+const ui_components_1 = require("@jupyterlab/ui-components");
 // --- Import Utility Functions ---
 const clipboard_1 = require("./utils/clipboard");
 const notebook_integration_1 = require("./utils/notebook-integration");
@@ -37,10 +38,17 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             this.historyHandler.toggleHistoryView();
         };
         this.handleSendMessage = () => {
-            console.log('Handle Send Message called from UI Manager callback');
-            const inputElement = this.layoutElements.inputField;
-            const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
-            inputElement.dispatchEvent(event);
+            // 1. Get the current text from the input field via UIManager or LayoutElements
+            const text = this.layoutElements.inputField.value;
+            if (!text.trim())
+                return; // Don't send empty messages
+            // 2. Get the markdown state from UIManager
+            const isMarkdown = this.uiManager.getIsMarkdownMode();
+            console.log(`[Widget] handleSendMessage: Text='${text}', Markdown=${isMarkdown}`); // Debug log
+            // 3. Call the MessageHandler's send method with text and state
+            this.messageHandler.handleSendMessage(text, isMarkdown);
+            // NOTE: No need to dispatch event anymore. 
+            // The input clearing is handled inside messageHandler.handleSendMessage now.
         };
         this.handleShowSettings = (event) => {
             console.log('Handle Show Settings clicked');
@@ -73,7 +81,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             insertCode: (code) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@code ${code}`); },
             insertCell: (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@cell ${content}`); },
             insertFilePath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@file ${path}`); },
-            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@directory ${path}`); },
+            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@dir ${path}`); },
             getSelectedText: notebook_integration_1.getSelectedText,
             getCurrentCellContent: notebook_integration_1.getCurrentCellContent,
             insertCellByIndex: (index) => (0, notebook_integration_1.insertCellContentByIndex)(index, (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@${content}`); }),
@@ -171,9 +179,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             addRenderedMessage: (messageElement) => this.uiManager.addChatMessageElement(messageElement)
         };
         const inputHandlerCallbacks = {
-            handleSendMessage: (message) => {
+            handleSendMessage: (message, isMarkdown) => {
                 if (this.messageHandler) {
-                    this.messageHandler.handleSendMessage(message);
+                    this.messageHandler.handleSendMessage(message, isMarkdown);
                 }
                 else {
                     console.error('MessageHandler not initialized when trying to send message from InputHandler');
@@ -185,8 +193,18 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 this.layoutElements.inputField.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
             },
             toggleInputExpansionUI: (isExpanded) => {
-                this.layoutElements.expandButton.textContent = isExpanded ? 'Collapse' : 'Expand';
-                this.layoutElements.expandButton.title = isExpanded ? 'Collapse input' : 'Expand input';
+                const button = this.layoutElements.expandButton;
+                // Clear existing content (text or old icon)
+                while (button.firstChild) {
+                    button.removeChild(button.firstChild);
+                }
+                // Add the appropriate icon using LabIcon.resolve
+                const icon = isExpanded
+                    ? ui_components_1.LabIcon.resolve({ icon: 'ui-components:caret-up' })
+                    : ui_components_1.LabIcon.resolve({ icon: 'ui-components:caret-down' });
+                icon.element({ container: button, tag: 'span' }); // Add icon to button
+                // Update title for accessibility
+                button.title = isExpanded ? 'Collapse input' : 'Expand input';
             },
             getCodeRefMap: () => { var _a; return ((_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.getCodeReferenceMap()) || new Map(); },
             resetCodeRefMap: () => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.resetCodeReferences(); }

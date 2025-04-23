@@ -1,7 +1,5 @@
 import { SettingsState, AppSettings } from '../state/settings-state';
-// import { ApiClient } from '../core/api-client'; // Commented out - unused import
 import { UIManager } from '../ui/ui-manager'; // Import UIManager if it provides notification service
-// import { SettingsModal } from '../ui/settings-modal'; // Commented out - unused import
 
 /**
  * Handles the logic related to the settings modal: 
@@ -9,30 +7,17 @@ import { UIManager } from '../ui/ui-manager'; // Import UIManager if it provides
  */
 export class SettingsHandler {
     private state: SettingsState;
-    // private apiClient: ApiClient; // Removed: unused variable
-    // private successCallback: (message: string) => void; // Commented out - unused
-    // private modal?: SettingsModal; // Commented out - unused
     private settingsModalContainer: HTMLDivElement;
     private uiManager: UIManager; // To show notifications
 
     constructor(
         state: SettingsState,
-        // successCallback: (message: string) => void, // Commented out - unused parameter
         settingsModalContainer: HTMLDivElement,
         uiManager: UIManager // Pass UIManager for notifications
     ) {
         this.state = state;
-        // this.apiClient = apiClient; // Removed: unused variable
-        // this.successCallback = successCallback; // Commented out - unused assignment
         this.settingsModalContainer = settingsModalContainer;
         this.uiManager = uiManager;
-
-        // Attach internal listeners if the modal has its own save/cancel buttons
-        // This assumes the modal element was created with listeners calling these methods.
-        // If createSettingsModalElement in ui/settings-modal.ts attaches listeners that 
-        // call callbacks passed during creation, then this handler doesn't need 
-        // to attach listeners directly, just provide the callbacks (e.g., this.saveSettings.bind(this)).
-        // For now, let's assume the callbacks passed to createSettingsModalElement handle this.
     }
 
     /**

@@ -29,7 +29,8 @@ class InputHandler {
                     // Resolve code references BEFORE sending
                     const resolvedMessage = this.resolveCodeReferences(rawMessage);
                     console.log('Sending resolved message:', resolvedMessage); // Debug log
-                    this.callbacks.handleSendMessage(resolvedMessage);
+                    // Pass markdown state along with the message
+                    this.callbacks.handleSendMessage(resolvedMessage, this.isMarkdownMode);
                     // Clearing is handled separately (e.g., by MessageHandler calling clearInput)
                 }
             }
@@ -72,18 +73,27 @@ class InputHandler {
         this.chatInput.removeEventListener('input', this._handleInput);
     }
     /**
-     * Appends text to the input field with proper spacing and focus.
+     * Appends text to the input field, potentially replacing a preceding '@' symbol.
      */
     appendToInput(text) {
         try {
             const currentValue = this.chatInput.value;
-            // Get current cursor position
             const start = this.chatInput.selectionStart;
             const end = this.chatInput.selectionEnd;
-            // Insert text at cursor position
-            this.chatInput.value = currentValue.slice(0, start) + text + currentValue.slice(end);
-            // Move cursor to end of inserted text
-            const newCursorPos = start + text.length;
+            let newValue = '';
+            let newCursorPos = 0;
+            // Check if the character immediately before the cursor is '@'
+            if (start > 0 && currentValue[start - 1] === '@') {
+                // Replace the '@' and append the new text
+                newValue = currentValue.slice(0, start - 1) + text + currentValue.slice(end);
+                newCursorPos = (start - 1) + text.length;
+            }
+            else {
+                // Standard insertion: Insert text at cursor position
+                newValue = currentValue.slice(0, start) + text + currentValue.slice(end);
+                newCursorPos = start + text.length;
+            }
+            this.chatInput.value = newValue;
             this.chatInput.focus();
             this.chatInput.setSelectionRange(newCursorPos, newCursorPos);
         }

@@ -1,9 +1,6 @@
-// import { PopupMenuManager, MenuActionCallbacks } from './popup-menu-manager'; // Removed unused import
-// import { UIManager } from '../ui/ui-manager'; // Removed unused import
-
 // Interface for callbacks provided to the InputHandler
 export interface InputHandlerCallbacks {
-  handleSendMessage: (message: string) => void;
+  handleSendMessage: (message: string, isMarkdown: boolean) => void;
   showPopupMenu: (left: number, top: number) => void;
   hidePopupMenu: () => void;
   // Placeholder for markdown toggle effect on placeholder
@@ -57,22 +54,31 @@ export class InputHandler {
   }
 
   /**
-   * Appends text to the input field with proper spacing and focus.
+   * Appends text to the input field, potentially replacing a preceding '@' symbol.
    */
   public appendToInput(text: string): void {
     try {
       const currentValue = this.chatInput.value;
-      // Get current cursor position
       const start = this.chatInput.selectionStart;
       const end = this.chatInput.selectionEnd;
-      
-      // Insert text at cursor position
-      this.chatInput.value = currentValue.slice(0, start) + text + currentValue.slice(end);
+      let newValue = '';
+      let newCursorPos = 0;
 
-      // Move cursor to end of inserted text
-      const newCursorPos = start + text.length;
+      // Check if the character immediately before the cursor is '@'
+      if (start > 0 && currentValue[start - 1] === '@') {
+        // Replace the '@' and append the new text
+        newValue = currentValue.slice(0, start - 1) + text + currentValue.slice(end);
+        newCursorPos = (start - 1) + text.length;
+      } else {
+        // Standard insertion: Insert text at cursor position
+        newValue = currentValue.slice(0, start) + text + currentValue.slice(end);
+        newCursorPos = start + text.length;
+      }
+
+      this.chatInput.value = newValue;
       this.chatInput.focus();
       this.chatInput.setSelectionRange(newCursorPos, newCursorPos);
+
     } catch (error) {
       console.error('Error appending to input:', error);
     }
@@ -194,7 +200,8 @@ export class InputHandler {
           // Resolve code references BEFORE sending
           const resolvedMessage = this.resolveCodeReferences(rawMessage);
           console.log('Sending resolved message:', resolvedMessage); // Debug log
-          this.callbacks.handleSendMessage(resolvedMessage);
+          // Pass markdown state along with the message
+          this.callbacks.handleSendMessage(resolvedMessage, this.isMarkdownMode);
           // Clearing is handled separately (e.g., by MessageHandler calling clearInput)
       }
     }

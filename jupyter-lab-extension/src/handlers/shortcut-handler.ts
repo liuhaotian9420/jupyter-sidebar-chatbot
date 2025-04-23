@@ -11,9 +11,6 @@ export interface ShortcutHandlerCallbacks {
     appendToInput: (text: string) => void;
     showWidget: () => void; // Callback to ensure the sidebar widget is visible
     focusInput: () => void; // Callback to focus the input field
-    // Callbacks to interact with InputHandler state (alternative to passing InputHandler instance)
-    // getHasAtSymbol: () => boolean;
-    // setHasAtSymbol: (value: boolean) => void;
 }
 
 let _handleKeyDown: ((event: KeyboardEvent) => void) | null = null;

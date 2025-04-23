@@ -17,17 +17,17 @@ export declare class MessageHandler {
     /**
      * Processes and sends a user-initiated message.
      * Also handles adding the user message to the UI and clearing the input.
+     * Accepts the message text and whether it was entered in Markdown mode.
      */
-    handleSendMessage(message: string): void;
+    handleSendMessage(message: string, isMarkdown: boolean): void;
     /**
      * Sends an automatic message (e.g., 'confirmed', 'rejected')
      * to the backend and handles the streaming response.
-     * Also adds the user's confirmation/rejection action to the UI.
+     * Also adds the user's confirmation/rejection action and a separator to the UI.
      */
     handleSendAutoMessage(message: string): void;
     /**
      * Adds a message to the UI via UIManager and saves to ChatState.
-     * (Helper method, potentially could live in UIManager or be part of its callback)
      */
     private addMessage;
     /**

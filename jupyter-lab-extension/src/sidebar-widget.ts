@@ -14,6 +14,7 @@ import { MessageHandler } from './handlers/message-handler';
 import { HistoryHandler, HistoryHandlerCallbacks } from './handlers/history-handler';
 import { SettingsHandler } from './handlers/settings-handler';
 import { UIManager, UIManagerCallbacks } from './ui/ui-manager';
+import { LabIcon } from '@jupyterlab/ui-components';
 
 // --- Import Utility Functions ---
 import {
@@ -58,11 +59,21 @@ export class SimpleSidebarWidget extends Widget {
       console.log('Handle Toggle History clicked');
       this.historyHandler.toggleHistoryView(); 
   };
-  private handleSendMessage = () => { 
-      console.log('Handle Send Message called from UI Manager callback');
-      const inputElement = this.layoutElements.inputField; 
-      const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
-      inputElement.dispatchEvent(event); 
+  private handleSendMessage = () => {
+    // 1. Get the current text from the input field via UIManager or LayoutElements
+    const text = this.layoutElements.inputField.value; 
+    if (!text.trim()) return; // Don't send empty messages
+
+    // 2. Get the markdown state from UIManager
+    const isMarkdown = this.uiManager.getIsMarkdownMode(); 
+
+    console.log(`[Widget] handleSendMessage: Text='${text}', Markdown=${isMarkdown}`); // Debug log
+
+    // 3. Call the MessageHandler's send method with text and state
+    this.messageHandler.handleSendMessage(text, isMarkdown); 
+
+    // NOTE: No need to dispatch event anymore. 
+    // The input clearing is handled inside messageHandler.handleSendMessage now.
   };
   private handleShowSettings = (event: MouseEvent) => { 
       console.log('Handle Show Settings clicked');
@@ -98,7 +109,7 @@ export class SimpleSidebarWidget extends Widget {
         insertCode: (code: string) => this.inputHandler?.appendToInput(`@code ${code}`),
         insertCell: (content: string) => this.inputHandler?.appendToInput(`@cell ${content}`),
         insertFilePath: (path: string) => this.inputHandler?.appendToInput(`@file ${path}`),
-        insertDirectoryPath: (path: string) => this.inputHandler?.appendToInput(`@directory ${path}`),
+        insertDirectoryPath: (path: string) => this.inputHandler?.appendToInput(`@dir ${path}`),
         getSelectedText: getSelectedText,
         getCurrentCellContent: getCurrentCellContent,
         insertCellByIndex: (index: number) => insertCellContentByIndex(index, (content: string) => this.inputHandler?.appendToInput(`@${content}`)),
@@ -193,9 +204,9 @@ export class SimpleSidebarWidget extends Widget {
      };
 
      const inputHandlerCallbacks: InputHandlerCallbacks = {
-        handleSendMessage: (message: string) => {
+        handleSendMessage: (message: string, isMarkdown: boolean) => {
           if (this.messageHandler) {
-            this.messageHandler.handleSendMessage(message);
+            this.messageHandler.handleSendMessage(message, isMarkdown);
           } else {
             console.error('MessageHandler not initialized when trying to send message from InputHandler');
           }
@@ -206,8 +217,18 @@ export class SimpleSidebarWidget extends Widget {
             this.layoutElements.inputField.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
         },
         toggleInputExpansionUI: (isExpanded: boolean) => {
-            this.layoutElements.expandButton.textContent = isExpanded ? 'Collapse' : 'Expand';
-            this.layoutElements.expandButton.title = isExpanded ? 'Collapse input' : 'Expand input';
+            const button = this.layoutElements.expandButton;
+            // Clear existing content (text or old icon)
+            while (button.firstChild) {
+              button.removeChild(button.firstChild);
+            }
+            // Add the appropriate icon using LabIcon.resolve
+            const icon = isExpanded 
+                ? LabIcon.resolve({ icon: 'ui-components:caret-up' }) 
+                : LabIcon.resolve({ icon: 'ui-components:caret-down' });
+            icon.element({ container: button, tag: 'span'}); // Add icon to button
+            // Update title for accessibility
+            button.title = isExpanded ? 'Collapse input' : 'Expand input';
         },
         getCodeRefMap: () => this.inputHandler?.getCodeReferenceMap() || new Map<string, string>(),
         resetCodeRefMap: () => this.inputHandler?.resetCodeReferences()

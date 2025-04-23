@@ -41,6 +41,7 @@ export declare class UIManager {
     private expandButton;
     private isInputExpanded;
     private isMarkdownMode;
+    getIsMarkdownMode(): boolean;
     constructor(popupMenuManager: PopupMenuManager, callbacks: UIManagerCallbacks, layoutElements: LayoutElements);
     /**
      * Returns the core layout elements.

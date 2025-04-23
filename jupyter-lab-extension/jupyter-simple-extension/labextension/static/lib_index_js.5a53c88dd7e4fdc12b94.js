@@ -488,7 +488,8 @@ class InputHandler {
                     // Resolve code references BEFORE sending
                     const resolvedMessage = this.resolveCodeReferences(rawMessage);
                     console.log('Sending resolved message:', resolvedMessage); // Debug log
-                    this.callbacks.handleSendMessage(resolvedMessage);
+                    // Pass markdown state along with the message
+                    this.callbacks.handleSendMessage(resolvedMessage, this.isMarkdownMode);
                     // Clearing is handled separately (e.g., by MessageHandler calling clearInput)
                 }
             }
@@ -531,18 +532,27 @@ class InputHandler {
         this.chatInput.removeEventListener('input', this._handleInput);
     }
     /**
-     * Appends text to the input field with proper spacing and focus.
+     * Appends text to the input field, potentially replacing a preceding '@' symbol.
      */
     appendToInput(text) {
         try {
             const currentValue = this.chatInput.value;
-            // Get current cursor position
             const start = this.chatInput.selectionStart;
             const end = this.chatInput.selectionEnd;
-            // Insert text at cursor position
-            this.chatInput.value = currentValue.slice(0, start) + text + currentValue.slice(end);
-            // Move cursor to end of inserted text
-            const newCursorPos = start + text.length;
+            let newValue = '';
+            let newCursorPos = 0;
+            // Check if the character immediately before the cursor is '@'
+            if (start > 0 && currentValue[start - 1] === '@') {
+                // Replace the '@' and append the new text
+                newValue = currentValue.slice(0, start - 1) + text + currentValue.slice(end);
+                newCursorPos = (start - 1) + text.length;
+            }
+            else {
+                // Standard insertion: Insert text at cursor position
+                newValue = currentValue.slice(0, start) + text + currentValue.slice(end);
+                newCursorPos = start + text.length;
+            }
+            this.chatInput.value = newValue;
             this.chatInput.focus();
             this.chatInput.setSelectionRange(newCursorPos, newCursorPos);
         }
@@ -689,65 +699,81 @@ class MessageHandler {
     /**
      * Processes and sends a user-initiated message.
      * Also handles adding the user message to the UI and clearing the input.
+     * Accepts the message text and whether it was entered in Markdown mode.
      */
-    handleSendMessage(message) {
-        if (!message)
+    handleSendMessage(message, isMarkdown) {
+        if (!message.trim())
             return;
-        // 1. Add user message to UI and state
-        // TODO: Process message for code refs (e.g., replace placeholders)
-        const processedMessage = message; // Placeholder for now
-        const hasCodeRefs = false; // TODO: Determine this based on processing
-        this.addMessage(processedMessage, 'user', hasCodeRefs, true);
-        // 2. Clear the input field (using InputHandler)
-        this.inputHandler.clearInput();
-        // 3. Send message to backend and handle streaming response
-        this.streamAndRenderResponse(processedMessage);
+        console.log(`[MessageHandler] Handling send: "${message}", Markdown: ${isMarkdown}`);
+        // Add user message to UI FIRST, using the isMarkdown flag
+        this.addMessage(message, 'user', isMarkdown); // Pass isMarkdown here
+        // Clear input via InputHandler (which uses UIManager)
+        this.inputHandler.clearInput(); // Corrected method name
+        // Send message to backend API and handle streaming response
+        this.streamAndRenderResponse(message);
     }
     /**
      * Sends an automatic message (e.g., 'confirmed', 'rejected')
      * to the backend and handles the streaming response.
-     * Also adds the user's confirmation/rejection action to the UI.
+     * Also adds the user's confirmation/rejection action and a separator to the UI.
      */
     handleSendAutoMessage(message) {
         if (!message.trim())
             return;
         // Add the user's action ('Confirmed' or 'Rejected') to the UI immediately
-        // Use a slightly more descriptive, capitalized text for the UI display.
         const userDisplayMessage = message.charAt(0).toUpperCase() + message.slice(1);
-        this.addMessage(userDisplayMessage, 'user', true, true); // Add the user message to UI and state
+        // Explicitly false for isMarkdown, true for isAuto
+        this.addMessage(userDisplayMessage, 'user', false, true);
+        // Create and add the separator element
+        console.log('[MessageHandler] Creating action separator element...'); // Debug log
+        const separatorDiv = document.createElement('div');
+        separatorDiv.className = 'jp-llm-ext-action-separator'; // Add a class for potential styling
+        separatorDiv.style.textAlign = 'center'; // Basic styling
+        separatorDiv.style.margin = '10px 0'; // Add some vertical space
+        separatorDiv.style.fontSize = '0.9em';
+        separatorDiv.style.color = 'var(--jp-ui-font-color2, grey)'; // Use JupyterLab theme variable
+        if (message === 'confirmed') {
+            separatorDiv.textContent = '--------✅ Confirmed--------';
+        }
+        else if (message === 'rejected') {
+            separatorDiv.textContent = '--------❌ Rejected--------';
+        }
+        else {
+            // Optional: Handle unexpected messages? Or just don't add a separator.
+            separatorDiv.textContent = `--------${userDisplayMessage}--------`;
+        }
+        // Add the separator directly to the UI Manager's container
+        console.log('[MessageHandler] Attempting to add separator element:', separatorDiv); // Debug log
+        this.uiManager.addChatMessageElement(separatorDiv);
+        console.log('[MessageHandler] Separator element should be added.'); // Debug log
         // Send the technical message ('confirmed' or 'rejected') to the backend
         // and handle the streaming response from the backend.
         this.streamAndRenderResponse(message);
     }
     /**
      * Adds a message to the UI via UIManager and saves to ChatState.
-     * (Helper method, potentially could live in UIManager or be part of its callback)
      */
-    addMessage(text, sender, isMarkdown, saveToHistory) {
-        // Note: This duplicates the logic from the old SimpleSidebarWidget.addMessage
-        // It might be better to have UIManager expose a method to add a rendered message
-        // and ChatState handle saving directly.
-        // For now, keep it here for clarity of message flow.
-        // TODO: Call actual render functions from message-renderer.ts when available
-        // Instead of just adding a div directly.
+    addMessage(text, sender, isMarkdown = false, // Default false, overridden below
+    isAuto = false // Flag for auto messages like confirm/reject
+    ) {
+        console.log(`[MessageHandler] Adding message: Sender=${sender}, Markdown=${isMarkdown}, Auto=${isAuto}`);
         let messageElement;
         if (sender === 'user') {
-            // Replace with renderUserMessage call
-            messageElement = document.createElement('div');
-            messageElement.className = 'jp-llm-ext-user-message'; // Example class
-            messageElement.textContent = text; // Basic rendering for now
+            // Pass the isMarkdown option to the renderer
+            messageElement = (0, message_renderer_1.renderUserMessage)(text, { isMarkdown }, this.rendererCallbacks);
         }
         else {
-            // renderBotMessage is used after streaming, this part might be redundant
-            // or only needed if we add non-streaming bot messages.
-            messageElement = document.createElement('div');
-            messageElement.className = 'jp-llm-ext-bot-message'; // Example class
-            messageElement.textContent = text; // Basic rendering for now
+            // Bot messages usually are markdown unless specified otherwise
+            // Handle auto messages specifically if they shouldn't be parsed as markdown
+            const botIsMarkdown = !isAuto; // Assume auto messages aren't markdown
+            messageElement = (0, message_renderer_1.renderBotMessage)(text, { isMarkdown: botIsMarkdown }, this.rendererCallbacks);
         }
         this.uiManager.addChatMessageElement(messageElement);
-        if (saveToHistory) {
-            const messageData = { text, sender, isMarkdown };
-            this.chatState.addMessageToCurrentChat(messageData);
+        // Don't save internal 'confirmed'/'rejected' messages to history
+        if (!isAuto) {
+            // Add isMarkdown back to the saved message state
+            const chatMessage = { sender, text, isMarkdown };
+            this.chatState.addMessageToCurrentChat(chatMessage);
         }
     }
     /**
@@ -2064,6 +2090,7 @@ const message_handler_1 = __webpack_require__(/*! ./handlers/message-handler */ 
 const history_handler_1 = __webpack_require__(/*! ./handlers/history-handler */ "./lib/handlers/history-handler.js");
 const settings_handler_1 = __webpack_require__(/*! ./handlers/settings-handler */ "./lib/handlers/settings-handler.js");
 const ui_manager_1 = __webpack_require__(/*! ./ui/ui-manager */ "./lib/ui/ui-manager.js");
+const ui_components_1 = __webpack_require__(/*! @jupyterlab/ui-components */ "webpack/sharing/consume/default/@jupyterlab/ui-components");
 // --- Import Utility Functions ---
 const clipboard_1 = __webpack_require__(/*! ./utils/clipboard */ "./lib/utils/clipboard.js");
 const notebook_integration_1 = __webpack_require__(/*! ./utils/notebook-integration */ "./lib/utils/notebook-integration.js");
@@ -2086,10 +2113,17 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             this.historyHandler.toggleHistoryView();
         };
         this.handleSendMessage = () => {
-            console.log('Handle Send Message called from UI Manager callback');
-            const inputElement = this.layoutElements.inputField;
-            const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
-            inputElement.dispatchEvent(event);
+            // 1. Get the current text from the input field via UIManager or LayoutElements
+            const text = this.layoutElements.inputField.value;
+            if (!text.trim())
+                return; // Don't send empty messages
+            // 2. Get the markdown state from UIManager
+            const isMarkdown = this.uiManager.getIsMarkdownMode();
+            console.log(`[Widget] handleSendMessage: Text='${text}', Markdown=${isMarkdown}`); // Debug log
+            // 3. Call the MessageHandler's send method with text and state
+            this.messageHandler.handleSendMessage(text, isMarkdown);
+            // NOTE: No need to dispatch event anymore. 
+            // The input clearing is handled inside messageHandler.handleSendMessage now.
         };
         this.handleShowSettings = (event) => {
             console.log('Handle Show Settings clicked');
@@ -2122,7 +2156,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             insertCode: (code) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@code ${code}`); },
             insertCell: (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@cell ${content}`); },
             insertFilePath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@file ${path}`); },
-            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@directory ${path}`); },
+            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@dir ${path}`); },
             getSelectedText: notebook_integration_1.getSelectedText,
             getCurrentCellContent: notebook_integration_1.getCurrentCellContent,
             insertCellByIndex: (index) => (0, notebook_integration_1.insertCellContentByIndex)(index, (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@${content}`); }),
@@ -2220,9 +2254,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             addRenderedMessage: (messageElement) => this.uiManager.addChatMessageElement(messageElement)
         };
         const inputHandlerCallbacks = {
-            handleSendMessage: (message) => {
+            handleSendMessage: (message, isMarkdown) => {
                 if (this.messageHandler) {
-                    this.messageHandler.handleSendMessage(message);
+                    this.messageHandler.handleSendMessage(message, isMarkdown);
                 }
                 else {
                     console.error('MessageHandler not initialized when trying to send message from InputHandler');
@@ -2234,8 +2268,18 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 this.layoutElements.inputField.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
             },
             toggleInputExpansionUI: (isExpanded) => {
-                this.layoutElements.expandButton.textContent = isExpanded ? 'Collapse' : 'Expand';
-                this.layoutElements.expandButton.title = isExpanded ? 'Collapse input' : 'Expand input';
+                const button = this.layoutElements.expandButton;
+                // Clear existing content (text or old icon)
+                while (button.firstChild) {
+                    button.removeChild(button.firstChild);
+                }
+                // Add the appropriate icon using LabIcon.resolve
+                const icon = isExpanded
+                    ? ui_components_1.LabIcon.resolve({ icon: 'ui-components:caret-up' })
+                    : ui_components_1.LabIcon.resolve({ icon: 'ui-components:caret-down' });
+                icon.element({ container: button, tag: 'span' }); // Add icon to button
+                // Update title for accessibility
+                button.title = isExpanded ? 'Collapse input' : 'Expand input';
             },
             getCodeRefMap: () => { var _a; return ((_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.getCodeReferenceMap()) || new Map(); },
             resetCodeRefMap: () => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.resetCodeReferences(); }
@@ -2942,18 +2986,40 @@ function createMessageDiv(sender) {
  */
 function renderUserMessage(text, options = {}, callbacks = {}) {
     const messageDiv = createMessageDiv('user');
-    // Handle user message with code references (logic to be moved from addMessage)
     if (options.isMarkdown) {
-        // Special case: User message with code references (placeholder)
+        // TODO: Integrate Code Reference rendering properly here
+        // For now, render the whole body as Markdown
         const contentDiv = document.createElement('div');
-        contentDiv.className = 'user-content-with-refs';
-        // TODO: Move code reference widget creation logic here
-        contentDiv.textContent = `[Code Refs Placeholder] ${text}`;
+        // Use 'markdown-content' class for consistent styling
+        contentDiv.className = 'markdown-content';
+        try {
+            // Preprocess, parse, and sanitize like in bot messages
+            const processedText = (0, markdown_config_1.preprocessMarkdown)(text);
+            const rawHtml = marked_1.marked.parse(processedText);
+            const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
+            contentDiv.innerHTML = sanitizedHtml;
+            // Enhance code blocks if user messages can contain them
+            const codeBlocks = contentDiv.querySelectorAll('pre code');
+            codeBlocks.forEach(block => {
+                // Pass only relevant callbacks if needed for user code blocks
+                enhanceCodeBlock(block, {
+                // e.g., showCopyFeedback: callbacks.showCopyFeedback 
+                });
+            });
+        }
+        catch (error) {
+            console.error('Failed to render user markdown:', error);
+            // Fallback to plain text if Markdown rendering fails
+            contentDiv.textContent = text;
+        }
         messageDiv.appendChild(contentDiv);
     }
     else {
+        // Non-Markdown user message (plain text)
+        // TODO: Integrate Code Reference rendering for plain text messages here too
         messageDiv.textContent = text;
     }
+    // TODO: Add user message specific actions if needed (e.g., copy text)
     return messageDiv;
 }
 /**
@@ -3511,6 +3577,10 @@ exports.UIManager = void 0;
  * This acts as a central point for UI manipulations, simplifying dependencies for handlers.
  */
 class UIManager {
+    // Add this getter method
+    getIsMarkdownMode() {
+        return this.isMarkdownMode;
+    }
     constructor(
     // docManager: IDocumentManager, // Commented out - unused parameter
     popupMenuManager, 
@@ -3524,7 +3594,24 @@ class UIManager {
         this.popupMenuManager = popupMenuManager; // Needed for '@' button action
         // this.widgetNode = widgetNode; // Commented out - unused assignment
         this.callbacks = callbacks; // Callbacks to trigger widget/handler logic
-        this.layoutElements = layoutElements;
+        this.layoutElements = layoutElements; // Keep reference if needed elsewhere
+        // --- Assign internal references from provided layoutElements ---
+        if (!layoutElements.messageContainer || !layoutElements.inputField ||
+            !layoutElements.titleInput || !layoutElements.historyContainer ||
+            !layoutElements.bottomBarContainer || !layoutElements.markdownToggleButton ||
+            !layoutElements.expandButton) {
+            console.error('UIManager: Critical layout elements missing during initialization!');
+            // Potentially throw an error or handle gracefully
+            return;
+        }
+        this.messageContainer = layoutElements.messageContainer;
+        this.inputField = layoutElements.inputField;
+        this.titleInput = layoutElements.titleInput;
+        this.historyContainer = layoutElements.historyContainer;
+        this.bottomBarContainer = layoutElements.bottomBarContainer;
+        this.markdownToggle = layoutElements.markdownToggleButton; // Use markdownToggleButton
+        this.expandButton = layoutElements.expandButton;
+        // --------------------------------------------------------------
         // Initialize elements that are created outside createLayout if any
         // In this case, all core elements are created within createLayout
         // Create and append the indicator element
@@ -3546,53 +3633,173 @@ class UIManager {
         return this.layoutElements;
     }
     /**
+     * Creates the main layout structure for the sidebar.
+     * @returns References to key DOM elements.
+     */
+    createLayout() {
+        // Create the main container
+        const mainContent = document.createElement('div');
+        mainContent.className = 'jp-llm-ext-content-wrapper';
+        // --- Title Container ---
+        const titleContainer = document.createElement('div');
+        titleContainer.className = 'jp-llm-ext-title-container';
+        this.titleInput = document.createElement('input');
+        this.titleInput.className = 'chat-title-input';
+        this.titleInput.type = 'text';
+        this.titleInput.placeholder = 'Chat title';
+        this.titleInput.value = 'New Chat'; // Default value, widget might update later
+        this.titleInput.addEventListener('change', this.callbacks.handleUpdateTitle);
+        titleContainer.appendChild(this.titleInput);
+        // --- Message & History Containers ---
+        this.messageContainer = document.createElement('div');
+        this.messageContainer.className = 'jp-llm-ext-message-container';
+        this.historyContainer = document.createElement('div');
+        this.historyContainer.className = 'jp-llm-ext-history-container';
+        this.historyContainer.style.display = 'none'; // Initially hidden
+        // --- Bottom Bar ---
+        this.bottomBarContainer = document.createElement('div');
+        this.bottomBarContainer.className = 'jp-llm-ext-bottom-bar-container';
+        // Controls Row (Markdown Toggle, Action Buttons)
+        const topRow = document.createElement('div');
+        topRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-controls-row';
+        const controlsContainer = this.createControlsContainer(); // Creates markdown toggle, @, expand, settings
+        topRow.appendChild(controlsContainer);
+        // Input Row
+        const middleRow = document.createElement('div');
+        middleRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row';
+        this.inputField = document.createElement('textarea');
+        this.inputField.placeholder = 'Ask me anything...';
+        this.inputField.rows = 1;
+        this.inputField.className = 'jp-llm-ext-input-field';
+        // Send on Enter (handled by callbacks.handleSendMessage)
+        this.inputField.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                this.callbacks.handleSendMessage();
+            }
+        });
+        // Input listener (e.g., for hiding '@' popup - might move to InputHandler later)
+        this.inputField.addEventListener('input', () => {
+            var _a;
+            // Basic logic for hiding popup if @ removed - refine later
+            const cursorPosition = this.inputField.selectionStart;
+            const textBeforeCursor = this.inputField.value.slice(0, cursorPosition);
+            const hasAtNow = textBeforeCursor.endsWith('@') &&
+                (cursorPosition === 1 ||
+                    !!((_a = textBeforeCursor[cursorPosition - 2]) === null || _a === void 0 ? void 0 : _a.match(/\s/)));
+            // This needs the widget's `hasAtSymbol` state or similar
+            // For now, this logic might be incomplete or moved.
+            if (!hasAtNow) {
+                this.popupMenuManager.hidePopupMenu();
+            }
+        });
+        middleRow.appendChild(this.inputField);
+        // Buttons Row (Send, New Chat, History)
+        const bottomRow = document.createElement('div');
+        bottomRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-buttons-row';
+        const sendButton = this.createButton('Send', 'Send message');
+        sendButton.classList.add('jp-llm-ext-send-button'); // Specific class for send
+        sendButton.addEventListener('click', this.callbacks.handleSendMessage);
+        const newChatButton = this.createButton('+ New Chat', 'Start a new chat');
+        newChatButton.addEventListener('click', this.callbacks.handleNewChat);
+        const historyButton = this.createButton('History', 'View chat history');
+        historyButton.addEventListener('click', this.callbacks.handleToggleHistory);
+        bottomRow.appendChild(sendButton);
+        bottomRow.appendChild(newChatButton);
+        bottomRow.appendChild(historyButton);
+        // Assemble Bottom Bar
+        this.bottomBarContainer.appendChild(topRow);
+        this.bottomBarContainer.appendChild(middleRow);
+        this.bottomBarContainer.appendChild(bottomRow);
+        // --- Assemble Main Content ---
+        mainContent.appendChild(titleContainer);
+        mainContent.appendChild(this.messageContainer);
+        mainContent.appendChild(this.historyContainer);
+        mainContent.appendChild(this.bottomBarContainer);
+        // Return references to key elements
+        return {
+            mainLayout: mainContent,
+            messageContainer: this.messageContainer,
+            inputField: this.inputField,
+            titleInput: this.titleInput,
+            historyContainer: this.historyContainer,
+            bottomBarContainer: this.bottomBarContainer,
+        };
+    }
+    /**
+     * Creates the controls container with toggles and action buttons.
+     */
+    createControlsContainer() {
+        const controlsContainer = document.createElement('div');
+        controlsContainer.className = 'jp-llm-ext-controls-container';
+        // --- Markdown Toggle ---
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'jp-llm-ext-toggle-container';
+        this.markdownToggle = document.createElement('input');
+        this.markdownToggle.type = 'checkbox';
+        this.markdownToggle.id = 'markdown-toggle'; // Ensure unique ID or handle differently
+        this.markdownToggle.addEventListener('change', (e) => {
+            const target = e.target;
+            this.isMarkdownMode = target.checked;
+            // Update placeholder based on mode
+            this.inputField.placeholder = this.isMarkdownMode
+                ? 'Write markdown here...\\n\\n# Example heading\\n- List item\\n\\n```code block```'
+                : 'Ask me anything...';
+            // Future: Notify widget/handler if needed: this.callbacks.handleToggleMarkdown(this.isMarkdownMode);
+        });
+        const toggleLabel = document.createElement('label');
+        toggleLabel.htmlFor = 'markdown-toggle';
+        toggleLabel.textContent = 'Markdown mode';
+        toggleContainer.appendChild(this.markdownToggle);
+        toggleContainer.appendChild(toggleLabel);
+        // --- Action Buttons (@, Expand, Settings) ---
+        const actionButtonsContainer = document.createElement('div');
+        actionButtonsContainer.className = 'jp-llm-ext-action-buttons-container';
+        // '@' Button
+        const atButton = this.createButton('@', 'Browse cells, code, files, and more');
+        atButton.addEventListener('click', (event) => {
+            // Pass event and button to the callback for positioning
+            this.callbacks.handleShowPopupMenu(event, event.currentTarget);
+        });
+        // Expand Button (store reference)
+        this.expandButton = this.createButton('⤢', 'Expand input');
+        this.expandButton.addEventListener('click', () => this.toggleInputExpansion());
+        // Settings Button
+        const settingsButton = this.createButton('⚙️', 'Settings');
+        settingsButton.addEventListener('click', this.callbacks.handleShowSettings);
+        // Add buttons to container
+        actionButtonsContainer.appendChild(atButton);
+        actionButtonsContainer.appendChild(this.expandButton);
+        actionButtonsContainer.appendChild(settingsButton);
+        // Assemble Controls Container
+        controlsContainer.appendChild(toggleContainer);
+        controlsContainer.appendChild(actionButtonsContainer);
+        return controlsContainer;
+    }
+    /**
      * Toggles the expansion state of the input field.
      */
     toggleInputExpansion() {
-        // Use layoutElements provided via constructor
-        const inputField = this.layoutElements.inputField;
-        const expandButton = this.layoutElements.expandButton;
-
-        if (!inputField || !expandButton)
+        if (!this.inputField || !this.expandButton)
             return; // Ensure elements exist
-        
         this.isInputExpanded = !this.isInputExpanded;
         if (this.isInputExpanded) {
-            inputField.style.height = '200px'; // Use CSS classes ideally
-            inputField.style.resize = 'vertical';
-            expandButton.textContent = '⤡'; // Collapse symbol
-            expandButton.title = 'Collapse input';
+            this.inputField.style.height = '200px'; // Use CSS classes ideally
+            this.inputField.style.resize = 'vertical';
+            this.expandButton.textContent = '⤡';
+            this.expandButton.title = 'Collapse input';
         }
         else {
-            inputField.style.height = ''; // Reset height
-            inputField.style.resize = 'none';
-            inputField.rows = 1; // Ensure collapse
-            expandButton.textContent = '⤢'; // Expand symbol
-            expandButton.title = 'Expand input';
+            this.inputField.style.height = ''; // Reset height
+            this.inputField.style.resize = 'none';
+            this.inputField.rows = 1; // Ensure collapse
+            this.expandButton.textContent = '⤢';
+            this.expandButton.title = 'Expand input';
         }
         // Future: Notify widget/handler if needed: this.callbacks.handleToggleExpansion(this.isInputExpanded);
     }
     /**
-     * Updates the appearance of the Expand/Collapse button.
-     * This method is needed because InputHandler manages the state,
-     * but UIManager manages the button element.
-     */
-    updateExpandButton(isExpanded) {
-        const expandButton = this.layoutElements.expandButton;
-        if (!expandButton) return;
-
-        if (isExpanded) {
-            expandButton.textContent = '⤡'; // Collapse symbol
-            expandButton.title = 'Collapse input';
-        }
-        else {
-            expandButton.textContent = '⤢'; // Expand symbol
-            expandButton.title = 'Expand input';
-        }
-    }
-    /**
      * Helper function to create a styled button.
-     * NOTE: This might be redundant if buildLayout handles all button creation. Keeping for now.
      */
     createButton(text, tooltip) {
         const button = document.createElement('button');
@@ -3607,37 +3814,29 @@ class UIManager {
      * @param element The message element (user or bot) to add.
      */
     addChatMessageElement(element) {
-        // Use layoutElements provided via constructor
-        const messageContainer = this.layoutElements.messageContainer;
-        if (messageContainer) {
-            messageContainer.appendChild(element);
+        if (this.messageContainer) {
+            this.messageContainer.appendChild(element);
             this.scrollToBottom(); // Scroll after adding the new element
         }
         else {
-            console.error('Message container not found in UIManager layoutElements.');
+            console.error('Message container not initialized in UIManager.');
         }
     }
     /**
      * Scrolls the message container to the bottom.
      */
     scrollToBottom() {
-        // Use layoutElements provided via constructor
-        const messageContainer = this.layoutElements.messageContainer;
-        if (messageContainer) {
-            messageContainer.scrollTop = messageContainer.scrollHeight;
+        if (this.messageContainer) {
+            this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
         }
         else {
-            console.error('Message container not found in UIManager layoutElements.');
+            console.error('Message container not initialized in UIManager.');
         }
     }
     /**
      * Switches the view to show the chat history.
      */
     showHistoryView() {
-        if (!this.layoutElements.messageContainer || !this.layoutElements.historyContainer || !this.layoutElements.bottomBarContainer) {
-            console.error("UIManager: Cannot show history view, required layout elements missing.");
-            return;
-        }
         this.layoutElements.messageContainer.style.display = 'none';
         this.layoutElements.historyContainer.style.display = 'block';
         this.layoutElements.bottomBarContainer.style.display = 'none';
@@ -3647,10 +3846,6 @@ class UIManager {
      * Switches the view to show the main chat interface.
      */
     showChatView() {
-        if (!this.layoutElements.messageContainer || !this.layoutElements.historyContainer || !this.layoutElements.bottomBarContainer) {
-            console.error("UIManager: Cannot show chat view, required layout elements missing.");
-            return;
-        }
         this.layoutElements.historyContainer.style.display = 'none';
         this.layoutElements.messageContainer.style.display = 'block';
         this.layoutElements.bottomBarContainer.style.display = 'flex'; // Assuming flex display
@@ -3660,22 +3855,14 @@ class UIManager {
      * Clears all messages from the message container.
      */
     clearMessageContainer() {
-        const messageContainer = this.layoutElements.messageContainer;
-        if (messageContainer) {
-            messageContainer.innerHTML = '';
-        } else {
-            console.error('UIManager: Cannot clear message container, element not found.');
-        }
+        this.layoutElements.messageContainer.innerHTML = '';
     }
     /**
      * Updates the value of the title input field.
      */
     updateTitleInput(title) {
-        const titleInput = this.layoutElements.titleInput;
-        if (titleInput) {
-            titleInput.value = title;
-        } else {
-            console.error('UIManager: Cannot update title input, element not found.');
+        if (this.layoutElements.titleInput) {
+            this.layoutElements.titleInput.value = title;
         }
     }
     /**
@@ -3697,7 +3884,6 @@ class UIManager {
         botMessageDiv.appendChild(streamingDiv);
         botMessageDiv.appendChild(contentDiv);
         // Add the whole container to the message list *before* streaming starts
-        // Ensure addChatMessageElement uses layoutElements.messageContainer correctly
         this.addChatMessageElement(botMessageDiv);
         return { botMessageDiv, streamingDiv, contentDiv };
     }
@@ -3708,8 +3894,7 @@ class UIManager {
     showNotification(message, type, duration = 3000) {
         console.log(`Notification (${type}): ${message}`);
         // Basic temporary implementation using the existing indicator element
-        // const indicator = this.layoutElements.mainElement.querySelector('.jp-llm-ext-keyboard-shortcut-indicator');
-        const indicator = this.keyboardShortcutIndicator; // Use the direct reference
+        const indicator = this.layoutElements.mainElement.querySelector('.jp-llm-ext-keyboard-shortcut-indicator');
         if (indicator) {
             if (this.notificationTimeout) {
                 clearTimeout(this.notificationTimeout); // Clear previous timeout
@@ -4186,4 +4371,4 @@ function insertCellContentByIndex(index, insertCallback) {
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.815e67580a6e4502e709.js.map
+//# sourceMappingURL=lib_index_js.5a53c88dd7e4fdc12b94.js.map
