@@ -16,29 +16,29 @@ This diagram shows the high-level directory structure of the project:
 
 ```mermaid
 graph TD
-    A[jupyter-llm-ext] --> B(backend);
-    A --> C(jupyter-lab-extension);
-    A --> D(docs);
+    A[jupyter-llm-ext] --> B[backend];
+    A --> C[jupyter-lab-extension];
+    A --> D[docs];
     A --> E[Other Root Files];
 
-    B --> B1(src);
-    B1 --> B1a(main.py);
-    B1 --> B1b(Images);
+    B --> B1[src];
+    B1 --> B1a[main.py];
+    B1 --> B1b[Images];
 
-    C --> C1(src);
-    C --> C2(style);
-    C --> C3(lib);
-    C --> C4[Config Files (package.json, tsconfig.json, etc.)];
+    C --> C1[src];
+    C --> C2[style];
+    C --> C3[lib];
+    C --> C4[Config Files - package.json, tsconfig.json];
 
-    C1 --> Ca(core);
-    C1 --> Cb(handlers);
-    C1 --> Cc(state);
-    C1 --> Cd(ui);
-    C1 --> Ce(utils);
-    C1 --> Cf[Top-level Files (index.ts, sidebar-widget.ts, etc.)];
+    C1 --> Ca[core];
+    C1 --> Cb[handlers];
+    C1 --> Cc[state];
+    C1 --> Cd[ui];
+    C1 --> Ce[utils];
+    C1 --> Cf[Top-level Files];
 
-    D --> Da[*.md (Generated Docs)];
-    D --> Db(README.md);
+    D --> Da[*.md Generated Docs];
+    D --> Db[README.md];
 
     subgraph Backend Service
         B1a
@@ -115,70 +115,66 @@ graph TD
     end
 
     %% Connections
-    SW --> UM;
-    SW --> MH;
-    SW --> IH;
-    SW --> HH;
-    SW --> SetH;
-    SW --> SH;
-    SW --> AC;
-    SW --> CS;
-    SW --> SS;
-    SW --> CCT;
-    SW --> DocMan;
+    SW --> UM
+    SW --> MH
+    SW --> IH
+    SW --> HH
+    SW --> SetH
+    SW --> SH
+    SW --> AC
+    SW --> CS
+    SW --> SS
+    SW --> CCT
+    SW --> DocMan
 
-    UM --> LB;
-    UM --> MR;
-    UM --> SM;
-    UM --> DE;
-    UM --> CRW;
-    UM --> IC;
-    UM --> HH;
-    UM --> IH;
-    UM --> SetH;
+    UM --> LB
+    UM --> MR
+    UM --> SM
+    UM --> DE
+    UM --> CRW
+    UM --> IC
+    UM --> HH
+    UM --> IH
+    UM --> SetH
 
-    MH --> AC;
-    MH --> CS;
-    MH --> MR;
-    MH --> UM;
+    MH --> AC
+    MH --> CS
+    MH --> MR
+    MH --> UM
 
-    IH --> PMM;
-    IH --> CRW;
-    IH --> UM;
-    IH --> MH; % Triggers send message
+    IH --> PMM
+    IH --> CRW
+    IH --> UM
+    IH --> MH
 
-    HH --> CS;
-    HH --> UM;
-    HH --> MR;
+    HH --> CS
+    HH --> UM
+    HH --> MR
 
-    SetH --> SS;
-    SetH --> SM;
-    SetH --> UM;
-    SetH --> AC; % Potentially for API key validation?
+    SetH --> SS
+    SetH --> SM
+    SetH --> UM
+    SetH --> AC
 
-    SH --> PMM;
-    SH --> IH; % Append to input
+    SH --> PMM
+    SH --> IH
 
-    PMM --> DocMan; % File browsing
-    PMM --> CCT; % Cell/Code context
-    PMM --> IH; % Insert selection
+    PMM --> DocMan
+    PMM --> CCT
+    PMM --> IH
 
-    MR --> MD;
-    MR --> High;
-    MR --> DE;
-    MR --> Clip; % Copy buttons
-    MR --> NI; % Add to cell buttons
+    MR --> MD
+    MR --> High
+    MR --> DE
+    MR --> Clip
+    MR --> NI
 
-    AC --> SS; % Uses settings (API URL/Key)
+    AC --> SS
 
-    CCT --> NotebookTrack;
+    CCT --> NotebookTrack
 
-    SW -.-> JLabApp; % Initialization
-    SW -.-> CmdPalette; % Passed to commands
-
-    %% Utils Usage (Simplified)
-    MR --> Clip;
-    MR --> NI;
+    SW -.-> JLabApp
+    SW -.-> CmdPalette
 ```
 
 ## Overall System Diagram
@@ -187,38 +183,38 @@ This diagram provides a simplified view of how the user interface, frontend exte
 
 ```mermaid
 graph TD
-    subgraph User Interface (JupyterLab)
-        JL[JupyterLab Shell] --> SW(SimpleSidebarWidget);
-        SW --> CCT(CellContextTracker);
-        SW --> PMM(PopupMenuManager);
-        SW --> NB(Notebook Interaction);
-        CCT --> ActiveCell[/Active Cell/];
-        PMM --> Files[/File System via DocManager/];
-        NB --> ActiveCell;
+    subgraph User Interface
+        JL[JupyterLab Shell] --> SW[SimpleSidebarWidget]
+        SW --> CCT[CellContextTracker]
+        SW --> PMM[PopupMenuManager]
+        SW --> NB[Notebook Interaction]
+        CCT --> ActiveCell[Active Cell]
+        PMM --> Files[File System]
+        NB --> ActiveCell
     end
 
     subgraph Frontend Extension Logic
-        SW --> MH(MessageHandler);
-        SW --> IH(InputHandler);
-        SW --> UI(UIManager/Renderer);
-        MH --> AC(ApiClient);
-        IH --> PMM;
-        UI --> SW;
+        SW --> MH[MessageHandler]
+        SW --> IH[InputHandler]
+        SW --> UI[UIManager]
+        MH --> AC[ApiClient]
+        IH --> PMM
+        UI --> SW
     end
 
-    subgraph Backend Service (FastAPI)
-        BE[main.py];
-        BE --> RespStream[/Response Stream/];
-        BE --> StaticImg[/Static Images/];
+    subgraph Backend Service
+        BE[main.py]
+        BE --> RespStream[Response Stream]
+        BE --> StaticImg[Static Images]
     end
 
     %% Interactions
-    AC -->|POST /chat| BE;
-    BE -->|StreamingResponse| AC;
-    UI -->|GET /images/...| StaticImg;
+    AC -->|POST /chat| BE
+    BE -->|StreamingResponse| AC
+    UI -->|GET /images| StaticImg
 
-    style BE fill:#f9f,stroke:#333,stroke-width:2px;
-    style SW fill:#ccf,stroke:#333,stroke-width:2px;
+    style BE fill:#f9f,stroke:#333,stroke-width:2px
+    style SW fill:#ccf,stroke:#333,stroke-width:2px
 ```
 
 ## Detailed Documentation
