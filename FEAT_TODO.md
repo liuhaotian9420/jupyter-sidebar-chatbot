@@ -7,4 +7,4 @@
 - [x] **(P1)** Implement backspace handling to delete the entire widget when the cursor is immediately after it and backspace is pressed.
 - [x] **(P0)** Implement serialization: Create a method to extract the semantic content (plain text + "@refText" for widgets) from the `div`. Update message sending logic to use this.
 - [x] **(P2)** Handle copy/paste behavior within the `contenteditable` `div`.
-- [ ] **(P2)** Ensure standard text editing features (newlines with Shift+Enter, sending on Enter) function correctly.
+- [x] **(P2)** Ensure standard text editing features (newlines with Shift+Enter, sending on Enter) function correctly.
