@@ -21,3 +21,15 @@
 - [x] **P2:** Implement reference widget rendering in `UIManager`/`MessageRenderer` to replace `@...` text with styled, non-editable widgets in user messages, using specified display formats.
 - [x] **P3:** Add CSS styling for `.jp-llm-ext-ref-widget` and type-specific variants.
 - [x] **P4:** Update `FEAT_TODO.md` and `TESTING_TODO.md`.
+
+---
+
+### Feature: shortcut-context-ref (Timestamp: 2024-10-27T15:00:00Z)
+
+**Goal:** Update the `Ctrl+L` shortcut to trigger context reference insertion via the standard reference handling mechanism (like clicking `@code` or `@cell` in the popup) instead of direct text appending. Add warning for invalid context.
+
+**Tasks:**
+- [x] **(P0)** Modify `Ctrl+L` logic in `shortcut-handler.ts` to call the appropriate handler function (likely on `InputHandler`) for `@code` and `@cell` references instead of `appendToInput`.
+- [x] **(P1)** Add a warning indicator via `showIndicator` in `shortcut-handler.ts` if `Ctrl+L` is pressed when neither code is selected nor a cell is active.
+- [ ] **(P2)** Update `FEAT_TODO.md` (this task).
+- [ ] **(P2)** Update `TESTING_TODO.md` with testing tasks for the new shortcut behavior.

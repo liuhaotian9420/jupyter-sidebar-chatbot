@@ -22,6 +22,10 @@ export declare class SimpleSidebarWidget extends Widget {
     private handleShowSettings;
     private handleShowPopupMenu;
     private handleUpdateTitle;
+    /**
+     * Helper function to replace a text range with a non-editable widget span.
+     */
+    private createWidgetSpan;
     constructor(docManager: IDocumentManager);
     /**
      * Disposes all resources

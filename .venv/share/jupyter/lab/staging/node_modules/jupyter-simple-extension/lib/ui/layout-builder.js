@@ -74,15 +74,21 @@ function buildLayout(callbacks = {}) {
     controlsRow.appendChild(controlsContainer);
     // Row 2: Input Field
     const inputRow = (0, dom_elements_1.createDiv)({ classes: 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row' });
-    const inputField = (0, dom_elements_1.createTextArea)({
+    const inputField = (0, dom_elements_1.createDiv)({
         classes: 'jp-llm-ext-input-field',
-        attributes: { placeholder: 'Ask me anything...', rows: '1' }
+        attributes: {
+            contenteditable: 'true',
+            role: 'textbox',
+            'aria-multiline': 'true',
+            'data-placeholder': 'Ask me anything...'
+        },
+        style: { minHeight: '20px', overflowY: 'hidden' }
     });
     if (callbacks.onInputFieldKeyPress) {
         inputField.addEventListener('keypress', callbacks.onInputFieldKeyPress);
     }
     if (callbacks.onInputFieldValueChange) {
-        inputField.addEventListener('input', () => callbacks.onInputFieldValueChange(inputField.value));
+        inputField.addEventListener('input', () => callbacks.onInputFieldValueChange(inputField.textContent || ''));
     }
     inputRow.appendChild(inputField);
     // Row 3: Main Buttons (Send, New Chat, History)

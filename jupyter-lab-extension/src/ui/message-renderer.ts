@@ -10,7 +10,8 @@ import {
 } from './dom-elements';
 // Removed unused import block for code-ref-widget
 import { CodeRefData } from '../handlers/input-handler'; // Import CodeRefData
-import { INotebookModel, CodeCellModel } from '@jupyterlab/notebook'; // Import notebook types
+import { INotebookModel } from '@jupyterlab/notebook'; // Keep this import
+import { CodeCellModel } from '@jupyterlab/cells'; // Import CodeCellModel from @jupyterlab/cells
 import { globals } from '../core/globals'; // Import globals
 
 // Removed unused import block for clipboard utils (used via callbacks)
@@ -116,11 +117,17 @@ function renderMessageContentWithRefs(
   text: string,
   callbacks: Partial<MessageRendererCallbacks>
 ): void {
-  // Regex to find @file, @dir, @Cell, @code references
-  // Matches: @type[value]
-  const refRegex = /(@(file|dir|Cell|code)\[([^\]]+?)\])/g;
+  // --- DEBUG LOG --- 
+  console.log('[renderMessageContentWithRefs] Processing text:', JSON.stringify(text)); // Log exact text
+  // --- END DEBUG LOG ---
+  
+  // Regex to find @file, @dir, @Cell, @code references (with optional surrounding whitespace)
+  const refRegex = /\s*(@(file|dir|Cell|code)\[([^\]]+?)\])\s*/g; 
   let lastIndex = 0;
   let match;
+
+  // Reset regex state just in case
+  refRegex.lastIndex = 0;
 
   while ((match = refRegex.exec(text)) !== null) {
     // Append text before the match
@@ -129,17 +136,18 @@ function renderMessageContentWithRefs(
     }
 
     // Process the matched reference
-    const fullMatch = match[0]; // e.g., @file[path/to/file.py]
-    const type = match[2] as 'file' | 'dir' | 'Cell' | 'code'; // e.g., file
-    const value = match[3]; // e.g., path/to/file.py or ref-1 or 1
+    const fullMatchWithWhitespace = match[0]; // Includes potential whitespace
+    const fullMatch = match[1]; // The actual @type[value] part
+    const type = match[2] as 'file' | 'dir' | 'Cell' | 'code';
+    const value = match[3];
 
     try {
-      const widget = createRefWidget(type, value, fullMatch, callbacks);
+      const widget = createRefWidget(type, value, fullMatch, callbacks); // Pass the clean match
       container.appendChild(widget);
     } catch (error) {
       console.error(`Failed to create widget for reference: ${fullMatch}`, error);
-      // Fallback: append the original reference text
-      container.appendChild(document.createTextNode(fullMatch));
+      // Fallback: append the original reference text (with potential whitespace)
+      container.appendChild(document.createTextNode(fullMatchWithWhitespace));
     }
 
     lastIndex = refRegex.lastIndex;
@@ -170,16 +178,19 @@ function createRefWidget(
 
   switch (type) {
     case 'file':
-      displayText = value.split(/[\\\\/]/).pop() || value; // Extract filename
+      displayText = value.split(/[\\/]/).pop() || value; // Extract filename
       titleText = `File: ${value}`;
       break;
     case 'dir':
-      displayText = value.split(/[\\\\/]/).pop() || value || '/'; // Extract dirname, handle root
+      displayText = value.split(/[\\/]/).pop() || value || '/'; // Extract dirname, handle root
       titleText = `Directory: ${value}`;
       break;
     case 'Cell': {
       const cellIndex = parseInt(value) - 1; // Convert back to 0-based index
       const notebookContext = callbacks.getCurrentNotebookContext ? callbacks.getCurrentNotebookContext() : undefined;
+      // --- DEBUG LOG --- 
+      console.log(`[createRefWidget @Cell] Input Value: ${value}, Parsed Index: ${cellIndex}, Notebook Context:`, notebookContext);
+      // --- END DEBUG LOG --- 
       const notebookName = notebookContext?.name || 'notebook';
       let cellTypeChar = '?';
 
@@ -200,9 +211,18 @@ function createRefWidget(
     case 'code': {
       const refId = value;
       const refData = callbacks.getCodeRefData ? callbacks.getCodeRefData(refId) : undefined;
+      // --- DEBUG LOG --- 
+      console.log(`[createRefWidget @code] Input Value (refId): ${refId}, Ref Data Found:`, refData);
+      // --- END DEBUG LOG --- 
       if (refData) {
-        displayText = `${refData.notebookName}-${refData.cellIndex + 1}-${refData.lineNumber}`;
-        titleText = `Code Reference: ${refData.notebookName}, Cell ${refData.cellIndex + 1}, Line ${refData.lineNumber}`;
+        // Construct display text using start and end lines
+        const startLine = refData.lineNumber; 
+        const endLine = refData.lineEndNumber;
+        const linePart = startLine === endLine ? `${startLine}` : `${startLine}_${endLine}`;
+        displayText = `${refData.notebookName}-${refData.cellIndex + 1}-${linePart}`;
+        // Update title text as well
+        const titleLinePart = startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}-${endLine}`;
+        titleText = `Code Reference: ${refData.notebookName}, Cell ${refData.cellIndex + 1}, ${titleLinePart}`;
       } else {
         displayText = `code-ref-${refId}`; // Fallback display
         titleText = `Code Reference ID: ${refId} (Data not found)`;
@@ -224,36 +244,34 @@ function renderRefsInElement(
   element: HTMLElement,
   callbacks: Partial<MessageRendererCallbacks>
 ): void {
-  const refRegex = /(@(file|dir|Cell|code)\[([^\]]+?)\])/g; // Same regex as renderMessageContentWithRefs
+  // Use the same updated regex here
+  const refRegex = /\s*(@(file|dir|Cell|code)\[([^\]]+?)\])\s*/g; 
   const walker = document.createTreeWalker(
     element,
-    NodeFilter.SHOW_TEXT, // Only consider text nodes
-    null // No custom filter
-    // false // deprecated
+    NodeFilter.SHOW_TEXT, 
+    null
   );
 
   let node;
   const nodesToProcess: Text[] = [];
-  // First, collect all text nodes to avoid issues with modifying the DOM while iterating
   while ((node = walker.nextNode())) {
-    // Check if node is a Text node and its content matches the regex
-    // Also ensure the node isn't already inside a widget (prevents double processing)
     if (
       node instanceof Text && 
       node.textContent && 
-      !(node.parentElement && node.parentElement.closest('.jp-llm-ext-ref-widget')) &&
-      refRegex.test(node.textContent)
+      !(node.parentElement && node.parentElement.closest('.jp-llm-ext-ref-widget'))
     ) {
-       // Reset regex lastIndex before testing
-       refRegex.lastIndex = 0;
-       nodesToProcess.push(node);
+       // Test with the specific regex before adding
+       refRegex.lastIndex = 0; // Reset before test
+       if (refRegex.test(node.textContent)) {
+         nodesToProcess.push(node);
+       }
     }
   }
 
   // Now, process the collected text nodes
   nodesToProcess.forEach(textNode => {
     const parent = textNode.parentNode;
-    if (!parent) return; // Should not happen, but safety check
+    if (!parent) return; 
 
     const text = textNode.textContent || '';
     const fragment = document.createDocumentFragment();
@@ -268,7 +286,8 @@ function renderRefsInElement(
       }
 
       // Process the matched reference
-      const fullMatch = match[0];
+      const fullMatchWithWhitespace = match[0];
+      const fullMatch = match[1]; 
       const type = match[2] as 'file' | 'dir' | 'Cell' | 'code';
       const value = match[3];
 
@@ -277,7 +296,7 @@ function renderRefsInElement(
         fragment.appendChild(widget);
       } catch (error) {
         console.error(`Failed to create widget for reference: ${fullMatch}`, error);
-        fragment.appendChild(document.createTextNode(fullMatch)); // Fallback
+        fragment.appendChild(document.createTextNode(fullMatchWithWhitespace)); // Fallback
       }
 
       lastIndex = refRegex.lastIndex;
@@ -288,7 +307,7 @@ function renderRefsInElement(
       fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
     }
 
-    // Replace the original text node with the fragment containing text and widgets
+    // Replace the original text node with the fragment
     parent.replaceChild(fragment, textNode);
   });
 }

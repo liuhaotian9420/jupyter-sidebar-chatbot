@@ -50,13 +50,6 @@ export class UIManager {
     // Internal UI state
     private isInputExpanded: boolean = false;
     private isMarkdownMode: boolean = false;
-    // Store the range where @ was typed to handle insertion
-    private activeReferenceTriggerRange: Range | null = null;
-
-    // Add this getter method
-    public getIsMarkdownMode(): boolean {
-        return this.isMarkdownMode;
-    }
 
     constructor(
         popupMenuManager: PopupMenuManager,
@@ -154,6 +147,7 @@ export class UIManager {
         // --- End Input Event Listener ---
 
         this.inputField.addEventListener('keydown', (event: KeyboardEvent) => {
+            console.log(`UI_MANAGER KeyDown: Key='${event.key}', Shift='${event.shiftKey}', Code='${event.code}'`);
             const selection = window.getSelection();
 
             // --- Backspace handling for widgets ---
@@ -185,6 +179,10 @@ export class UIManager {
                 }
             }
             // --- End Backspace handling ---
+
+            // --- @ Key Direct Handling ---
+            // REMOVED: This logic is now centralized in shortcut-handler.ts
+            // --- End @ Key Direct Handling ---
 
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault(); // Prevent default newline insertion
@@ -509,214 +507,197 @@ export class UIManager {
     }
 
     /**
-     * Serializes the content of the contenteditable input field.
-     * Converts divs/brs used for line breaks into newline characters.
-     * In the future, this will handle custom ref-text widgets.
-     * @returns The serialized string content.
-     */
-    public getSerializedInput(): string {
-        if (!this.inputField) {
-            return '';
-        }
-
-        let content = '';
-        const nodes = this.inputField.childNodes;
-
-        for (let i = 0; i < nodes.length; i++) {
-            const node = nodes[i];
-
-            if (node.nodeType === Node.TEXT_NODE) {
-                content += node.textContent;
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                const element = node as HTMLElement;
-                // Handle line breaks: Treat divs and brs as newlines
-                if (element.tagName === 'DIV' || element.tagName === 'BR') {
-                    // Add newline only if the previous content didn't end with one
-                    // or if it's the very first element
-                    if (i > 0 && !content.endsWith('\n')) {
-                         content += '\n';
-                    }
-                    // Recursively serialize content within divs (handles nested structures)
-                    if (element.tagName === 'DIV') {
-                        content += this.serializeNodeChildren(element); // Use helper for children
-                    }
-                } else if (element.hasAttribute('data-ref-text')) { // Future widget handling
-                     // Check for our custom widget attribute
-                    content += element.getAttribute('data-ref-text') || '';
-                } else {
-                    // For other inline elements (like span from formatting), get their text content
-                    content += element.textContent;
-                }
-            }
-        }
-        // Trim leading/trailing whitespace and normalize multiple newlines
-        return content.trim().replace(/\n{2,}/g, '\n\n');
-    }
-
-    /**
-     * Helper function to recursively serialize child nodes of an element.
-     * Used by getSerializedInput to handle nested structures like divs.
-     */
-    private serializeNodeChildren(parentNode: Node): string {
-        let childContent = '';
-        const nodes = parentNode.childNodes;
-        for (let i = 0; i < nodes.length; i++) {
-            const node = nodes[i];
-            if (node.nodeType === Node.TEXT_NODE) {
-                childContent += node.textContent;
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                const element = node as HTMLElement;
-                if (element.tagName === 'DIV' || element.tagName === 'BR') {
-                    if (i > 0 && !childContent.endsWith('\n')) {
-                         childContent += '\n';
-                    }
-                    if (element.tagName === 'DIV') {
-                         childContent += this.serializeNodeChildren(element);
-                    }
-                } else if (element.hasAttribute('data-ref-text')) {
-                    childContent += element.getAttribute('data-ref-text') || '';
-                } else {
-                    childContent += element.textContent;
-                }
-            }
-        }
-        return childContent;
-    }
-
-    /**
-     * Clears the content of the input field.
-     */
-    public clearInputField(): void {
-        if (this.inputField) {
-            this.inputField.innerHTML = '';
-            // Reset reference state as well
-            this.activeReferenceTriggerRange = null;
-            this.popupMenuManager.hidePopupMenu(); // Hide if open
-            // Optional: Reset any expansion state if needed
-            if (this.isInputExpanded) {
-                 // Maybe toggle expansion off or just reset height?
-                 // For now, just clearing content.
-            }
-            // Re-focus might be desired
-            this.inputField.focus();
-        }
-    }
-
-    /**
-     * Handles the input event to detect potential references starting with '@'.
-     * This will be used to trigger the reference popup in a later step.
+     * Checks the input field content and cursor position to determine if 
+     * the reference suggestion popup should be shown or hidden.
+     * Triggered on 'input' events.
      */
     private handleInputForReference(): void {
         const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0 || !this.inputField) {
+        if (!selection || !selection.rangeCount || !selection.isCollapsed) {
+            // Need a collapsed selection (cursor) inside the input field
+            this.popupMenuManager.hidePopupMenu();
             return;
         }
 
         const range = selection.getRangeAt(0);
-        const textNode = range.startContainer;
+        const container = range.startContainer;
         const offset = range.startOffset;
 
-        // Flag to track if we should close the popup
-        let shouldClosePopup = true;
-
-        // Ensure we are dealing with a text node inside the input field
-        if (!textNode || textNode.nodeType !== Node.TEXT_NODE || !this.inputField.contains(textNode)) {
-            // Might be at the boundary or in an empty div, ignore for now
-            // TODO: Handle cases where '@' is typed at the very beginning or after a widget
-            console.debug("Reference detection skipped: Not in a text node or outside input field.");
-            // Close popup if cursor moves out of a valid reference-starting context
-            if (this.popupMenuManager.isPopupMenuVisible()) {
-                this.popupMenuManager.hidePopupMenu();
-                this.activeReferenceTriggerRange = null; // Clear stored range
-            }
+        // Ensure the cursor is within the input field itself
+        if (!this.inputField.contains(container)) {
+            this.popupMenuManager.hidePopupMenu();
             return;
         }
 
-        const textContent = textNode.textContent || '';
+        // Combine text content from preceding siblings if cursor is at the start of a text node
+        let textBeforeCursor = '';
+        let currentContainer: Node | null = container;
+        let currentOffset = offset;
 
-        // Find the last '@' before the cursor
-        const lastAtPos = textContent.lastIndexOf('@', offset - 1);
+        while (currentContainer) {
+            if (currentContainer.nodeType === Node.TEXT_NODE) {
+                textBeforeCursor = currentContainer.textContent?.substring(0, currentOffset) + textBeforeCursor;
+            } else if (currentContainer.nodeType === Node.ELEMENT_NODE && (currentContainer as HTMLElement).classList.contains('jp-llm-ext-ref-widget')) {
+                 // If we encounter a widget before the cursor, we can't be right after '@'
+                 textBeforeCursor = '[widget]' + textBeforeCursor; // Add placeholder to break '@' sequence
+            } else if (currentContainer.nodeType === Node.ELEMENT_NODE && (currentContainer as HTMLElement).tagName === 'BR') {
+                 textBeforeCursor = '\n' + textBeforeCursor; // Treat BR as newline
+            }
 
-        if (lastAtPos !== -1) {
-            // Check if the '@' is preceded by whitespace or is at the beginning of the node
-            const isStartOfRef = lastAtPos === 0 || /\s/.test(textContent[lastAtPos - 1]);
-
-            if (isStartOfRef) {
-                // Extract potential reference text after '@' up to the cursor
-                const potentialRef = textContent.substring(lastAtPos + 1, offset);
-
-                // Basic validation: Allow alphanumeric, underscores, dots, slashes for paths
-                // Allow empty query initially to show popup right after typing '@'
-                if (/^[a-zA-Z0-9_\.\-\/]*$/.test(potentialRef)) {
-                    console.log('UIManager: Potential reference detected:', potentialRef);
-                    // Store the range where the trigger occurred
-                    this.activeReferenceTriggerRange = range;
-                    // Show the suggestions popup
-                    this.popupMenuManager.showReferenceSuggestions(potentialRef, range);
-                    shouldClosePopup = false; // Keep popup open
-                } else {
-                     // Text after @ is not a valid start, or just '@' typed
-                     console.debug("Reference detection: Invalid characters after @ or empty ref.");
-                     // shouldClosePopup remains true
-                }
+            // Move to the previous sibling or parent's previous sibling
+            if (currentContainer.previousSibling) {
+                currentContainer = currentContainer.previousSibling;
+                // If moving to a new node, take its full content
+                currentOffset = (currentContainer.textContent || '').length; 
             } else {
-                console.debug("Reference detection: '@' not preceded by whitespace.");
-                // shouldClosePopup remains true
+                // Move up to parent, continue search from before the parent
+                currentContainer = currentContainer.parentNode;
+                if (currentContainer === this.inputField || !currentContainer) {
+                    break; // Stop if we reached the input field or top
+                }
+                currentOffset = Array.prototype.indexOf.call(currentContainer.parentNode?.childNodes || [], currentContainer); 
+            }
+        }
+        
+        console.log(`UI_MANAGER handleInput: Text before cursor: "${textBeforeCursor}"`);
+        // --- Check for trigger conditions --- 
+        const endsWithAt = textBeforeCursor.endsWith('@');
+        const endsWithAtSpace = textBeforeCursor.endsWith('@ ');
+
+        if (endsWithAt || endsWithAtSpace) {
+            if (this.popupMenuManager.isPopupMenuVisible()) {
+                // TODO: If visible, maybe just update the query in the popup?
+                 console.log('UI_MANAGER handleInput: Popup already visible, skipping show.');
+            } else {
+                // Find the start of the query (after '@' or '@ ')
+                const atIndex = textBeforeCursor.lastIndexOf('@');
+                let queryStartIndex = atIndex + 1;
+                if (endsWithAtSpace) {
+                    queryStartIndex = atIndex + 2;
+                }
+                const query = textBeforeCursor.substring(queryStartIndex);
+
+                // --- Insert temporary span to get reliable coordinates --- 
+                const tempAnchorId = 'jp-llm-temp-popup-anchor';
+                let tempSpan = document.getElementById(tempAnchorId);
+                if (tempSpan) tempSpan.remove(); // Clean up previous if any
+
+                tempSpan = document.createElement('span');
+                tempSpan.id = tempAnchorId;
+                // Style to be invisible and take no space
+                tempSpan.style.visibility = 'hidden'; 
+                tempSpan.style.width = '0';
+                tempSpan.style.height = '0';
+                tempSpan.style.overflow = 'hidden';
+                tempSpan.textContent = '\u200B'; // Zero-width space might help rendering
+
+                // Insert the span at the current cursor position
+                range.insertNode(tempSpan);
+                const spanRect = tempSpan.getBoundingClientRect();
+                tempSpan.remove(); // Remove immediately after getting coords
+                // --- End temporary span logic ---
+
+                if (spanRect.top === 0 && spanRect.left === 0) {
+                     console.error("UI_MANAGER handleInput: Failed to get valid coordinates from temp anchor span.");
+                      // Fallback or alternative positioning might be needed here
+                      // Maybe position relative to input field bottom-left?
+                     this.popupMenuManager.hidePopupMenu(); // Don't show if coords are bad
+                } else {
+                     console.log(`UI_MANAGER handleInput: Anchor coords from temp span: Top=${spanRect.top}, Left=${spanRect.left}`);
+                     // Show the TOP LEVEL suggestions using the reliable coordinates
+                     // Pass the coordinates directly to showPopupMenu
+                     this.popupMenuManager.showPopupMenu(spanRect.top, spanRect.left); 
+                }
             }
         } else {
-            console.debug("Reference detection: No '@' found before cursor in current text node.");
-            // shouldClosePopup remains true
+            // If text doesn't end with @ or @-space, hide the popup
+            // Only hide if it was previously showing the 'top' or 'references' menu triggered by '@'
+            // Avoid hiding menus triggered by the button click unnecessarily
+            if (this.popupMenuManager.isPopupMenuVisible()) { // && (this.popupMenuManager.getCurrentMenuLevel() === 'references' || /* Need way to know if triggered by @ */ )) {
+                console.log('UI_MANAGER handleInput: Hiding popup, trigger condition no longer met.');
+                this.popupMenuManager.hidePopupMenu();
+            }
         }
-
-        // Close the popup if no valid reference start was detected in this input event
-        if (shouldClosePopup && this.popupMenuManager.isPopupMenuVisible()) {
-            console.log('UIManager: Closing reference popup due to invalid context.')
-            this.popupMenuManager.hidePopupMenu();
-            this.activeReferenceTriggerRange = null; // Clear stored range
-        }
+        
+        // TODO: Update popup query if it's already visible and the text after @ changes
+        // (Need more robust logic here, considering backspace, etc.)
     }
 
     /**
-     * Serializes the content of a DOM Range, handling widgets correctly.
-     * @param range The Range object to serialize.
-     * @returns The serialized plain text content.
+     * Serializes the content of the input field, converting known widgets 
+     * back to their reference strings (e.g., @file:path/to/file.txt).
+     * 
+     * NOTE: This currently uses a simple text serialization. For full fidelity 
+     * preserving structure (like multiple paragraphs), a more complex approach 
+     * (e.g., HTML processing or a dedicated editor model) would be needed.
+     * 
+     * @returns {string} The serialized plain text content of the input field.
      */
-    private serializeRangeContent(range: Range): string {
-        if (!range) {
-            return '';
+    public getSerializedInput(): string {
+        let serialized = '';
+        const nodes = this.inputField.childNodes;
+
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            if (node.nodeType === Node.TEXT_NODE) {
+                serialized += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node as HTMLElement;
+                if (element.classList.contains('jp-llm-ext-ref-widget') && element.dataset.referenceText) {
+                    // Append the reference text stored in the data attribute
+                    serialized += element.dataset.referenceText;
+                } else if (element.tagName === 'BR') {
+                    // Convert BR tags back to newlines
+                    serialized += '\n';
+                } else if (element.tagName === 'DIV') {
+                    // Handle DIV elements (might be inserted by browser on paste/enter)
+                    // Add newline before if needed, then serialize children recursively?
+                    if (i > 0) { // Add newline only if not the first element
+                        serialized += '\n'; 
+                    }
+                    serialized += this.serializeNodeChildren(element); // Recursively serialize children
+                } else {
+                    // Include text content of other unexpected elements, but log a warning
+                    console.warn('UIManager getSerializedInput: Encountered unexpected element:', element.tagName);
+                    serialized += element.textContent;
+                }
+            } // Ignore other node types (comments, etc.)
         }
 
-        const fragment = range.cloneContents(); // Get a document fragment of the selection
-        let content = '';
+        return serialized.trim(); // Trim leading/trailing whitespace
+    }
 
-        const serializeNode = (node: Node): void => {
+    // Helper to serialize children of a node (e.g., for DIVs)
+    private serializeNodeChildren(parentNode: Node): string {
+        let content = '';
+        const nodes = parentNode.childNodes;
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
             if (node.nodeType === Node.TEXT_NODE) {
                 content += node.textContent;
             } else if (node.nodeType === Node.ELEMENT_NODE) {
                 const element = node as HTMLElement;
-                if (element.tagName === 'DIV' || element.tagName === 'BR') {
-                    if (!content.endsWith('\n')) {
-                        content += '\n';
-                    }
-                    // Serialize children if it's a DIV
-                    if (element.tagName === 'DIV') {
-                        element.childNodes.forEach(serializeNode);
-                    }
-                } else if (element.classList.contains('jp-llm-ext-ref-widget') && element.hasAttribute('data-ref-text')) {
-                    // Use data-ref-text for widgets
-                    content += element.getAttribute('data-ref-text') || '';
-                } else {
-                    // Recursively serialize children of other elements
-                    element.childNodes.forEach(serializeNode);
-                }
+                 if (element.classList.contains('jp-llm-ext-ref-widget') && element.dataset.referenceText) {
+                    content += element.dataset.referenceText;
+                } else if (element.tagName === 'BR') {
+                    content += '\n';
+                 } else {
+                    // Recursively handle nested elements if necessary, or just get text content
+                     content += this.serializeNodeChildren(element);
+                 }
             }
-            // Ignore other node types (comments, etc.)
-        };
+        }
+        return content;
+    }
 
-        fragment.childNodes.forEach(serializeNode);
-
-        // Basic normalization (might need refinement based on how ranges/fragments handle line breaks)
-        return content.replace(/\n{2,}/g, '\n\n');
+    public clearInputField(): void {
+        this.inputField.innerHTML = ''; // Clear all content
+        // Reset expansion state if needed
+        if (this.isInputExpanded) {
+            this.toggleInputExpansion();
+        }
+        // Ensure placeholder reappears if using CSS for it
+        this.inputField.dispatchEvent(new Event('input')); // Trigger event to update UI state if necessary
     }
 
     /**
@@ -724,24 +705,21 @@ export class UIManager {
      */
     private handleCopy(event: ClipboardEvent): void {
         const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0 || !event.clipboardData) {
-            return; // No selection or clipboard access
+        if (!selection || selection.isCollapsed || !event.clipboardData) {
+            return; // Nothing selected or no clipboard data object
         }
 
         const range = selection.getRangeAt(0);
-        if (range.collapsed) {
-            return; // Nothing selected to copy
+        // Ensure the selection is within our input field
+        if (!this.inputField.contains(range.commonAncestorContainer)) {
+            return; 
         }
 
-        // Serialize the selected range
         const selectedText = this.serializeRangeContent(range);
 
-        // Set plain text data on the clipboard
+        event.preventDefault(); // Prevent default copy behavior
         event.clipboardData.setData('text/plain', selectedText);
-
-        // Prevent the browser's default copy behavior (which might copy HTML)
-        event.preventDefault();
-        console.log('UIManager: Copied serialized selection to clipboard:', selectedText);
+        console.log('UIManager handleCopy: Copied serialized text:', selectedText);
     }
 
     /**
@@ -749,27 +727,32 @@ export class UIManager {
      */
     private handlePaste(event: ClipboardEvent): void {
         if (!event.clipboardData) {
-            return; // No clipboard data available
+            return;
         }
 
-        // Get plain text from clipboard
-        const pastedText = event.clipboardData.getData('text/plain');
-
-        if (pastedText) {
-            // Prevent the browser's default paste behavior (avoids pasting HTML)
-            event.preventDefault();
-
-            // Insert the plain text using execCommand
-            // This handles replacing selected content or inserting at the cursor
-            document.execCommand('insertText', false, pastedText);
-
-            console.log('UIManager: Pasted plain text from clipboard:', pastedText);
-
-            // Ensure the input field is scrolled into view if necessary after paste
-            this.inputField.scrollIntoView({ block: 'nearest' }); 
-        } else {
-            // If no plain text, let the default behavior happen (might handle files etc.)
-            console.log('UIManager: No plain text found on clipboard for paste.');
+        const text = event.clipboardData.getData('text/plain');
+        if (text) {
+            event.preventDefault(); // Prevent default paste behavior
+            
+            // Insert the plain text at the current cursor position
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+                 const range = selection.getRangeAt(0);
+                 range.deleteContents(); // Delete selected content if any
+                 const textNode = document.createTextNode(text);
+                 range.insertNode(textNode);
+                 // Move cursor after inserted text
+                 range.setStartAfter(textNode);
+                 range.setEndAfter(textNode);
+                 selection.removeAllRanges();
+                 selection.addRange(range);
+                 
+                 // Ensure scroll into view and trigger input event for potential updates
+                 this.inputField.focus(); 
+                 textNode.parentElement?.scrollIntoView({ block: 'nearest' });
+                 this.inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+            }
+            console.log('UIManager handlePaste: Pasted text:', text);
         }
     }
 
@@ -779,4 +762,39 @@ export class UIManager {
     // --- Potentially add methods to get element references if needed externally ---
     // public getInputField(): HTMLTextAreaElement { return this.inputField; }
     // etc.
+
+    // Helper to serialize a range (needed for copy)
+    private serializeRangeContent(range: Range): string {
+        const fragment = range.cloneContents();
+        let tempDiv = document.createElement('div');
+        tempDiv.appendChild(fragment);
+        
+        // Now, serialize tempDiv's content like we do for getSerializedInput
+        let serialized = '';
+        const nodes = tempDiv.childNodes;
+
+        const serializeNode = (node: Node): void => {
+             if (node.nodeType === Node.TEXT_NODE) {
+                serialized += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node as HTMLElement;
+                if (element.classList.contains('jp-llm-ext-ref-widget') && element.dataset.referenceText) {
+                    serialized += element.dataset.referenceText;
+                } else if (element.tagName === 'BR') {
+                    serialized += '\n';
+                } else { // For other elements (like DIVs potentially in fragment), serialize children
+                     const childNodes = element.childNodes;
+                     for (let j = 0; j < childNodes.length; j++) {
+                         serializeNode(childNodes[j]);
+                     }
+                }
+            }
+        };
+
+        for (let i = 0; i < nodes.length; i++) {
+            serializeNode(nodes[i]);
+        }
+
+        return serialized;
+    }
 } 

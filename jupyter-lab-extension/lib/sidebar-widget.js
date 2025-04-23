@@ -16,14 +16,51 @@ const history_handler_1 = require("./handlers/history-handler");
 const settings_handler_1 = require("./handlers/settings-handler");
 const ui_manager_1 = require("./ui/ui-manager");
 const ui_components_1 = require("@jupyterlab/ui-components");
+const globals_1 = require("./core/globals");
 // --- Import Utility Functions ---
 const clipboard_1 = require("./utils/clipboard");
 const notebook_integration_1 = require("./utils/notebook-integration");
-const code_ref_widget_1 = require("./ui/code-ref-widget");
 /**
  * Main sidebar widget for the AI chat interface - Now acts as an orchestrator.
  */
 class SimpleSidebarWidget extends widgets_1.Widget {
+    /**
+     * Helper function to replace a text range with a non-editable widget span.
+     */
+    createWidgetSpan(range, refText) {
+        if (!range)
+            return;
+        // Extract a display-friendly version (e.g., filename from path)
+        let displayLabel = refText;
+        if (refText.startsWith('@file ') || refText.startsWith('@dir ')) {
+            const parts = refText.split(' ');
+            if (parts.length > 1) {
+                const pathParts = parts[1].split(/[\\/]/);
+                displayLabel = pathParts[pathParts.length - 1] || parts[1]; // Use last part of path or full path
+            }
+        }
+        else if (refText.startsWith('@Cell ')) {
+            displayLabel = refText.substring(1); // Remove leading '@'
+        } // Add more conditions for other types if needed
+        // Create the widget span
+        const span = document.createElement('span');
+        span.className = 'jp-llm-ext-ref-widget'; // Class for styling
+        span.setAttribute('contenteditable', 'false'); // Make it non-editable
+        span.setAttribute('data-ref-text', refText); // Store original text for serialization
+        span.textContent = displayLabel; // Set visible text
+        // Replace the range content with the span
+        range.deleteContents();
+        range.insertNode(span);
+        // Move cursor after the inserted span
+        const selection = window.getSelection();
+        if (selection) {
+            const newRange = document.createRange();
+            newRange.setStartAfter(span);
+            newRange.setEndAfter(span);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+        }
+    }
     constructor(docManager) {
         super();
         // Placeholder for handler methods used in UIManager callbacks
@@ -37,18 +74,18 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             console.log('Handle Toggle History clicked');
             this.historyHandler.toggleHistoryView();
         };
-        this.handleSendMessage = () => {
+        this.handleSendMessage = (message) => {
             // 1. Get the current text from the input field via UIManager or LayoutElements
-            const text = this.layoutElements.inputField.value;
-            if (!text.trim())
-                return; // Don't send empty messages
-            // 2. Get the markdown state from UIManager
-            const isMarkdown = this.uiManager.getIsMarkdownMode();
-            console.log(`[Widget] handleSendMessage: Text='${text}', Markdown=${isMarkdown}`); // Debug log
+            // const text = this.layoutElements.inputField.value; // No longer needed, text is passed in
+            if (!message.trim())
+                return; // Don't send empty messages (check the passed message)
+            // 2. Get the markdown state from UIManager - REMOVED
+            // const isMarkdown = this.uiManager.getIsMarkdownMode(); 
+            console.log(`[Widget] handleSendMessage: Text='${message}'`); // Debug log using passed message
             // 3. Call the MessageHandler's send method with text and state
-            this.messageHandler.handleSendMessage(text, isMarkdown);
-            // NOTE: No need to dispatch event anymore. 
-            // The input clearing is handled inside messageHandler.handleSendMessage now.
+            this.messageHandler.handleSendMessage(message); // Pass the received message - REMOVED isMarkdown
+            // NOTE: Input clearing is now handled by UIManager after this callback returns.
+            // Do NOT clear input here or in MessageHandler.
         };
         this.handleShowSettings = (event) => {
             console.log('Handle Show Settings clicked');
@@ -78,18 +115,91 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.apiClient = new api_client_1.ApiClient((initialSettings === null || initialSettings === void 0 ? void 0 : initialSettings.apiUrl) || undefined);
         this.chatState = new chat_state_1.ChatState();
         this.popupMenuManager = new popup_menu_manager_1.PopupMenuManager(this.docManager, this.node, {
-            insertCode: (code) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@code ${code}`); },
+            insertCode: (code) => {
+                var _a, _b, _c;
+                if (!this.inputHandler || !globals_1.globals.notebookTracker)
+                    return;
+                const currentNotebookPanel = globals_1.globals.notebookTracker.currentWidget;
+                if (!currentNotebookPanel || !currentNotebookPanel.context || !currentNotebookPanel.content) {
+                    console.warn('Could not get notebook context for code reference, inserting raw code as fallback.');
+                    (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(code);
+                    return;
+                }
+                const notebookPath = currentNotebookPanel.context.path;
+                const notebookName = ((_b = notebookPath.split('/').pop()) === null || _b === void 0 ? void 0 : _b.split('.')[0]) || 'notebook';
+                const currentCell = currentNotebookPanel.content.activeCell;
+                if (!currentCell) {
+                    console.warn('Could not get active cell for code reference, inserting raw code as fallback.');
+                    (_c = this.inputHandler) === null || _c === void 0 ? void 0 : _c.appendToInput(code);
+                    return;
+                }
+                const cellIndex = currentNotebookPanel.content.activeCellIndex;
+                let lineNumber = 1; // Default line number
+                let lineEndNumber = 1; // Default end line number
+                // --- DEBUG LOG --- 
+                console.log('Are we currently in a code cell?');
+                // check if currentCell is in editor 
+                console.log(currentCell.editor);
+                // --- END DEBUG LOG ---
+                if (currentCell.editor) {
+                    const editor = currentCell.editor;
+                    const cmEditor = editor.editor; // Access CodeMirror editor instance (EditorView)
+                    if (cmEditor && cmEditor.state) {
+                        const state = cmEditor.state;
+                        const selection = state.selection.main;
+                        if (!selection.empty) {
+                            lineNumber = state.doc.lineAt(selection.from).number; // 1-based start line
+                            lineEndNumber = state.doc.lineAt(selection.to).number; // 1-based end line
+                        }
+                        else {
+                            // Fallback for cursor position if no selection
+                            const cursor = editor.getCursorPosition();
+                            if (cursor) {
+                                lineNumber = cursor.line + 1; // 1-based line number
+                                lineEndNumber = lineNumber; // Start and end are the same for cursor
+                            }
+                        }
+                    }
+                    else {
+                        // Fallback if cmEditor or state is not available (should not happen often)
+                        console.warn('Could not access CodeMirror state for line numbers.');
+                        const cursor = editor.getCursorPosition();
+                        if (cursor) {
+                            lineNumber = cursor.line + 1;
+                            lineEndNumber = lineNumber;
+                        }
+                    }
+                }
+                else {
+                    console.warn('Could not access cell editor for line numbers.');
+                    // Keep default line numbers 1, 1 if editor is not available
+                }
+                // --- DEBUG LOG --- 
+                console.log(`[SimpleSidebarWidget.insertCode] Determined lines: Start=${lineNumber}, End=${lineEndNumber}`);
+                // --- END DEBUG LOG ---
+                // Pass both start and end line numbers
+                const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber, lineEndNumber);
+                const placeholder = `@code[${refId}]`;
+                this.inputHandler.appendToInput(placeholder);
+            },
             insertCell: (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@cell ${content}`); },
-            insertFilePath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@file ${path}`); },
-            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@dir ${path}`); },
+            insertFilePath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@file[${path}]`); },
+            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@dir[${path}]`); },
             getSelectedText: notebook_integration_1.getSelectedText,
             getCurrentCellContent: notebook_integration_1.getCurrentCellContent,
-            insertCellByIndex: (index) => (0, notebook_integration_1.insertCellContentByIndex)(index, (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@${content}`); }),
+            insertCellByIndex: (index) => {
+                var _a;
+                const oneBasedIndex = index + 1;
+                const refText = `@Cell[${oneBasedIndex}]`;
+                (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(refText);
+            },
             insertCollapsedCodeRef: (code, cellIndex, lineNumber, notebookName) => {
+                // Handle reference from cursor position (assume start/end line are the same)
                 if (!this.inputHandler)
                     return;
-                const refId = this.inputHandler.addCodeReference(code);
-                const placeholder = (0, code_ref_widget_1.createCodeRefPlaceholder)(refId, notebookName, lineNumber);
+                const lineEndNumber = lineNumber; // Start and end are the same for a single line reference
+                const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber, lineEndNumber);
+                const placeholder = `@code[${refId}]`;
                 this.inputHandler.appendToInput(placeholder);
             }
         });
@@ -179,9 +289,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             addRenderedMessage: (messageElement) => this.uiManager.addChatMessageElement(messageElement)
         };
         const inputHandlerCallbacks = {
-            handleSendMessage: (message, isMarkdown) => {
+            handleSendMessage: (message) => {
                 if (this.messageHandler) {
-                    this.messageHandler.handleSendMessage(message, isMarkdown);
+                    this.messageHandler.handleSendMessage(message);
                 }
                 else {
                     console.error('MessageHandler not initialized when trying to send message from InputHandler');
@@ -190,7 +300,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             showPopupMenu: (left, top) => this.popupMenuManager.showPopupMenu(left, top),
             hidePopupMenu: () => this.popupMenuManager.hidePopupMenu(),
             updatePlaceholder: (isMarkdown) => {
-                this.layoutElements.inputField.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
+                // Use dataset for data-placeholder attribute
+                this.layoutElements.inputField.dataset.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
             },
             toggleInputExpansionUI: (isExpanded) => {
                 const button = this.layoutElements.expandButton;
@@ -258,6 +369,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             const newChat = this.chatState.createNewChat();
             this.historyHandler.loadChat(newChat.id);
         }
+        // Setup global keyboard shortcuts with the UIManager for proper @ key handling
         (0, shortcut_handler_1.setupShortcuts)(this.inputHandler, this.popupMenuManager, shortcutCallbacks);
         this.node.appendChild(this.layoutElements.mainElement);
         this.node.appendChild(this.settingsModalContainer);

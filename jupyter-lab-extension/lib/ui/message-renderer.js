@@ -13,13 +13,7 @@ const marked_1 = require("marked");
 const dompurify_1 = __importDefault(require("dompurify"));
 // import hljs from 'highlight.js'; // Removed unused import
 const dom_elements_1 = require("./dom-elements");
-// Removed unused import block for code-ref-widget
-// import {
-//   CodeRefData,
-//   createCodeRefWidgetHTML,
-//   attachCodeRefEventListeners,
-//   defaultCodeRefToggleLogic
-// } from './code-ref-widget';
+const globals_1 = require("../core/globals"); // Import globals
 // Removed unused import block for clipboard utils (used via callbacks)
 // import { copyToClipboard, copyImageToClipboard, copyMessageToClipboard } from '../utils/clipboard';
 // Removed unused import (used via callbacks)
@@ -69,11 +63,177 @@ function renderUserMessage(text, options = {}, callbacks = {}) {
     }
     else {
         // Non-Markdown user message (plain text)
-        // TODO: Integrate Code Reference rendering for plain text messages here too
-        messageDiv.textContent = text;
+        // Replace simple textContent assignment with ref-aware rendering
+        // messageDiv.textContent = text;
+        renderMessageContentWithRefs(messageDiv, text, callbacks);
     }
     // TODO: Add user message specific actions if needed (e.g., copy text)
     return messageDiv;
+}
+/**
+ * NEW: Renders message content, replacing @references with widgets.
+ */
+function renderMessageContentWithRefs(container, text, callbacks) {
+    // --- DEBUG LOG --- 
+    console.log('[renderMessageContentWithRefs] Processing text:', JSON.stringify(text)); // Log exact text
+    // --- END DEBUG LOG ---
+    // Regex to find @file, @dir, @Cell, @code references (with optional surrounding whitespace)
+    const refRegex = /\s*(@(file|dir|Cell|code)\[([^\]]+?)\])\s*/g;
+    let lastIndex = 0;
+    let match;
+    // Reset regex state just in case
+    refRegex.lastIndex = 0;
+    while ((match = refRegex.exec(text)) !== null) {
+        // Append text before the match
+        if (match.index > lastIndex) {
+            container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+        }
+        // Process the matched reference
+        const fullMatchWithWhitespace = match[0]; // Includes potential whitespace
+        const fullMatch = match[1]; // The actual @type[value] part
+        const type = match[2];
+        const value = match[3];
+        try {
+            const widget = createRefWidget(type, value, fullMatch, callbacks); // Pass the clean match
+            container.appendChild(widget);
+        }
+        catch (error) {
+            console.error(`Failed to create widget for reference: ${fullMatch}`, error);
+            // Fallback: append the original reference text (with potential whitespace)
+            container.appendChild(document.createTextNode(fullMatchWithWhitespace));
+        }
+        lastIndex = refRegex.lastIndex;
+    }
+    // Append any remaining text after the last match
+    if (lastIndex < text.length) {
+        container.appendChild(document.createTextNode(text.substring(lastIndex)));
+    }
+}
+/**
+ * NEW: Creates a reference widget span.
+ */
+function createRefWidget(type, value, originalRefText, // The full @type[value] string
+callbacks) {
+    const widget = document.createElement('span');
+    widget.className = `jp-llm-ext-ref-widget ref-${type.toLowerCase()}`;
+    widget.setAttribute('contenteditable', 'false');
+    widget.dataset.refText = originalRefText; // Store the original reference
+    let displayText = '';
+    let titleText = originalRefText; // Default tooltip
+    switch (type) {
+        case 'file':
+            displayText = value.split(/[\\/]/).pop() || value; // Extract filename
+            titleText = `File: ${value}`;
+            break;
+        case 'dir':
+            displayText = value.split(/[\\/]/).pop() || value || '/'; // Extract dirname, handle root
+            titleText = `Directory: ${value}`;
+            break;
+        case 'Cell': {
+            const cellIndex = parseInt(value) - 1; // Convert back to 0-based index
+            const notebookContext = callbacks.getCurrentNotebookContext ? callbacks.getCurrentNotebookContext() : undefined;
+            // --- DEBUG LOG --- 
+            console.log(`[createRefWidget @Cell] Input Value: ${value}, Parsed Index: ${cellIndex}, Notebook Context:`, notebookContext);
+            // --- END DEBUG LOG --- 
+            const notebookName = (notebookContext === null || notebookContext === void 0 ? void 0 : notebookContext.name) || 'notebook';
+            let cellTypeChar = '?';
+            if (notebookContext && globals_1.globals.notebookTracker) {
+                const currentNotebookPanel = globals_1.globals.notebookTracker.find(widget => widget.context.path === notebookContext.path);
+                if (currentNotebookPanel && currentNotebookPanel.model) {
+                    const cellModel = currentNotebookPanel.model.cells.get(cellIndex);
+                    if (cellModel) {
+                        cellTypeChar = cellModel.type === 'markdown' ? 'M' : 'C';
+                    }
+                }
+            }
+            displayText = `${notebookName}-${cellTypeChar}-${value}`; // value is 1-based index
+            titleText = `Cell ${value} (${cellTypeChar === 'M' ? 'Markdown' : 'Code'}) in ${notebookName}`;
+            break;
+        }
+        case 'code': {
+            const refId = value;
+            const refData = callbacks.getCodeRefData ? callbacks.getCodeRefData(refId) : undefined;
+            // --- DEBUG LOG --- 
+            console.log(`[createRefWidget @code] Input Value (refId): ${refId}, Ref Data Found:`, refData);
+            // --- END DEBUG LOG --- 
+            if (refData) {
+                // Construct display text using start and end lines
+                const startLine = refData.lineNumber;
+                const endLine = refData.lineEndNumber;
+                const linePart = startLine === endLine ? `${startLine}` : `${startLine}_${endLine}`;
+                displayText = `${refData.notebookName}-${refData.cellIndex + 1}-${linePart}`;
+                // Update title text as well
+                const titleLinePart = startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}-${endLine}`;
+                titleText = `Code Reference: ${refData.notebookName}, Cell ${refData.cellIndex + 1}, ${titleLinePart}`;
+            }
+            else {
+                displayText = `code-ref-${refId}`; // Fallback display
+                titleText = `Code Reference ID: ${refId} (Data not found)`;
+            }
+            break;
+        }
+    }
+    widget.textContent = displayText;
+    widget.title = titleText; // Add tooltip
+    return widget;
+}
+/**
+ * NEW: Recursively finds and replaces @references within text nodes of an element.
+ */
+function renderRefsInElement(element, callbacks) {
+    // Use the same updated regex here
+    const refRegex = /\s*(@(file|dir|Cell|code)\[([^\]]+?)\])\s*/g;
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
+    let node;
+    const nodesToProcess = [];
+    while ((node = walker.nextNode())) {
+        if (node instanceof Text &&
+            node.textContent &&
+            !(node.parentElement && node.parentElement.closest('.jp-llm-ext-ref-widget'))) {
+            // Test with the specific regex before adding
+            refRegex.lastIndex = 0; // Reset before test
+            if (refRegex.test(node.textContent)) {
+                nodesToProcess.push(node);
+            }
+        }
+    }
+    // Now, process the collected text nodes
+    nodesToProcess.forEach(textNode => {
+        const parent = textNode.parentNode;
+        if (!parent)
+            return;
+        const text = textNode.textContent || '';
+        const fragment = document.createDocumentFragment();
+        let lastIndex = 0;
+        let match;
+        refRegex.lastIndex = 0; // Reset regex state for each node
+        while ((match = refRegex.exec(text)) !== null) {
+            // Append text before the match
+            if (match.index > lastIndex) {
+                fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+            }
+            // Process the matched reference
+            const fullMatchWithWhitespace = match[0];
+            const fullMatch = match[1];
+            const type = match[2];
+            const value = match[3];
+            try {
+                const widget = createRefWidget(type, value, fullMatch, callbacks);
+                fragment.appendChild(widget);
+            }
+            catch (error) {
+                console.error(`Failed to create widget for reference: ${fullMatch}`, error);
+                fragment.appendChild(document.createTextNode(fullMatchWithWhitespace)); // Fallback
+            }
+            lastIndex = refRegex.lastIndex;
+        }
+        // Append any remaining text after the last match
+        if (lastIndex < text.length) {
+            fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+        }
+        // Replace the original text node with the fragment
+        parent.replaceChild(fragment, textNode);
+    });
 }
 /**
  * Renders a bot message (text, markdown, images, code blocks).
@@ -105,7 +265,10 @@ function renderBotMessage(text, options = { isMarkdown: true }, callbacks = {}) 
             const rawHtml = marked_1.marked.parse(processedText);
             const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
             contentDiv.innerHTML = sanitizedHtml;
-            // Enhance code blocks after setting innerHTML
+            // --- NEW: Render references within the sanitized HTML --- 
+            renderRefsInElement(contentDiv, callbacks);
+            // --- End NEW ---
+            // Enhance code blocks after setting innerHTML and rendering refs
             const codeBlocks = contentDiv.querySelectorAll('pre code');
             codeBlocks.forEach(block => {
                 enhanceCodeBlock(block, callbacks);
@@ -271,6 +434,9 @@ function renderBotMessageFinal(contentDiv, streamingDiv, completeResponse, optio
             const rawHtml = marked_1.marked.parse(processedText);
             const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
             contentDiv.innerHTML = sanitizedHtml;
+            // --- NEW: Render references within the sanitized HTML --- 
+            renderRefsInElement(contentDiv, effectiveCallbacks);
+            // --- End NEW ---
             // --- Interrupt Handling ---
             const isInterrupt = completeResponse.startsWith('**[INTERRUPT]**');
             if (isInterrupt) {

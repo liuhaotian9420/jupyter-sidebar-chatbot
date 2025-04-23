@@ -41,9 +41,16 @@ export function addMessageToCell(text: string): void {
 }
 
 /**
- * Gets the currently selected text from the active notebook cell or text editor.
+ * Gets the currently selected text from:
+ *  - the active notebook cell 
+ *  - the text editor
+ *  - the output area of a code cell
  */
 export function getSelectedText(): string | null {
+  // if (isOutputArea()) {
+  //   // TODO: return what's selected in the output area
+  //   return null;
+  // }
   const cell = globals.notebookTracker?.activeCell;
   if (cell?.editor) {
     const editor = cell.editor;
@@ -71,6 +78,66 @@ export function getSelectedText(): string | null {
     }
   }
   return null;
+}
+/** 
+ * Checks whether we are currently in a notebook cell.
+*/
+export function isInNotebookCell(): boolean {
+  const activeCell = globals.notebookTracker?.activeCell;
+  return activeCell !== null;
+}
+/** 
+ * Checks whether we are currently in a notebook cell and the editor is focused:
+ * meaning that the cursor is in the editor.
+*/
+export function isInNotebookCellAndEditorFocused(): boolean {
+  const activeCell = globals.notebookTracker?.activeCell;
+  if (activeCell?.editor) {
+    const editor = activeCell.editor;
+    const cmEditor = (editor as any).editor; // Access CodeMirror editor instance
+    return cmEditor && cmEditor.state;
+  }
+  return false;
+}
+/**
+ * Check whether the currently active cell is a code cell.  
+*/
+export function isCodeCell(): boolean {
+  const activeCell = globals.notebookTracker?.activeCell;
+  return activeCell?.model?.type === 'code';
+}
+/**
+ * Check whether the cursor is in the output area of a code cell.
+ * This function specifically checks if we're in a code cell's output area,
+ * not just any output area.
+ */
+export function isOutputArea(): boolean {
+  const activeCell = globals.notebookTracker?.activeCell;
+  if (!activeCell?.model) return false;
+  
+  // First check if it's a code cell
+  if (activeCell.model.type !== 'code') return false;
+  
+  // Then check if we're in the output area
+  const editor = activeCell.editor;
+  if (!editor) return false;
+  
+  const cmEditor = (editor as any).editor;
+  if (!cmEditor?.state) return false;
+  
+  // Get the editor's DOM element
+  const editorElement = cmEditor.dom;
+  if (!editorElement) return false;
+  
+  // Check if the active element is within the output area
+  const activeElement = document.activeElement;
+  if (!activeElement) return false;
+  
+  // The output area is typically a sibling of the editor element
+  const outputArea = editorElement.nextElementSibling;
+  if (!outputArea) return false;
+  
+  return outputArea.contains(activeElement);
 }
 
 /**

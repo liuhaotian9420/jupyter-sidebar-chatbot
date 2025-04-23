@@ -19,7 +19,8 @@ export interface CodeRefData {
   code: string;
   notebookName: string;
   cellIndex: number;
-  lineNumber: number;
+  lineNumber: number; // Represents the START line number (1-based)
+  lineEndNumber: number; // Add END line number (1-based)
 }
 
 /**
@@ -170,24 +171,29 @@ export class InputHandler {
    * Adds a code reference to the internal map and returns its ID.
    * @param code The actual code content.
    * @param notebookName The name of the notebook the code is from.
-   * @param cellIndex The index of the cell the code is from.
-   * @param lineNumber The starting line number of the code within the cell.
+   * @param cellIndex The index of the cell the code is from (0-based).
+   * @param lineNumber The starting line number of the code within the cell (1-based).
+   * @param lineEndNumber The ending line number of the code within the cell (1-based).
    * @returns The generated reference ID (e.g., "ref-1").
    */
   public addCodeReference(
     code: string,
     notebookName: string,
     cellIndex: number,
-    lineNumber: number
+    lineNumber: number, // Start line
+    lineEndNumber: number // End line
   ): string {
       const refId = `ref-${this.nextRefId++}`;
-      const refData: CodeRefData = { code, notebookName, cellIndex, lineNumber };
-      this.codeRefMap.set(refId, refData);
+      // Store both start and end line numbers
+      const refData: CodeRefData = { code, notebookName, cellIndex, lineNumber, lineEndNumber }; 
+      // Store the ACTUAL CodeRefData object in the map
+      this.codeRefMap.set(refId, refData); 
+      // Log the details separately
       console.log(
         'Added code reference:',
         refId, 
         '->',
-        `(${notebookName}, Cell ${cellIndex}, Line ${lineNumber}) ` + 
+        `(${notebookName}, Cell ${cellIndex + 1}, Line ${lineNumber}${lineNumber !== lineEndNumber ? '_' + lineEndNumber : ''}) ` + 
         code.substring(0, 30) + '...' // Log metadata too
       ); 
       return refId;
@@ -204,6 +210,9 @@ export class InputHandler {
    * Clears the code reference map and resets the ID counter.
    */
   public resetCodeReferences(): void {
+      // --- DEBUG LOG --- 
+      console.log('[InputHandler] resetCodeReferences called!', new Error().stack); // Log call stack
+      // --- END DEBUG LOG --- 
       this.codeRefMap.clear();
       this.nextRefId = 1;
       console.log('Code references reset.'); // Debug log
@@ -248,11 +257,10 @@ export class InputHandler {
       event.preventDefault(); // Prevent default newline insertion
       // Use textContent for div
       let message = this.chatInput.textContent || '';
-      message = this.resolveCodeReferences(message.trim()); // Resolve refs before sending
+      message = message.trim(); // Just trim the raw message
       
       if (message) {
-        this.callbacks.handleSendMessage(message); // Pass resolved message - REMOVED isMarkdown
-        this.clearInput(); // Clear input after sending
+        this.callbacks.handleSendMessage(message); // Pass raw message with placeholders
       }
     }
     // --- Handle Tab/Escape/Arrows for popup interaction ---

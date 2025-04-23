@@ -1,11 +1,18 @@
 export interface InputHandlerCallbacks {
-    handleSendMessage: (message: string, isMarkdown: boolean) => void;
+    handleSendMessage: (message: string) => void;
     showPopupMenu: (left: number, top: number) => void;
     hidePopupMenu: () => void;
     updatePlaceholder: (isMarkdown: boolean) => void;
     toggleInputExpansionUI: (isExpanded: boolean) => void;
-    getCodeRefMap: () => Map<string, string>;
+    getCodeRefMap: () => Map<string, CodeRefData>;
     resetCodeRefMap: () => void;
+}
+export interface CodeRefData {
+    code: string;
+    notebookName: string;
+    cellIndex: number;
+    lineNumber: number;
+    lineEndNumber: number;
 }
 /**
  * Handles events and logic related to the chat input field.
@@ -18,7 +25,7 @@ export declare class InputHandler {
     private hasAtSymbol;
     private isMarkdownMode;
     private isInputExpanded;
-    constructor(chatInput: HTMLTextAreaElement, callbacks: InputHandlerCallbacks);
+    constructor(chatInput: HTMLDivElement, callbacks: InputHandlerCallbacks);
     /**
      * Removes event listeners.
      */
@@ -42,13 +49,18 @@ export declare class InputHandler {
     /**
      * Adds a code reference to the internal map and returns its ID.
      * @param code The actual code content.
+     * @param notebookName The name of the notebook the code is from.
+     * @param cellIndex The index of the cell the code is from (0-based).
+     * @param lineNumber The starting line number of the code within the cell (1-based).
+     * @param lineEndNumber The ending line number of the code within the cell (1-based).
      * @returns The generated reference ID (e.g., "ref-1").
      */
-    addCodeReference(code: string): string;
+    addCodeReference(code: string, notebookName: string, cellIndex: number, lineNumber: number, // Start line
+    lineEndNumber: number): string;
     /**
      * Returns the current map of code references.
      */
-    getCodeReferenceMap(): Map<string, string>;
+    getCodeReferenceMap(): Map<string, CodeRefData>;
     /**
      * Clears the code reference map and resets the ID counter.
      */
@@ -62,6 +74,55 @@ export declare class InputHandler {
     private resolveCodeReferences;
     private _handleKeyPress;
     private _handleInput;
+    /**
+      // Handle @ symbol removal to hide popup using selection API
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount) return;
+  
+      const range = selection.getRangeAt(0);
+      // Check if the input field contains the start of the range
+      if (!this.chatInput.contains(range.startContainer)) return;
+  
+      const cursorPosition = getCaretPosition(this.chatInput); // Use helper
+      if (cursorPosition === null) return;
+  
+      const textContent = this.chatInput.textContent || '';
+      const textBeforeCursor = textContent.slice(0, cursorPosition);
+  
+      // Check if the character immediately before the cursor is '@'
+      // and if it's preceded by whitespace or is at the start of the input.
+      const isAtSymbolContext = textBeforeCursor.endsWith('@') &&
+                             (cursorPosition === 1 ||
+                              cursorPosition > 1 && /\s/.test(textBeforeCursor[cursorPosition - 2]));
+  
+      if (this.hasAtSymbol && !isAtSymbolContext) {
+        // @ symbol context was present but now it's gone, hide the popup
+        this.callbacks.hidePopupMenu();
+      }
+      // Update the state *after* checking the previous state
+      this.hasAtSymbol = isAtSymbolContext;
+  
+      // --- Auto-resize logic (optional) ---
+      // Simple auto-resize based on scroll height (might need refinement)
+      if (!this.isInputExpanded) { // Only auto-resize if not manually expanded
+          this.chatInput.style.height = 'auto'; // Temporarily shrink to content
+          const scrollHeight = this.chatInput.scrollHeight;
+          // Set a max height to prevent infinite growth, e.g., 150px
+          const maxHeight = 150;
+          const newHeight = Math.min(scrollHeight, maxHeight);
+           // Only update height if it actually changes to avoid flicker
+          if (this.chatInput.offsetHeight < newHeight) {
+               this.chatInput.style.height = `${newHeight}px`;
+               this.chatInput.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+          } else if (scrollHeight <= this.chatInput.clientHeight) {
+              // Shrink if content height is less than current height
+              this.chatInput.style.height = `${scrollHeight}px`;
+              this.chatInput.style.overflowY = 'hidden';
+          }
+      }
+      // -----------------------------------
+    };
+    
     /**
      * Explicitly sets the hasAtSymbol flag. Called by shortcut handler.
      */

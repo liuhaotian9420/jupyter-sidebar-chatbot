@@ -61,16 +61,27 @@ export declare class PopupMenuManager {
      * Handle keyboard navigation when the popup menu is shown
      */
     private handleKeyDown;
+    private processMenuNavigation;
     private updateSelectionHighlight;
     private deselectAllMenuItems;
     private selectNextMenuItem;
     private selectPreviousMenuItem;
     /**
-     * Get all interactive menu items
+     * Get all interactive menu items currently displayed
      */
     private getMenuItems;
     /**
-     * Update popup position, keeping the bottom edge fixed at the anchor point
+     * Updates the position of the popup menu based on the active reference range
+     * or the initial anchor point. Tries to position the BOTTOM of the menu
+     * just ABOVE the range/anchor.
      */
     private updatePopupPosition;
+    /**
+     * Checks if the popup menu is currently visible.
+     */
+    isPopupMenuVisible(): boolean;
+    /**
+     * Gets the current level of the popup menu.
+     */
+    getCurrentMenuLevel(): 'top' | 'files' | 'directories' | 'cells';
 }

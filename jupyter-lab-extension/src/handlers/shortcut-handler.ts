@@ -3,7 +3,10 @@ import { InputHandler } from './input-handler'; // Assuming InputHandler manages
 import {
   getSelectedText,
   getCurrentCellContent,
+  isInNotebookCell,
+  isInNotebookCellAndEditorFocused
 } from '../utils/notebook-integration';
+import { globals } from '../core/globals'; // Import globals to get cell index etc.
 
 // Interface for callbacks provided to the shortcut handler
 export interface ShortcutHandlerCallbacks {
@@ -35,44 +38,118 @@ export function setupShortcuts(
     _handleKeyDown = (event: KeyboardEvent) => {
         const { showIndicator, appendToInput, showWidget, focusInput } = callbacks;
 
-        // Check for @ key
-        if (event.key === '@') {
-            // Prevent default browser behavior
-            event.preventDefault();
-            event.stopPropagation();
+        // Check for @ key - event.key should correctly report '@' even with Shift
+        // Also check for SHIFT+2 as an alternative way to trigger '@'
+        if (event.key === '@' || (event.shiftKey && event.key === '2')) {
+            console.log("SHORTCUT HANDLER: '@' key or SHIFT+2 detected");
 
-            // Check if the input field is the active element
-            // We rely on InputHandler potentially managing focus or assume it is handled elsewhere
-            const inputField = document.activeElement as HTMLTextAreaElement; // A bit fragile
-            if (inputField && inputField.tagName === 'TEXTAREA' && inputField.classList.contains('jp-llm-ext-input-field')) {
-                // Get cursor position
-                const cursorPosition = inputField.selectionStart || 0;
-                const textBeforeCursor = inputField.value.substring(0, cursorPosition);
+            const inputField = document.activeElement;
+            const isContentEditableInput = inputField &&
+                (inputField as HTMLElement).getAttribute('contenteditable') === 'true' &&
+                (inputField as HTMLElement).classList.contains('jp-llm-ext-input-field');
 
-                // Calculate position to show menu (simplified example)
-                const inputRect = inputField.getBoundingClientRect();
-                const lineHeight = parseInt(window.getComputedStyle(inputField).lineHeight) || 20;
-                const linesBeforeCursor = (textBeforeCursor.match(/\n/g) || []).length;
-                const cursorTop = inputRect.top + (linesBeforeCursor * lineHeight);
-                const left = inputRect.left + 10; // Simplified horizontal position
+            // Handle the case where the input field is NOT the active element first
+            if (!isContentEditableInput) { // Only handle if NOT our input field
+                console.log("SHORTCUT HANDLER: Input field is NOT active element. Handling '@' globally.");
+                // If not in our input field, prevent default, show widget, focus, insert '@', and show popup.
+                event.preventDefault();
+                event.stopPropagation();
 
-                // Insert @ symbol at cursor position
-                const newValue =
-                    inputField.value.substring(0, cursorPosition) +
-                    '@' +
-                    inputField.value.substring(cursorPosition);
-                inputField.value = newValue;
+                showWidget();
+                focusInput();
+                // After focus, show popup via window.setTimeout to ensure input is ready
+                window.setTimeout(() => {
+                    const inputElement = document.querySelector('.jp-llm-ext-input-field');
+                    if (inputElement) {
+                         const selection = window.getSelection();
+                        if (selection) { // Check if selection exists (even if rangeCount is 0 initially)
+                            // Ensure the input field has focus *before* manipulating the range
+                            if (document.activeElement !== inputElement) {
+                                (inputElement as HTMLElement).focus(); // Re-focus just in case
+                            }
 
-                // Update has @ symbol flag via InputHandler
-                inputHandler.setHasAtSymbol(true);
+                            // Create or get the range
+                            let range: Range;
+                            if (selection.rangeCount > 0) {
+                                range = selection.getRangeAt(0);
+                                // Double-check if the focus is now correctly inside the input element
+                                if (!inputElement.contains(range.commonAncestorContainer)) {
+                                    console.log("SHORTCUT HANDLER: Range is not inside the input field after focus. Creating new range.");
+                                    // If range is not inside, create a new one collapsed at the end
+                                     range = document.createRange();
+                                     range.selectNodeContents(inputElement);
+                                     range.collapse(false); // Collapse to the end
+                                     selection.removeAllRanges();
+                                     selection.addRange(range);
+                                }
+                            } else {
+                                // If no range exists, create one collapsed at the end
+                                console.log("SHORTCUT HANDLER: No range found after focus. Creating new range.");
+                                range = document.createRange();
+                                range.selectNodeContents(inputElement);
+                                range.collapse(false); // Collapse to the end
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                            }
 
-                // Move cursor after the @ symbol
-                inputField.selectionStart = cursorPosition + 1;
-                inputField.selectionEnd = cursorPosition + 1;
+                            // Manually insert '@' since we prevented default
+                            const atNode = document.createTextNode('@');
+                            range.deleteContents(); // Clear any selection just in case
+                            range.insertNode(atNode);
+                            // Move cursor after the inserted '@'
+                            range.setStartAfter(atNode);
+                            range.setEndAfter(atNode);
+                            selection.removeAllRanges(); // Update selection to the new cursor position
+                            selection.addRange(range);
 
-                // Show the popup menu
-                popupMenuManager.showPopupMenu(left + 60, cursorTop - 20); // Adjust positioning as needed
-                showIndicator('Browse cells, code, files, and more');
+                            // **NESTED TIMEOUT:** Give browser time to render before getting range position
+                            window.setTimeout(() => {
+                                console.log("SHORTCUT HANDLER: Showing popup after focusing, inserting '@', and nested timeout.");
+                                // Ensure we get the most up-to-date range reference
+                                const currentSelection = window.getSelection();
+                                if (currentSelection && currentSelection.rangeCount > 0) {
+                                    const currentRange = currentSelection.getRangeAt(0);
+
+                                    // --- Insert temporary span to get reliable coords --- 
+                                    const tempAnchorId = 'jp-llm-shortcut-popup-anchor';
+                                    let tempSpan = document.getElementById(tempAnchorId);
+                                    if (tempSpan) tempSpan.remove(); // Clean up previous
+
+                                    tempSpan = document.createElement('span');
+                                    tempSpan.id = tempAnchorId;
+                                    tempSpan.style.visibility = 'hidden'; 
+                                    tempSpan.style.width = '0';
+                                    tempSpan.style.overflow = 'hidden';
+                                    tempSpan.textContent = '\u200B'; // Zero-width space
+
+                                    currentRange.insertNode(tempSpan); // Insert at cursor
+                                    const spanRect = tempSpan.getBoundingClientRect();
+                                    tempSpan.remove(); // Remove immediately
+                                    // --- End temporary span logic ---
+
+                                    if (spanRect.top === 0 && spanRect.left === 0) {
+                                        console.error("SHORTCUT HANDLER: Failed to get valid coordinates from temp anchor span.");
+                                    } else {
+                                         console.log(`SHORTCUT HANDLER: Anchor coords from temp span: Top=${spanRect.top}, Left=${spanRect.left}`);
+                                         popupMenuManager.showPopupMenu(spanRect.left, spanRect.top); 
+                                         showIndicator('Browsing references...');
+                                    }
+                                } else {
+                                     console.error("SHORTCUT HANDLER: Could not get range immediately before showing popup.");
+                                }
+                            }, 0); // 0ms delay is often sufficient
+
+                        } else {
+                             console.log("SHORTCUT HANDLER: No selection object after focus, cannot insert '@' or show popup reliably.");
+                        }
+                    } else {
+                        console.log("SHORTCUT HANDLER: Could not find input element after timeout.");
+                    }
+                }, 50); // Outer timeout remains 50ms
+            } else {
+                // Input field IS focused. Let default '@' insertion happen.
+                // The 'input' listener in UIManager should handle the popup.
+                console.log("SHORTCUT HANDLER: Input field IS active element. Letting default '@' behavior proceed.");
             }
         }
         // Check for Ctrl+L (insert selection or cell)
@@ -81,20 +158,40 @@ export function setupShortcuts(
             event.stopPropagation();
 
             const selected = getSelectedText();
-            if (selected) {
-                appendToInput(`@code ${selected}`); // Use callback
-                showIndicator('Selected code inserted');
+            // const cellContent = getCurrentCellContent(); // We don't need the content itself anymore
+            const isCellFocused = isInNotebookCellAndEditorFocused(); // If the cursor is in the editor mode
+            const isCellSelected = isInNotebookCell(); // If the cursor is in the notebook cell
+            const activeCellIndex = globals.notebookTracker?.currentWidget?.content?.activeCellIndex; // Get index
+
+            let handled = false;
+            // Priority 1: Selected text in an active cell editor
+            if (isCellFocused && selected) {
+                // Mimic selecting '@code'
+                // Insert the basic reference text. The full metadata handling
+                // should ideally be triggered elsewhere if needed (e.g., InputHandler based on text).
+                appendToInput(`@code `); // Insert '@code ' (maybe add selection later if needed by InputHandler logic?)
+                // TODO: Potentially call inputHandler.addCodeReference here if required by the flow
+                // This would need notebookName, cellIndex, startLine, endLine.
+                showIndicator('Code reference initiated'); // Indicate action started
+                handled = true;
+            // Priority 2: Active cell selected (not necessarily editor focus)
+            } else if (isCellSelected && activeCellIndex !== undefined && activeCellIndex !== null) {
+                // Mimic selecting '@Cells' -> clicking a cell
+                // Insert reference like "@Cell 3" (using 1-based index for display)
+                appendToInput(`@Cell ${activeCellIndex + 1} `); // Add trailing space
+                showIndicator('Cell reference inserted');
+                handled = true;
             } else {
-                const cellContent = getCurrentCellContent();
-                if (cellContent) {
-                    appendToInput(`@cell ${cellContent}`); // Use callback
-                    showIndicator('Cell content inserted');
-                }
+                // Invalid context for the shortcut
+                showIndicator('Cannot insert reference: Select code or an active cell.');
+                handled = true; // Still handled the shortcut, just showed a warning
             }
 
-            // Ensure the sidebar is visible and input is focused
-            showWidget(); // Use callback
-            focusInput(); // Use callback
+            // Ensure the sidebar is visible and input is focused only if an action was taken
+            if (handled) {
+                showWidget(); // Use callback
+                focusInput(); // Use callback
+            }
         }
     };
 

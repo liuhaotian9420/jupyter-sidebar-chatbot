@@ -1,5 +1,4 @@
 "use strict";
-// import { ReadonlyPartialJSONObject } from '@lumino/coreutils';
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createDiv = createDiv;
 exports.createButton = createButton;

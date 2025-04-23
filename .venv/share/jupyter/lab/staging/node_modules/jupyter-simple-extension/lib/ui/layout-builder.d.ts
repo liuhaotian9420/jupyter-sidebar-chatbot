@@ -15,7 +15,7 @@ export interface LayoutElements {
     titleInput: HTMLInputElement;
     messageContainer: HTMLDivElement;
     historyContainer: HTMLDivElement;
-    inputField: HTMLTextAreaElement;
+    inputField: HTMLDivElement;
     bottomBarContainer: HTMLDivElement;
     sendButton: HTMLButtonElement;
     newChatButton: HTMLButtonElement;

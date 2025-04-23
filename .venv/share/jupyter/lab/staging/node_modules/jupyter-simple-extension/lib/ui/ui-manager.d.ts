@@ -6,7 +6,7 @@ import { LayoutElements } from './layout-builder';
 export interface UIManagerCallbacks {
     handleNewChat: () => void;
     handleToggleHistory: () => void;
-    handleSendMessage: () => void;
+    handleSendMessage: (message: string) => void;
     handleShowSettings: (event: MouseEvent) => void;
     handleShowPopupMenu: (event: MouseEvent, targetButton: HTMLElement) => void;
     handleUpdateTitle: () => void;
@@ -17,7 +17,7 @@ export interface UIManagerCallbacks {
 export interface UIElements {
     mainLayout: HTMLElement;
     messageContainer: HTMLDivElement;
-    inputField: HTMLTextAreaElement;
+    inputField: HTMLDivElement;
     titleInput: HTMLInputElement;
     historyContainer: HTMLDivElement;
     bottomBarContainer: HTMLDivElement;
@@ -41,7 +41,6 @@ export declare class UIManager {
     private expandButton;
     private isInputExpanded;
     private isMarkdownMode;
-    getIsMarkdownMode(): boolean;
     constructor(popupMenuManager: PopupMenuManager, callbacks: UIManagerCallbacks, layoutElements: LayoutElements);
     /**
      * Returns the core layout elements.
@@ -114,4 +113,32 @@ export declare class UIManager {
      * Useful if the widget is hidden while the indicator is shown.
      */
     clearIndicator(): void;
+    /**
+     * Checks the input field content and cursor position to determine if
+     * the reference suggestion popup should be shown or hidden.
+     * Triggered on 'input' events.
+     */
+    private handleInputForReference;
+    /**
+     * Serializes the content of the input field, converting known widgets
+     * back to their reference strings (e.g., @file:path/to/file.txt).
+     *
+     * NOTE: This currently uses a simple text serialization. For full fidelity
+     * preserving structure (like multiple paragraphs), a more complex approach
+     * (e.g., HTML processing or a dedicated editor model) would be needed.
+     *
+     * @returns {string} The serialized plain text content of the input field.
+     */
+    getSerializedInput(): string;
+    private serializeNodeChildren;
+    clearInputField(): void;
+    /**
+     * Handles the 'copy' event to put serialized plain text onto the clipboard.
+     */
+    private handleCopy;
+    /**
+     * Handles the 'paste' event to insert plain text content.
+     */
+    private handlePaste;
+    private serializeRangeContent;
 }

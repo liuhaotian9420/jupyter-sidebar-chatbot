@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MessageHandler = void 0;
 const message_renderer_1 = require("../ui/message-renderer");
 const notebook_integration_1 = require("../utils/notebook-integration");
+const globals_1 = require("../core/globals"); // Import globals for notebook tracker
 /**
  * Handles sending messages, interacting with the API,
  * managing streaming responses, and updating the UI and state.
@@ -18,16 +19,17 @@ class MessageHandler {
     /**
      * Processes and sends a user-initiated message.
      * Also handles adding the user message to the UI and clearing the input.
-     * Accepts the message text and whether it was entered in Markdown mode.
+     * Accepts the message text.
      */
-    handleSendMessage(message, isMarkdown) {
+    handleSendMessage(message) {
         if (!message.trim())
             return;
-        console.log(`[MessageHandler] Handling send: "${message}", Markdown: ${isMarkdown}`);
-        // Add user message to UI FIRST, using the isMarkdown flag
-        this.addMessage(message, 'user', isMarkdown); // Pass isMarkdown here
+        console.log(`[MessageHandler] Handling send: "${message}"`);
+        // Add user message to UI FIRST
+        // Assume user messages aren't markdown unless specific toggle is used elsewhere
+        this.addMessage(message, 'user');
         // Clear input via InputHandler (which uses UIManager)
-        this.inputHandler.clearInput(); // Corrected method name
+        // REMOVED: this.inputHandler.clearInput(); // Input clearing is now handled by UIManager after the callback
         // Send message to backend API and handle streaming response
         this.streamAndRenderResponse(message);
     }
@@ -77,15 +79,29 @@ class MessageHandler {
     ) {
         console.log(`[MessageHandler] Adding message: Sender=${sender}, Markdown=${isMarkdown}, Auto=${isAuto}`);
         let messageElement;
+        // Prepare extended callbacks for the renderer
+        const extendedCallbacks = Object.assign(Object.assign({}, this.rendererCallbacks), { getCodeRefData: (refId) => {
+                return this.inputHandler.getCodeReferenceMap().get(refId);
+            }, getCurrentNotebookContext: () => {
+                var _a, _b;
+                const currentNotebook = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.currentWidget;
+                if (currentNotebook === null || currentNotebook === void 0 ? void 0 : currentNotebook.context) {
+                    const path = currentNotebook.context.path;
+                    const name = ((_b = path.split('/').pop()) === null || _b === void 0 ? void 0 : _b.split('.')[0]) || 'notebook';
+                    return { name, path };
+                }
+                return undefined;
+            } });
         if (sender === 'user') {
-            // Pass the isMarkdown option to the renderer
-            messageElement = (0, message_renderer_1.renderUserMessage)(text, { isMarkdown }, this.rendererCallbacks);
+            // Pass the isMarkdown option and extended callbacks to the renderer
+            messageElement = (0, message_renderer_1.renderUserMessage)(text, { isMarkdown }, extendedCallbacks);
         }
         else {
             // Bot messages usually are markdown unless specified otherwise
             // Handle auto messages specifically if they shouldn't be parsed as markdown
             const botIsMarkdown = !isAuto; // Assume auto messages aren't markdown
-            messageElement = (0, message_renderer_1.renderBotMessage)(text, { isMarkdown: botIsMarkdown }, this.rendererCallbacks);
+            // Pass extended callbacks to bot message renderer too, in case it needs them later
+            messageElement = (0, message_renderer_1.renderBotMessage)(text, { isMarkdown: botIsMarkdown }, extendedCallbacks);
         }
         this.uiManager.addChatMessageElement(messageElement);
         // Don't save internal 'confirmed'/'rejected' messages to history

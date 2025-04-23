@@ -1,3 +1,4 @@
+import { CodeRefData } from '../handlers/input-handler';
 /**
  * Callbacks for actions within rendered messages.
  */
@@ -9,6 +10,11 @@ export interface MessageRendererCallbacks {
     copyMessageToClipboard: (text: string, feedbackCb: () => void) => void;
     handleConfirmInterrupt: () => void;
     handleRejectInterrupt: () => void;
+    getCodeRefData?: (refId: string) => CodeRefData | undefined;
+    getCurrentNotebookContext?: () => {
+        name: string;
+        path: string;
+    } | undefined;
 }
 /**
  * Options for rendering a message.

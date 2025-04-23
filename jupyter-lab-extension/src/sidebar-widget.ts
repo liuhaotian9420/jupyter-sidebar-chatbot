@@ -9,12 +9,13 @@ import { createSettingsModalElement, SettingsModalCallbacks } from './ui/setting
 import { MessageRendererCallbacks } from './ui/message-renderer';
 import { ChatState } from './state/chat-state';
 import { SettingsState } from './state/settings-state';
-import { InputHandler, InputHandlerCallbacks } from './handlers/input-handler';
+import { InputHandler, InputHandlerCallbacks, CodeRefData } from './handlers/input-handler';
 import { MessageHandler } from './handlers/message-handler';
 import { HistoryHandler, HistoryHandlerCallbacks } from './handlers/history-handler';
 import { SettingsHandler } from './handlers/settings-handler';
 import { UIManager, UIManagerCallbacks } from './ui/ui-manager';
 import { LabIcon } from '@jupyterlab/ui-components';
+import { globals } from './core/globals';
 
 // --- Import Utility Functions ---
 import {
@@ -146,17 +147,91 @@ export class SimpleSidebarWidget extends Widget {
     this.apiClient = new ApiClient(initialSettings?.apiUrl || undefined);
     this.chatState = new ChatState();
     this.popupMenuManager = new PopupMenuManager(this.docManager, this.node, {
-        insertCode: (code: string) => this.inputHandler?.appendToInput(`@code ${code}`),
+        insertCode: (code: string) => {
+            if (!this.inputHandler || !globals.notebookTracker) return;
+
+            const currentNotebookPanel = globals.notebookTracker.currentWidget;
+            if (!currentNotebookPanel || !currentNotebookPanel.context || !currentNotebookPanel.content) {
+                console.warn('Could not get notebook context for code reference, inserting raw code as fallback.');
+                this.inputHandler?.appendToInput(code); 
+                return;
+            }
+
+            const notebookPath = currentNotebookPanel.context.path;
+            const notebookName = notebookPath.split('/').pop()?.split('.')[0] || 'notebook';
+            const currentCell = currentNotebookPanel.content.activeCell;
+            if (!currentCell) {
+                console.warn('Could not get active cell for code reference, inserting raw code as fallback.');
+                this.inputHandler?.appendToInput(code); 
+                return;
+            }
+            const cellIndex = currentNotebookPanel.content.activeCellIndex;
+            let lineNumber = 1; // Default line number
+            let lineEndNumber = 1; // Default end line number
+            // --- DEBUG LOG --- 
+            console.log('Are we currently in a code cell?');
+            // check if currentCell is in editor 
+            console.log(currentCell.editor);
+            // --- END DEBUG LOG ---
+            if (currentCell.editor) {
+                const editor = currentCell.editor;
+                const cmEditor = (editor as any).editor; // Access CodeMirror editor instance (EditorView)
+                if (cmEditor && cmEditor.state) {
+                    const state = cmEditor.state;
+                    const selection = state.selection.main;
+                    if (!selection.empty) {
+                      lineNumber = state.doc.lineAt(selection.from).number; // 1-based start line
+                      lineEndNumber = state.doc.lineAt(selection.to).number; // 1-based end line
+                    } else {
+                      // Fallback for cursor position if no selection
+                      const cursor = editor.getCursorPosition();
+                      if (cursor) {
+                          lineNumber = cursor.line + 1; // 1-based line number
+                          lineEndNumber = lineNumber; // Start and end are the same for cursor
+                      }
+                    }
+                } else {
+                    // Fallback if cmEditor or state is not available (should not happen often)
+                    console.warn('Could not access CodeMirror state for line numbers.');
+                    const cursor = editor.getCursorPosition();
+                    if (cursor) {
+                        lineNumber = cursor.line + 1; 
+                        lineEndNumber = lineNumber; 
+                    }
+                }
+            } else {
+                 console.warn('Could not access cell editor for line numbers.');
+                 // Keep default line numbers 1, 1 if editor is not available
+            }
+            
+            // --- DEBUG LOG --- 
+            console.log(`[SimpleSidebarWidget.insertCode] Determined lines: Start=${lineNumber}, End=${lineEndNumber}`);
+            // --- END DEBUG LOG ---
+
+            // Pass both start and end line numbers
+            const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber, lineEndNumber);
+            const placeholder = `@code[${refId}]`;
+            this.inputHandler.appendToInput(placeholder);
+        },
         insertCell: (content: string) => this.inputHandler?.appendToInput(`@cell ${content}`),
-        insertFilePath: (path: string) => this.inputHandler?.appendToInput(`@file ${path}`),
-        insertDirectoryPath: (path: string) => this.inputHandler?.appendToInput(`@dir ${path}`),
+        insertFilePath: (path: string) => this.inputHandler?.appendToInput(`@file[${path}]`),
+        insertDirectoryPath: (path: string) => this.inputHandler?.appendToInput(`@dir[${path}]`),
         getSelectedText: getSelectedText,
         getCurrentCellContent: getCurrentCellContent,
-        insertCellByIndex: (index: number) => insertCellContentByIndex(index, (content: string) => this.inputHandler?.appendToInput(`@${content}`)),
+        insertCellByIndex: (index: number) => { 
+            const oneBasedIndex = index + 1; 
+            const refText = `@Cell[${oneBasedIndex}]`; 
+            this.inputHandler?.appendToInput(refText); 
+        },
+        // TODO: insertCollapsedCodeRef should later be merged with insertCode
+        // as we only expect one kind of behavior from the input handler.
+        // this change will also involve ui changes
         insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => {
+            // Handle reference from cursor position (assume start/end line are the same)
             if (!this.inputHandler) return;
-            const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber);
-            const placeholder = createCodeRefPlaceholder(refId, notebookName, lineNumber);
+            const lineEndNumber = lineNumber; // Start and end are the same for a single line reference
+            const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber, lineEndNumber);
+            const placeholder = `@code[${refId}]`; 
             this.inputHandler.appendToInput(placeholder);
         }
     });

@@ -455,13 +455,12 @@ exports.HistoryHandler = HistoryHandler;
 /*!***************************************!*\
   !*** ./lib/handlers/input-handler.js ***!
   \***************************************/
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 
-// import { PopupMenuManager, MenuActionCallbacks } from './popup-menu-manager'; // Removed unused import
-// import { UIManager } from '../ui/ui-manager'; // Removed unused import
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.InputHandler = void 0;
+const content_editable_utils_1 = __webpack_require__(/*! ../utils/content-editable-utils */ "./lib/utils/content-editable-utils.js"); // Helper needed
 /**
  * Handles events and logic related to the chat input field.
  */
@@ -480,40 +479,45 @@ class InputHandler {
         // -----------------------------
         // --- Private Event Handlers ---
         this._handleKeyPress = (event) => {
-            // Handle Enter key (send message)
+            // Handle Enter key press (send message)
             if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                const rawMessage = this.chatInput.value.trim();
-                if (rawMessage) {
-                    // Resolve code references BEFORE sending
-                    const resolvedMessage = this.resolveCodeReferences(rawMessage);
-                    console.log('Sending resolved message:', resolvedMessage); // Debug log
-                    // Pass markdown state along with the message
-                    this.callbacks.handleSendMessage(resolvedMessage, this.isMarkdownMode);
-                    // Clearing is handled separately (e.g., by MessageHandler calling clearInput)
+                event.preventDefault(); // Prevent default newline insertion
+                // Use textContent for div
+                let message = this.chatInput.textContent || '';
+                message = message.trim(); // Just trim the raw message
+                if (message) {
+                    this.callbacks.handleSendMessage(message); // Pass raw message with placeholders
                 }
             }
-            // Note: '@' key handling might be better in handleKeyDown if needed globally,
-            // but keeping here for now as it relates directly to input field focus.
-            // Or handled by shortcut-handler listening globally. Let's assume shortcut-handler handles it.
+            // --- Handle Tab/Escape/Arrows for popup interaction ---
+            // Check if popup is visible (needs a way to know, maybe via callbacks or direct reference?)
+            // Assuming popupMenuManager reference is available or state is tracked
+            // else if (this.popupMenuManager.isPopupMenuVisible()) { // Pseudo-code
+            //    if (event.key === 'Tab' || event.key === 'Escape' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            //        // Prevent default input field behavior
+            //        event.preventDefault();
+            //        // Let the PopupMenuManager's document handler manage the event
+            //    }
+            // }
+            // --- End Popup Interaction Handling ---
         };
         this._handleInput = () => {
-            // Handle @ symbol removal to hide popup
-            const cursorPosition = this.chatInput.selectionStart;
-            if (cursorPosition === null)
-                return; // Type guard
-            const textBeforeCursor = this.chatInput.value.slice(0, cursorPosition);
-            // Check if the character immediately before the cursor is '@'
-            // and if it's preceded by whitespace or is at the start of the input.
-            const isAtSymbolContext = textBeforeCursor.endsWith('@') &&
-                (cursorPosition === 1 ||
-                    /\s/.test(textBeforeCursor[cursorPosition - 2]));
-            if (this.hasAtSymbol && !isAtSymbolContext) {
-                // @ symbol context was present but now it's gone, hide the popup
-                this.callbacks.hidePopupMenu();
-            }
-            // Update the state *after* checking the previous state
-            this.hasAtSymbol = isAtSymbolContext;
+            // Use textContent for div
+            const currentText = this.chatInput.textContent || '';
+            // --- Update Code Ref Placeholders --- 
+            // Optional: If we want visual placeholders to update live
+            // This could involve complex DOM manipulation or using a library.
+            // For now, we resolve refs only on send.
+            // --- At Symbol Detection for Popup --- 
+            // This logic was moved to UIManager.handleInputForReference
+            // because UIManager needs to coordinate showing the popup.
+            // InputHandler might still need to know *if* an @ was typed recently
+            // to adjust behavior (e.g., how Enter works), but UIManager handles the popup trigger.
+            // Simple check if text contains '@' for potential state management
+            this.hasAtSymbol = currentText.includes('@');
+            // Adjust input height dynamically based on content?
+            // Can be complex with contenteditable divs. Requires careful calculation.
+            // this.adjustInputHeight(); 
         };
         this.chatInput = chatInput;
         this.callbacks = callbacks;
@@ -536,25 +540,39 @@ class InputHandler {
      */
     appendToInput(text) {
         try {
-            const currentValue = this.chatInput.value;
-            const start = this.chatInput.selectionStart;
-            const end = this.chatInput.selectionEnd;
-            let newValue = '';
-            let newCursorPos = 0;
-            // Check if the character immediately before the cursor is '@'
-            if (start > 0 && currentValue[start - 1] === '@') {
-                // Replace the '@' and append the new text
-                newValue = currentValue.slice(0, start - 1) + text + currentValue.slice(end);
-                newCursorPos = (start - 1) + text.length;
+            this.chatInput.focus(); // Ensure focus first
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) {
+                console.error('Cannot append to input: No selection found.');
+                // Fallback: append to end
+                this.chatInput.textContent = (this.chatInput.textContent || '') + text;
+                return;
+            }
+            const range = selection.getRangeAt(0);
+            const { startContainer, startOffset } = range;
+            let currentTextContent = this.chatInput.textContent || ''; // Use textContent
+            let insertPos = (0, content_editable_utils_1.getCaretPosition)(this.chatInput); // Get linear position
+            // Simple check: if the character before the linear caret position is '@'
+            if (insertPos > 0 && currentTextContent[insertPos - 1] === '@') {
+                // Replace the '@' - more complex with DOM manipulation,
+                // For simplicity, we'll replace in textContent and reset
+                const before = currentTextContent.slice(0, insertPos - 1);
+                const after = currentTextContent.slice(insertPos);
+                this.chatInput.textContent = before + text + after;
+                // Set cursor position after the inserted text
+                (0, content_editable_utils_1.setCaretPosition)(this.chatInput, (insertPos - 1) + text.length);
             }
             else {
-                // Standard insertion: Insert text at cursor position
-                newValue = currentValue.slice(0, start) + text + currentValue.slice(end);
-                newCursorPos = start + text.length;
+                // Standard insertion - more complex with DOM manipulation
+                // For simplicity, we'll insert in textContent and reset
+                const before = currentTextContent.slice(0, insertPos);
+                const after = currentTextContent.slice(insertPos);
+                this.chatInput.textContent = before + text + after;
+                // Set cursor position after the inserted text
+                (0, content_editable_utils_1.setCaretPosition)(this.chatInput, insertPos + text.length);
             }
-            this.chatInput.value = newValue;
-            this.chatInput.focus();
-            this.chatInput.setSelectionRange(newCursorPos, newCursorPos);
+            // Trigger input event manually since we're changing textContent directly
+            this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
         }
         catch (error) {
             console.error('Error appending to input:', error);
@@ -564,16 +582,20 @@ class InputHandler {
      * Clears the input field and resets associated state after sending.
      */
     clearInput() {
-        this.chatInput.value = '';
+        // Use textContent for div
+        this.chatInput.textContent = '';
         // Directly reset internal state instead of relying on callback
         this.resetCodeReferences();
-        this.chatInput.rows = 1;
+        // Remove rows manipulation
+        // this.chatInput.rows = 1;
         this.chatInput.style.height = ''; // Reset height
         this.hasAtSymbol = false; // Reset @ state
         // Reset expand button state if it was expanded
         if (this.isInputExpanded) {
             this.toggleInputExpansion(false); // Collapse input
         }
+        // Trigger input event manually after clearing
+        this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
     }
     /**
      * Sets the markdown mode state and updates the placeholder.
@@ -592,13 +614,18 @@ class InputHandler {
     toggleInputExpansion(forceState) {
         this.isInputExpanded = forceState !== undefined ? forceState : !this.isInputExpanded;
         if (this.isInputExpanded) {
+            // Use max-height or height for div
             this.chatInput.style.height = '200px'; // Example height
+            // Allow vertical resizing if desired, or keep as 'none'
             this.chatInput.style.resize = 'vertical';
+            this.chatInput.style.overflowY = 'auto'; // Ensure scrollbar appears if needed
         }
         else {
             this.chatInput.style.height = ''; // Reset height
             this.chatInput.style.resize = 'none';
-            this.chatInput.rows = 1; // Ensure it collapses back to 1 row height
+            // Remove rows manipulation
+            // this.chatInput.rows = 1; // Ensure it collapses back to 1 row height
+            this.chatInput.style.overflowY = 'hidden'; // Hide scrollbar when collapsed
         }
         // Notify UIManager/LayoutBuilder to update button appearance
         this.callbacks.toggleInputExpansionUI(this.isInputExpanded);
@@ -607,12 +634,24 @@ class InputHandler {
     /**
      * Adds a code reference to the internal map and returns its ID.
      * @param code The actual code content.
+     * @param notebookName The name of the notebook the code is from.
+     * @param cellIndex The index of the cell the code is from (0-based).
+     * @param lineNumber The starting line number of the code within the cell (1-based).
+     * @param lineEndNumber The ending line number of the code within the cell (1-based).
      * @returns The generated reference ID (e.g., "ref-1").
      */
-    addCodeReference(code) {
+    addCodeReference(code, notebookName, cellIndex, lineNumber, // Start line
+    lineEndNumber // End line
+    ) {
         const refId = `ref-${this.nextRefId++}`;
-        this.codeRefMap.set(refId, code);
-        console.log('Added code reference:', refId, '->', code.substring(0, 50) + '...'); // Debug log
+        // Store both start and end line numbers
+        const refData = { code, notebookName, cellIndex, lineNumber, lineEndNumber };
+        // Store the ACTUAL CodeRefData object in the map
+        this.codeRefMap.set(refId, refData);
+        // Log the details separately
+        console.log('Added code reference:', refId, '->', `(${notebookName}, Cell ${cellIndex + 1}, Line ${lineNumber}${lineNumber !== lineEndNumber ? '_' + lineEndNumber : ''}) ` +
+            code.substring(0, 30) + '...' // Log metadata too
+        );
         return refId;
     }
     /**
@@ -625,6 +664,9 @@ class InputHandler {
      * Clears the code reference map and resets the ID counter.
      */
     resetCodeReferences() {
+        // --- DEBUG LOG --- 
+        console.log('[InputHandler] resetCodeReferences called!', new Error().stack); // Log call stack
+        // --- END DEBUG LOG --- 
         this.codeRefMap.clear();
         this.nextRefId = 1;
         console.log('Code references reset.'); // Debug log
@@ -642,11 +684,12 @@ class InputHandler {
         // Regex to find placeholders like [ref-1], [ref-12], etc.
         const placeholderRegex = /\[(ref-\d+)\]/g;
         let resolvedMessage = message.replace(placeholderRegex, (match, refId) => {
-            const code = this.codeRefMap.get(refId);
-            if (code !== undefined) {
+            // Access the .code property from the stored object
+            const refData = this.codeRefMap.get(refId);
+            if (refData) {
                 console.log('Resolving code reference:', refId); // Debug log
                 // Add context around the replaced code
-                return `\n\`\`\`\n${code}\n\`\`\`\n`;
+                return `\n\`\`\`\n${refData.code}\n\`\`\`\n`; // Use refData.code
             }
             else {
                 console.warn('Could not find code for reference:', refId); // Warn if ref ID not found
@@ -655,6 +698,55 @@ class InputHandler {
         });
         return resolvedMessage;
     }
+    /**
+      // Handle @ symbol removal to hide popup using selection API
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount) return;
+  
+      const range = selection.getRangeAt(0);
+      // Check if the input field contains the start of the range
+      if (!this.chatInput.contains(range.startContainer)) return;
+  
+      const cursorPosition = getCaretPosition(this.chatInput); // Use helper
+      if (cursorPosition === null) return;
+  
+      const textContent = this.chatInput.textContent || '';
+      const textBeforeCursor = textContent.slice(0, cursorPosition);
+  
+      // Check if the character immediately before the cursor is '@'
+      // and if it's preceded by whitespace or is at the start of the input.
+      const isAtSymbolContext = textBeforeCursor.endsWith('@') &&
+                             (cursorPosition === 1 ||
+                              cursorPosition > 1 && /\s/.test(textBeforeCursor[cursorPosition - 2]));
+  
+      if (this.hasAtSymbol && !isAtSymbolContext) {
+        // @ symbol context was present but now it's gone, hide the popup
+        this.callbacks.hidePopupMenu();
+      }
+      // Update the state *after* checking the previous state
+      this.hasAtSymbol = isAtSymbolContext;
+  
+      // --- Auto-resize logic (optional) ---
+      // Simple auto-resize based on scroll height (might need refinement)
+      if (!this.isInputExpanded) { // Only auto-resize if not manually expanded
+          this.chatInput.style.height = 'auto'; // Temporarily shrink to content
+          const scrollHeight = this.chatInput.scrollHeight;
+          // Set a max height to prevent infinite growth, e.g., 150px
+          const maxHeight = 150;
+          const newHeight = Math.min(scrollHeight, maxHeight);
+           // Only update height if it actually changes to avoid flicker
+          if (this.chatInput.offsetHeight < newHeight) {
+               this.chatInput.style.height = `${newHeight}px`;
+               this.chatInput.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+          } else if (scrollHeight <= this.chatInput.clientHeight) {
+              // Shrink if content height is less than current height
+              this.chatInput.style.height = `${scrollHeight}px`;
+              this.chatInput.style.overflowY = 'hidden';
+          }
+      }
+      // -----------------------------------
+    };
+    
     /**
      * Explicitly sets the hasAtSymbol flag. Called by shortcut handler.
      */
@@ -684,6 +776,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.MessageHandler = void 0;
 const message_renderer_1 = __webpack_require__(/*! ../ui/message-renderer */ "./lib/ui/message-renderer.js");
 const notebook_integration_1 = __webpack_require__(/*! ../utils/notebook-integration */ "./lib/utils/notebook-integration.js");
+const globals_1 = __webpack_require__(/*! ../core/globals */ "./lib/core/globals.js"); // Import globals for notebook tracker
 /**
  * Handles sending messages, interacting with the API,
  * managing streaming responses, and updating the UI and state.
@@ -699,16 +792,17 @@ class MessageHandler {
     /**
      * Processes and sends a user-initiated message.
      * Also handles adding the user message to the UI and clearing the input.
-     * Accepts the message text and whether it was entered in Markdown mode.
+     * Accepts the message text.
      */
-    handleSendMessage(message, isMarkdown) {
+    handleSendMessage(message) {
         if (!message.trim())
             return;
-        console.log(`[MessageHandler] Handling send: "${message}", Markdown: ${isMarkdown}`);
-        // Add user message to UI FIRST, using the isMarkdown flag
-        this.addMessage(message, 'user', isMarkdown); // Pass isMarkdown here
+        console.log(`[MessageHandler] Handling send: "${message}"`);
+        // Add user message to UI FIRST
+        // Assume user messages aren't markdown unless specific toggle is used elsewhere
+        this.addMessage(message, 'user');
         // Clear input via InputHandler (which uses UIManager)
-        this.inputHandler.clearInput(); // Corrected method name
+        // REMOVED: this.inputHandler.clearInput(); // Input clearing is now handled by UIManager after the callback
         // Send message to backend API and handle streaming response
         this.streamAndRenderResponse(message);
     }
@@ -758,15 +852,29 @@ class MessageHandler {
     ) {
         console.log(`[MessageHandler] Adding message: Sender=${sender}, Markdown=${isMarkdown}, Auto=${isAuto}`);
         let messageElement;
+        // Prepare extended callbacks for the renderer
+        const extendedCallbacks = Object.assign(Object.assign({}, this.rendererCallbacks), { getCodeRefData: (refId) => {
+                return this.inputHandler.getCodeReferenceMap().get(refId);
+            }, getCurrentNotebookContext: () => {
+                var _a, _b;
+                const currentNotebook = (_a = globals_1.globals.notebookTracker) === null || _a === void 0 ? void 0 : _a.currentWidget;
+                if (currentNotebook === null || currentNotebook === void 0 ? void 0 : currentNotebook.context) {
+                    const path = currentNotebook.context.path;
+                    const name = ((_b = path.split('/').pop()) === null || _b === void 0 ? void 0 : _b.split('.')[0]) || 'notebook';
+                    return { name, path };
+                }
+                return undefined;
+            } });
         if (sender === 'user') {
-            // Pass the isMarkdown option to the renderer
-            messageElement = (0, message_renderer_1.renderUserMessage)(text, { isMarkdown }, this.rendererCallbacks);
+            // Pass the isMarkdown option and extended callbacks to the renderer
+            messageElement = (0, message_renderer_1.renderUserMessage)(text, { isMarkdown }, extendedCallbacks);
         }
         else {
             // Bot messages usually are markdown unless specified otherwise
             // Handle auto messages specifically if they shouldn't be parsed as markdown
             const botIsMarkdown = !isAuto; // Assume auto messages aren't markdown
-            messageElement = (0, message_renderer_1.renderBotMessage)(text, { isMarkdown: botIsMarkdown }, this.rendererCallbacks);
+            // Pass extended callbacks to bot message renderer too, in case it needs them later
+            messageElement = (0, message_renderer_1.renderBotMessage)(text, { isMarkdown: botIsMarkdown }, extendedCallbacks);
         }
         this.uiManager.addChatMessageElement(messageElement);
         // Don't save internal 'confirmed'/'rejected' messages to history
@@ -965,32 +1073,36 @@ class PopupMenuManager {
         await this.renderMenuContent();
         // Ensure it's attached to the widget node if somehow detached
         this.widgetNode.appendChild(this.popupMenuContainer);
-        // Position the popup menu - handled in updatePopupPosition
-        this.updatePopupPosition();
-        // Focus the search input if we are in file/directory view, otherwise focus the first item
-        if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-            setTimeout(() => {
-                // Focus after timeout to ensure DOM is ready
+        // Position the popup menu - DEFER calculation slightly
+        setTimeout(() => {
+            console.log("POPUP: Deferred updatePopupPosition call.");
+            try {
+                this.updatePopupPosition();
+            }
+            catch (error) {
+                console.error("POPUP: Error during deferred updatePopupPosition:", error);
+            }
+            // Focus the search input *after* positioning if in file/dir view
+            // Otherwise, focus first menu item
+            if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
                 this.searchInput.focus();
-                console.log('POPUP: Focused search input');
-            }, 50); // Slightly longer timeout
-            this.selectedMenuItemIndex = -1; // Don't select an item if search is focused
-        }
-        else {
-            // Reset and select the first menu item for top level
-            this.selectedMenuItemIndex = -1;
-            setTimeout(() => this.selectNextMenuItem(), 50);
-        }
+                console.log('POPUP: Focused search input after deferred positioning.');
+                this.selectedMenuItemIndex = -1; // Don't select an item if search is focused
+            }
+            else { // Top level or cells
+                this.selectedMenuItemIndex = -1;
+                this.selectNextMenuItem(); // Select first item
+                // Optionally focus the first item for immediate keyboard nav
+                // const menuItems = this.getMenuItems();
+                // if (menuItems.length > 0) menuItems[0].focus(); 
+            }
+        }, 0); // 0ms delay is usually sufficient
     }
     hidePopupMenu() {
         if (this.popupMenuContainer.style.display !== 'none') {
-            console.log('POPUP: Hiding menu.');
+            console.log('POPUP: Hiding menu. Called from:', new Error().stack);
             this.popupMenuContainer.style.display = 'none';
-            // No need to explicitly remove from widgetNode unless causing issues
-            // If performance becomes an issue with many menus, consider removing/re-adding
-            // if (this.popupMenuContainer.parentNode === this.widgetNode) {
-            //     this.widgetNode.removeChild(this.popupMenuContainer);
-            // }
+            this.currentMenuLevel = 'top'; // Reset level
         }
     }
     async renderMenuContent() {
@@ -1005,11 +1117,12 @@ class PopupMenuManager {
             while (this.popupMenuContainer.firstChild) {
                 this.popupMenuContainer.removeChild(this.popupMenuContainer.firstChild);
             }
-            // If not at top level, add a search input for filtering items
+            // Only add search input if NOT at top level
             if (this.currentMenuLevel !== 'top') {
                 // Add search input at the top of the menu
                 this.popupMenuContainer.appendChild(this.searchInput);
-                // Path display and back button removed for cleaner UI
+                this.searchInput.value = ''; // Clear for file/dir/cell levels
+                this.lastSearchTerm = '';
             }
             // Render different menu content based on current level
             switch (this.currentMenuLevel) {
@@ -1027,9 +1140,13 @@ class PopupMenuManager {
             // Reset selection after rendering
             this.selectedMenuItemIndex = -1;
             this.updateSelectionHighlight();
-            // Update the position to maintain the fixed bottom edge
-            if (this.popupMenuContainer.style.display !== 'none' && this._anchorX !== undefined && this._anchorY !== undefined) {
+            // Update the position (might have changed due to content rendering)
+            console.log("POPUP: ===> About to call updatePopupPosition after renderMenuContent");
+            try {
                 this.updatePopupPosition();
+            }
+            catch (err) {
+                console.error("POPUP: Error calling updatePopupPosition after render:", err);
             }
         }
         catch (error) {
@@ -1357,18 +1474,27 @@ class PopupMenuManager {
             case 'select-cell':
                 if (path) {
                     const cellIndex = parseInt(path);
-                    if (!isNaN(cellIndex) && this.callbacks.insertCellByIndex) {
-                        this.callbacks.insertCellByIndex(cellIndex);
+                    if (!isNaN(cellIndex)) {
+                        // Construct the reference text (e.g., "@Cell 3")
+                        // const refText = `@Cell ${cellIndex + 1}`; // Use 1-based index for display
+                        // console.log("TODO: Implement cell reference insertion: ", refText);
+                        this.callbacks.insertCellByIndex(cellIndex); // Call the appropriate callback
                         this.hidePopupMenu();
                     }
                     else {
-                        console.error('POPUP: Invalid cell index or callback missing.');
+                        console.error('POPUP: Invalid cell index.');
                     }
+                }
+                else {
+                    console.error('POPUP: Cell selected but index (path) is missing.');
                 }
                 break;
             case 'select-file':
                 if (path) {
-                    this.callbacks.insertFilePath(path);
+                    // Construct the reference text (e.g., "@file path/to/file.py")
+                    // const refText = `@file ${path}`;
+                    // console.log("TODO: Implement file reference insertion: ", refText);
+                    this.callbacks.insertFilePath(path); // Call the appropriate callback
                     this.hidePopupMenu();
                 }
                 else {
@@ -1392,7 +1518,10 @@ class PopupMenuManager {
                 break;
             case 'select-directory-callback': // New action to select dir when in directory view
                 if (path) {
-                    this.callbacks.insertDirectoryPath(path); // Use the callback
+                    // Construct the reference text (e.g., "@dir path/to/directory")
+                    // const refText = `@dir ${path}`;
+                    // console.log("TODO: Implement directory reference insertion: ", refText);
+                    this.callbacks.insertDirectoryPath(path); // Call the appropriate callback
                     this.hidePopupMenu();
                 }
                 else {
@@ -1584,7 +1713,7 @@ class PopupMenuManager {
     getParentDirectory(path) {
         if (!path)
             return '';
-        const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\\\'));
+        const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
         if (lastSlash === -1)
             return ''; // No directory part, likely root or just a filename
         return path.substring(0, lastSlash);
@@ -1593,207 +1722,230 @@ class PopupMenuManager {
      * Handle keyboard navigation when the popup menu is shown
      */
     handleKeyDown(event) {
-        var _a;
-        // Skip if menu not visible
-        if (this.popupMenuContainer.style.display === 'none') {
+        // Only handle keys if the popup is visible
+        if (!this.isPopupMenuVisible()) {
             return;
         }
-        console.log(`POPUP KeyDown: Key='${event.key}', Target='${(_a = event.target) === null || _a === void 0 ? void 0 : _a.tagName}', SearchFocused='${document.activeElement === this.searchInput}'`);
-        // Special handling for when search input is focused
-        if (document.activeElement === this.searchInput) {
-            // The input's own keydown handler will handle most keys
-            // But for certain keys like arrow keys, we may need to move focus
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                // Move selection to first/last item
+        console.log(`POPUP Document KeyDown: Key='${event.key}', Target=`, event.target);
+        // Allow default browser search behavior (e.g., Cmd+F)
+        if (event.metaKey || event.ctrlKey) {
+            return;
+        }
+        // If focus is inside the search input, let its handler manage navigation keys
+        if (event.target === this.searchInput) {
+            console.log('POPUP (Document): Key event target is search input, skipping document handler.');
+            // Allow Backspace etc. to work naturally in search input
+            if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+                // Let the search input's keydown handle Escape, stop propagation
+                // But let the main handler process Up/Down/Enter/Tab by blurring
+                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    // Trigger blur to shift focus to menu items
+                    this.searchInput.blur();
+                    // Prevent default scrolling behavior
+                    event.preventDefault();
+                    // Process the key event now in the menu context
+                    this.processMenuNavigation(event.key);
+                }
+                else if (event.key === 'Enter') {
+                    this.searchInput.blur();
+                    event.preventDefault();
+                    this.processMenuNavigation(event.key);
+                }
+                else if (event.key === 'Tab') {
+                    // Allow tabbing away (or maybe cycle focus?)
+                    this.searchInput.blur();
+                    // Don't prevent default - allow tabbing
+                }
+                else if (event.key === 'Escape') {
+                    // Already handled by searchInput's listener, just stop propagation
+                    event.stopPropagation();
+                }
+            }
+            else {
+                // Allow other keys (typing) in the search input
+                return;
+            }
+        }
+        else {
+            // Focus is NOT in the search input, process normally
+            this.processMenuNavigation(event.key);
+            // Prevent default browser actions for these keys when menu is active
+            if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
                 event.preventDefault();
                 event.stopPropagation();
-                // Delay before moving focus - this gives time for the search input's
-                // own keydown handler to process the key first
-                setTimeout(() => {
-                    if (event.key === 'ArrowDown') {
-                        this.searchInput.blur();
-                        this.selectNextMenuItem();
-                    }
-                    else { // ArrowUp
-                        this.searchInput.blur();
-                        this.selectPreviousMenuItem();
-                    }
-                }, 0);
-                return;
             }
-            // IMPORTANT: For Backspace in search input, just return without handling
-            // Let the default behavior happen
-            if (event.key === 'Backspace') {
-                // Just perform default behavior in search input
-                return;
-            }
-            // Let all other keys be handled by the search input's own handler
-            return;
         }
-        // From here, search input is NOT focused
-        const menuItems = this.getMenuItems();
-        switch (event.key) {
+    }
+    processMenuNavigation(key) {
+        switch (key) {
             case 'ArrowDown':
-                if (menuItems.length > 0) {
-                    console.log('POPUP KeyDown (Menu Focused): ArrowDown');
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.selectNextMenuItem();
-                }
+                console.log('POPUP: Arrow Down pressed');
+                this.selectNextMenuItem();
                 break;
             case 'ArrowUp':
-                if (menuItems.length > 0) {
-                    console.log('POPUP KeyDown (Menu Focused): ArrowUp');
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.selectPreviousMenuItem();
-                }
-                break;
-            case 'Backspace':
-                console.log('POPUP KeyDown (Menu Focused): Backspace');
-                // Only prevent default and navigate back if we have history
-                if (this.menuHistory.length > 0) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.navigateBackMenu();
-                }
-                else {
-                    console.log('POPUP KeyDown (Menu Focused): No history, allowing Backspace default action');
-                    // Allow default - don't prevent or stop propagation
-                }
+                console.log('POPUP: Arrow Up pressed');
+                this.selectPreviousMenuItem();
                 break;
             case 'Enter':
-                console.log('POPUP KeyDown (Menu Focused): Enter');
-                // Only activate if an item is selected
-                if (this.selectedMenuItemIndex >= 0 && this.selectedMenuItemIndex < menuItems.length) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    menuItems[this.selectedMenuItemIndex].click();
-                }
-                break;
-            case 'Tab':
-                console.log('POPUP KeyDown (Menu Focused): Tab');
-                // Basic Tab support: move focus between search and first/last item
-                event.preventDefault();
-                event.stopPropagation();
-                if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-                    this.searchInput.focus();
-                    this.deselectAllMenuItems(); // Deselect items when search gets focus via Tab
+            case 'Tab': // Treat Tab like Enter for selection
+                console.log(`POPUP: ${key} pressed`);
+                if (this.selectedMenuItemIndex >= 0) {
+                    const menuItems = this.getMenuItems();
+                    if (menuItems[this.selectedMenuItemIndex]) {
+                        console.log('POPUP: Simulating click on selected item:', menuItems[this.selectedMenuItemIndex].textContent);
+                        // Simulate click to trigger handleMenuClick
+                        menuItems[this.selectedMenuItemIndex].click();
+                    }
+                    else {
+                        console.log('POPUP: Selected index out of bounds?');
+                    }
                 }
                 else {
-                    // Maybe close menu on Tab from top level? Or do nothing.
-                    this.hidePopupMenu();
+                    console.log('POPUP: Enter/Tab pressed but no item selected');
+                    // If no item is selected, maybe select the first one and activate?
+                    const menuItems = this.getMenuItems();
+                    if (menuItems.length > 0) {
+                        menuItems[0].click(); // Activate first item
+                    }
                 }
                 break;
             case 'Escape':
-                console.log('POPUP KeyDown (Menu Focused): Escape');
-                event.preventDefault();
-                event.stopPropagation();
-                this.hidePopupMenu();
-                break;
-            default:
-                console.log(`POPUP KeyDown (Menu Focused): Default key '${event.key}'`);
-                // If typing a character and in file/dir view, focus search
-                if ((this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') &&
-                    event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                    event.preventDefault(); // Prevent character appearing elsewhere
-                    event.stopPropagation();
-                    this.searchInput.focus();
-                    // Manually append the typed character as focus happens after keydown default action
-                    this.searchInput.value += event.key;
-                    // Trigger input event manually to update list
-                    this.searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                console.log('POPUP: Escape pressed');
+                // If in a submenu, navigate back; otherwise, hide.
+                if (this.menuHistory.length > 0) {
+                    this.navigateBackMenu();
                 }
-                // Allow other keys (e.g., modifiers) to pass through if not handled
+                else {
+                    this.hidePopupMenu();
+                }
                 break;
         }
     }
     updateSelectionHighlight() {
         const menuItems = this.getMenuItems();
-        console.log(`POPUP updateSelectionHighlight: Highlighting index ${this.selectedMenuItemIndex} among ${menuItems.length} items.`);
         menuItems.forEach((item, index) => {
             if (index === this.selectedMenuItemIndex) {
-                if (!item.classList.contains('selected')) {
-                    item.classList.add('selected');
-                    console.log(`POPUP updateSelectionHighlight: Added 'selected' to item ${index}`);
-                    // Ensure item is visible
-                    item.scrollIntoView({ block: 'nearest' });
-                }
+                item.classList.add('jp-llm-ext-popup-menu-item-selected');
+                // Scroll into view if necessary
+                item.scrollIntoView({ block: 'nearest' });
             }
             else {
-                if (item.classList.contains('selected')) {
-                    item.classList.remove('selected');
-                    console.log(`POPUP updateSelectionHighlight: Removed 'selected' from item ${index}`);
-                }
+                item.classList.remove('jp-llm-ext-popup-menu-item-selected');
             }
         });
     }
     deselectAllMenuItems() {
         const menuItems = this.getMenuItems();
-        menuItems.forEach(item => item.classList.remove('selected'));
+        menuItems.forEach(item => {
+            item.classList.remove('jp-llm-ext-popup-menu-item-selected');
+        });
         this.selectedMenuItemIndex = -1;
     }
     selectNextMenuItem() {
         const menuItems = this.getMenuItems();
-        if (!menuItems.length) {
-            console.log('POPUP selectNext: No items to select.');
-            this.selectedMenuItemIndex = -1; // Ensure index is reset
+        if (menuItems.length === 0)
             return;
+        this.selectedMenuItemIndex++;
+        if (this.selectedMenuItemIndex >= menuItems.length) {
+            this.selectedMenuItemIndex = 0; // Wrap around
         }
-        const oldIndex = this.selectedMenuItemIndex;
-        // Deselect current first is handled by updateSelectionHighlight
-        // Move to the next item or loop back to the first
-        this.selectedMenuItemIndex = (this.selectedMenuItemIndex + 1) % menuItems.length;
-        console.log(`POPUP selectNext: Index changed from ${oldIndex} to ${this.selectedMenuItemIndex}`);
         this.updateSelectionHighlight();
+        console.log(`POPUP: Selected item index: ${this.selectedMenuItemIndex}`);
     }
     selectPreviousMenuItem() {
         const menuItems = this.getMenuItems();
-        if (!menuItems.length) {
-            console.log('POPUP selectPrevious: No items to select.');
-            this.selectedMenuItemIndex = -1; // Ensure index is reset
+        if (menuItems.length === 0)
             return;
+        this.selectedMenuItemIndex--;
+        if (this.selectedMenuItemIndex < 0) {
+            this.selectedMenuItemIndex = menuItems.length - 1; // Wrap around
         }
-        const oldIndex = this.selectedMenuItemIndex;
-        // Deselect current first is handled by updateSelectionHighlight
-        // Move to the previous item or loop to the last
-        this.selectedMenuItemIndex = this.selectedMenuItemIndex <= 0 ?
-            menuItems.length - 1 : this.selectedMenuItemIndex - 1;
-        console.log(`POPUP selectPrevious: Index changed from ${oldIndex} to ${this.selectedMenuItemIndex}`);
         this.updateSelectionHighlight();
+        console.log(`POPUP: Selected item index: ${this.selectedMenuItemIndex}`);
     }
     /**
-     * Get all interactive menu items
+     * Get all interactive menu items currently displayed
      */
     getMenuItems() {
-        const items = Array.from(this.popupMenuContainer.querySelectorAll('.jp-llm-ext-popup-menu-item'));
-        // Filter out non-interactive items like loading, empty, error
-        return items.filter(item => {
-            const actionId = item.dataset.actionId;
-            return actionId !== 'loading' && actionId !== 'empty' && actionId !== 'error';
-        });
+        return Array.from(this.popupMenuContainer.querySelectorAll('.jp-llm-ext-popup-menu-item'));
     }
     /**
-     * Update popup position, keeping the bottom edge fixed at the anchor point
+     * Updates the position of the popup menu based on the active reference range
+     * or the initial anchor point. Tries to position the BOTTOM of the menu
+     * just ABOVE the range/anchor.
      */
     updatePopupPosition() {
-        var _a, _b;
-        // Make sure anchor points are defined
-        const anchorX = (_a = this._anchorX) !== null && _a !== void 0 ? _a : 0;
-        const anchorY = (_b = this._anchorY) !== null && _b !== void 0 ? _b : 0;
-        // Position the popup menu
-        this.popupMenuContainer.style.position = 'absolute';
-        this.popupMenuContainer.style.left = `${anchorX}px`;
-        // Show the menu so we can calculate its height
+        if (!this.widgetNode)
+            return;
+        const widgetRect = this.widgetNode.getBoundingClientRect();
+        let targetTop;
+        let targetLeft;
+        // Use the anchor coordinates provided (now from the reliable temp span)
+        if (this._anchorX !== undefined && this._anchorY !== undefined) {
+            console.log(`POPUP: Positioning based on anchor point: (${this._anchorX}, ${this._anchorY})`);
+            // Target position relative to viewport
+            targetTop = this._anchorY;
+            targetLeft = this._anchorX;
+        }
+        else {
+            console.warn("POPUP: Cannot update position - no anchor point provided.");
+            return;
+        }
+        // Make sure the popup is visible and rendered to get its height
+        this.popupMenuContainer.style.visibility = 'hidden'; // Keep it hidden while calculating
         this.popupMenuContainer.style.display = 'block';
-        // Get the actual height after rendering
-        const menuHeight = this.popupMenuContainer.offsetHeight;
-        // Add a small gap (10px) between the bottom of the menu and the trigger point
-        const gap = 10;
-        // Position above the cursor/button to keep bottom edge at the anchor point:
-        // y - gap = bottom edge of popup, so popup top = y - gap - menuHeight
-        this.popupMenuContainer.style.top = `${anchorY - gap - menuHeight}px`;
-        console.log(`POPUP: Positioned menu at height ${menuHeight}px with bottom at ${anchorY - gap}px`);
+        const popupHeight = this.popupMenuContainer.offsetHeight;
+        const popupWidth = this.popupMenuContainer.offsetWidth;
+        // Calculate desired 'top' style relative to the widgetNode
+        // Position the bottom of the popup just above the target's top
+        let top = (targetTop - widgetRect.top) - popupHeight;
+        // Calculate desired 'left' style relative to the widgetNode
+        let left = targetLeft - widgetRect.left;
+        // --- Boundary checks (relative to widget) ---
+        const widgetClientWidth = this.widgetNode.clientWidth; // Use clientWidth for inner width
+        const widgetClientHeight = this.widgetNode.clientHeight;
+        // Prevent going off the left edge of the widget
+        if (left < 0) {
+            left = 5; // Small padding
+            console.log("POPUP Adjust: Corrected left edge");
+        }
+        // Prevent going off the right edge of the widget
+        if (left + popupWidth > widgetClientWidth) {
+            left = widgetClientWidth - popupWidth - 5; // Adjust left, add padding
+            console.log("POPUP Adjust: Corrected right edge");
+        }
+        // Prevent going off the top edge of the widget
+        if (top < 0) {
+            // If it goes off the top, try positioning it *below* the target instead
+            const spaceBelow = widgetClientHeight - (targetTop - widgetRect.top + 10); // Space below target
+            if (spaceBelow >= popupHeight) {
+                top = (targetTop - widgetRect.top) + 10; // Position below target with padding
+                console.log("POPUP Adjust: Flipping below target (was off top)");
+            }
+            else {
+                // Not enough space below either, clamp to top
+                top = 5; // Small padding from top
+                console.log("POPUP Adjust: Clamped to top edge (no space below)");
+            }
+        }
+        console.log(`POPUP: Setting position - Top: ${top}px, Left: ${left}px (Relative to Widget)`);
+        this.popupMenuContainer.style.top = `${top}px`;
+        this.popupMenuContainer.style.left = `${left}px`;
+        // Make it visible again
+        this.popupMenuContainer.style.display = 'block';
+        this.popupMenuContainer.style.visibility = 'visible';
+    }
+    /**
+     * Checks if the popup menu is currently visible.
+     */
+    isPopupMenuVisible() {
+        return this.popupMenuContainer.style.display !== 'none';
+    }
+    /**
+     * Gets the current level of the popup menu.
+     */
+    getCurrentMenuLevel() {
+        return this.currentMenuLevel;
     }
 }
 exports.PopupMenuManager = PopupMenuManager;
@@ -1810,27 +1962,16 @@ exports.PopupMenuManager = PopupMenuManager;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SettingsHandler = void 0;
-// import { SettingsModal } from '../ui/settings-modal'; // Commented out - unused import
 /**
  * Handles the logic related to the settings modal:
  * displaying, hiding, populating, saving, and showing feedback.
  */
 class SettingsHandler {
-    constructor(state, 
-    // successCallback: (message: string) => void, // Commented out - unused parameter
-    settingsModalContainer, uiManager // Pass UIManager for notifications
+    constructor(state, settingsModalContainer, uiManager // Pass UIManager for notifications
     ) {
         this.state = state;
-        // this.apiClient = apiClient; // Removed: unused variable
-        // this.successCallback = successCallback; // Commented out - unused assignment
         this.settingsModalContainer = settingsModalContainer;
         this.uiManager = uiManager;
-        // Attach internal listeners if the modal has its own save/cancel buttons
-        // This assumes the modal element was created with listeners calling these methods.
-        // If createSettingsModalElement in ui/settings-modal.ts attaches listeners that 
-        // call callbacks passed during creation, then this handler doesn't need 
-        // to attach listeners directly, just provide the callbacks (e.g., this.saveSettings.bind(this)).
-        // For now, let's assume the callbacks passed to createSettingsModalElement handle this.
     }
     /**
      * Populates the settings form with current values and displays the modal.
@@ -1945,37 +2086,117 @@ popupMenuManager, callbacks) {
     }
     _handleKeyDown = (event) => {
         const { showIndicator, appendToInput, showWidget, focusInput } = callbacks;
-        // Check for @ key
-        if (event.key === '@') {
-            // Prevent default browser behavior
-            event.preventDefault();
-            event.stopPropagation();
-            // Check if the input field is the active element
-            // We rely on InputHandler potentially managing focus or assume it is handled elsewhere
-            const inputField = document.activeElement; // A bit fragile
-            if (inputField && inputField.tagName === 'TEXTAREA' && inputField.classList.contains('jp-llm-ext-input-field')) {
-                // Get cursor position
-                const cursorPosition = inputField.selectionStart || 0;
-                const textBeforeCursor = inputField.value.substring(0, cursorPosition);
-                // Calculate position to show menu (simplified example)
-                const inputRect = inputField.getBoundingClientRect();
-                const lineHeight = parseInt(window.getComputedStyle(inputField).lineHeight) || 20;
-                const linesBeforeCursor = (textBeforeCursor.match(/\n/g) || []).length;
-                const cursorTop = inputRect.top + (linesBeforeCursor * lineHeight);
-                const left = inputRect.left + 10; // Simplified horizontal position
-                // Insert @ symbol at cursor position
-                const newValue = inputField.value.substring(0, cursorPosition) +
-                    '@' +
-                    inputField.value.substring(cursorPosition);
-                inputField.value = newValue;
-                // Update has @ symbol flag via InputHandler
-                inputHandler.setHasAtSymbol(true);
-                // Move cursor after the @ symbol
-                inputField.selectionStart = cursorPosition + 1;
-                inputField.selectionEnd = cursorPosition + 1;
-                // Show the popup menu
-                popupMenuManager.showPopupMenu(left + 60, cursorTop - 20); // Adjust positioning as needed
-                showIndicator('Browse cells, code, files, and more');
+        // Check for @ key - event.key should correctly report '@' even with Shift
+        // Also check for SHIFT+2 as an alternative way to trigger '@'
+        if (event.key === '@' || (event.shiftKey && event.key === '2')) {
+            console.log("SHORTCUT HANDLER: '@' key or SHIFT+2 detected");
+            const inputField = document.activeElement;
+            const isContentEditableInput = inputField &&
+                inputField.getAttribute('contenteditable') === 'true' &&
+                inputField.classList.contains('jp-llm-ext-input-field');
+            // Handle the case where the input field is NOT the active element first
+            if (isContentEditableInput) {
+                console.log("SHORTCUT HANDLER: Input field IS active element. Letting default behavior proceed.");
+                // If not in our input field, prevent default, show widget, focus, insert '@', and show popup.
+                event.preventDefault();
+                event.stopPropagation();
+                showWidget();
+                focusInput();
+                // After focus, show popup via window.setTimeout to ensure input is ready
+                window.setTimeout(() => {
+                    const inputElement = document.querySelector('.jp-llm-ext-input-field');
+                    if (inputElement) {
+                        const selection = window.getSelection();
+                        if (selection) { // Check if selection exists (even if rangeCount is 0 initially)
+                            // Ensure the input field has focus *before* manipulating the range
+                            if (document.activeElement !== inputElement) {
+                                inputElement.focus(); // Re-focus just in case
+                            }
+                            // Create or get the range
+                            let range;
+                            if (selection.rangeCount > 0) {
+                                range = selection.getRangeAt(0);
+                                // Double-check if the focus is now correctly inside the input element
+                                if (!inputElement.contains(range.commonAncestorContainer)) {
+                                    console.log("SHORTCUT HANDLER: Range is not inside the input field after focus. Creating new range.");
+                                    // If range is not inside, create a new one collapsed at the end
+                                    range = document.createRange();
+                                    range.selectNodeContents(inputElement);
+                                    range.collapse(false); // Collapse to the end
+                                    selection.removeAllRanges();
+                                    selection.addRange(range);
+                                }
+                            }
+                            else {
+                                // If no range exists, create one collapsed at the end
+                                console.log("SHORTCUT HANDLER: No range found after focus. Creating new range.");
+                                range = document.createRange();
+                                range.selectNodeContents(inputElement);
+                                range.collapse(false); // Collapse to the end
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                            }
+                            // Manually insert '@' since we prevented default
+                            const atNode = document.createTextNode('@');
+                            range.deleteContents(); // Clear any selection just in case
+                            range.insertNode(atNode);
+                            // Move cursor after the inserted '@'
+                            range.setStartAfter(atNode);
+                            range.setEndAfter(atNode);
+                            selection.removeAllRanges(); // Update selection to the new cursor position
+                            selection.addRange(range);
+                            // **NESTED TIMEOUT:** Give browser time to render before getting range position
+                            window.setTimeout(() => {
+                                console.log("SHORTCUT HANDLER: Showing popup after focusing, inserting '@', and nested timeout.");
+                                // Ensure we get the most up-to-date range reference
+                                const currentSelection = window.getSelection();
+                                if (currentSelection && currentSelection.rangeCount > 0) {
+                                    const currentRange = currentSelection.getRangeAt(0);
+                                    // --- Insert temporary span to get reliable coords --- 
+                                    const tempAnchorId = 'jp-llm-shortcut-popup-anchor';
+                                    let tempSpan = document.getElementById(tempAnchorId);
+                                    if (tempSpan)
+                                        tempSpan.remove(); // Clean up previous
+                                    tempSpan = document.createElement('span');
+                                    tempSpan.id = tempAnchorId;
+                                    tempSpan.style.visibility = 'hidden';
+                                    tempSpan.style.width = '0';
+                                    tempSpan.style.overflow = 'hidden';
+                                    tempSpan.textContent = '\u200B'; // Zero-width space
+                                    currentRange.insertNode(tempSpan); // Insert at cursor
+                                    const spanRect = tempSpan.getBoundingClientRect();
+                                    tempSpan.remove(); // Remove immediately
+                                    // --- End temporary span logic ---
+                                    if (spanRect.top === 0 && spanRect.left === 0) {
+                                        console.error("SHORTCUT HANDLER: Failed to get valid coordinates from temp anchor span.");
+                                    }
+                                    else {
+                                        console.log(`SHORTCUT HANDLER: Anchor coords from temp span: Top=${spanRect.top}, Left=${spanRect.left}`);
+                                        popupMenuManager.showPopupMenu(spanRect.left, spanRect.top);
+                                        showIndicator('Browsing references...');
+                                    }
+                                }
+                                else {
+                                    console.error("SHORTCUT HANDLER: Could not get range immediately before showing popup.");
+                                }
+                            }, 0); // 0ms delay is often sufficient
+                        }
+                        else {
+                            console.log("SHORTCUT HANDLER: No selection object after focus, cannot insert '@' or show popup reliably.");
+                        }
+                    }
+                    else {
+                        console.log("SHORTCUT HANDLER: Could not find input element after timeout.");
+                    }
+                }, 50); // Outer timeout remains 50ms
+            }
+            else {
+                console.log("SHORTCUT HANDLER: Input field is NOT active element. Handling '@' globally.");
+                // If the input field is already focused, DO NOTHING here.
+                // The default browser behavior will insert the '@'.
+                // The 'input' event listener in UIManager will then detect the '@'
+                // and trigger the popup via handleInputForReference.
+                // We do NOT preventDefault or stopPropagation.
             }
         }
         // Check for Ctrl+L (insert selection or cell)
@@ -2091,14 +2312,51 @@ const history_handler_1 = __webpack_require__(/*! ./handlers/history-handler */ 
 const settings_handler_1 = __webpack_require__(/*! ./handlers/settings-handler */ "./lib/handlers/settings-handler.js");
 const ui_manager_1 = __webpack_require__(/*! ./ui/ui-manager */ "./lib/ui/ui-manager.js");
 const ui_components_1 = __webpack_require__(/*! @jupyterlab/ui-components */ "webpack/sharing/consume/default/@jupyterlab/ui-components");
+const globals_1 = __webpack_require__(/*! ./core/globals */ "./lib/core/globals.js");
 // --- Import Utility Functions ---
 const clipboard_1 = __webpack_require__(/*! ./utils/clipboard */ "./lib/utils/clipboard.js");
 const notebook_integration_1 = __webpack_require__(/*! ./utils/notebook-integration */ "./lib/utils/notebook-integration.js");
-const code_ref_widget_1 = __webpack_require__(/*! ./ui/code-ref-widget */ "./lib/ui/code-ref-widget.js");
 /**
  * Main sidebar widget for the AI chat interface - Now acts as an orchestrator.
  */
 class SimpleSidebarWidget extends widgets_1.Widget {
+    /**
+     * Helper function to replace a text range with a non-editable widget span.
+     */
+    createWidgetSpan(range, refText) {
+        if (!range)
+            return;
+        // Extract a display-friendly version (e.g., filename from path)
+        let displayLabel = refText;
+        if (refText.startsWith('@file ') || refText.startsWith('@dir ')) {
+            const parts = refText.split(' ');
+            if (parts.length > 1) {
+                const pathParts = parts[1].split(/[\\/]/);
+                displayLabel = pathParts[pathParts.length - 1] || parts[1]; // Use last part of path or full path
+            }
+        }
+        else if (refText.startsWith('@Cell ')) {
+            displayLabel = refText.substring(1); // Remove leading '@'
+        } // Add more conditions for other types if needed
+        // Create the widget span
+        const span = document.createElement('span');
+        span.className = 'jp-llm-ext-ref-widget'; // Class for styling
+        span.setAttribute('contenteditable', 'false'); // Make it non-editable
+        span.setAttribute('data-ref-text', refText); // Store original text for serialization
+        span.textContent = displayLabel; // Set visible text
+        // Replace the range content with the span
+        range.deleteContents();
+        range.insertNode(span);
+        // Move cursor after the inserted span
+        const selection = window.getSelection();
+        if (selection) {
+            const newRange = document.createRange();
+            newRange.setStartAfter(span);
+            newRange.setEndAfter(span);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+        }
+    }
     constructor(docManager) {
         super();
         // Placeholder for handler methods used in UIManager callbacks
@@ -2112,18 +2370,18 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             console.log('Handle Toggle History clicked');
             this.historyHandler.toggleHistoryView();
         };
-        this.handleSendMessage = () => {
+        this.handleSendMessage = (message) => {
             // 1. Get the current text from the input field via UIManager or LayoutElements
-            const text = this.layoutElements.inputField.value;
-            if (!text.trim())
-                return; // Don't send empty messages
-            // 2. Get the markdown state from UIManager
-            const isMarkdown = this.uiManager.getIsMarkdownMode();
-            console.log(`[Widget] handleSendMessage: Text='${text}', Markdown=${isMarkdown}`); // Debug log
+            // const text = this.layoutElements.inputField.value; // No longer needed, text is passed in
+            if (!message.trim())
+                return; // Don't send empty messages (check the passed message)
+            // 2. Get the markdown state from UIManager - REMOVED
+            // const isMarkdown = this.uiManager.getIsMarkdownMode(); 
+            console.log(`[Widget] handleSendMessage: Text='${message}'`); // Debug log using passed message
             // 3. Call the MessageHandler's send method with text and state
-            this.messageHandler.handleSendMessage(text, isMarkdown);
-            // NOTE: No need to dispatch event anymore. 
-            // The input clearing is handled inside messageHandler.handleSendMessage now.
+            this.messageHandler.handleSendMessage(message); // Pass the received message - REMOVED isMarkdown
+            // NOTE: Input clearing is now handled by UIManager after this callback returns.
+            // Do NOT clear input here or in MessageHandler.
         };
         this.handleShowSettings = (event) => {
             console.log('Handle Show Settings clicked');
@@ -2153,18 +2411,91 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.apiClient = new api_client_1.ApiClient((initialSettings === null || initialSettings === void 0 ? void 0 : initialSettings.apiUrl) || undefined);
         this.chatState = new chat_state_1.ChatState();
         this.popupMenuManager = new popup_menu_manager_1.PopupMenuManager(this.docManager, this.node, {
-            insertCode: (code) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@code ${code}`); },
+            insertCode: (code) => {
+                var _a, _b, _c;
+                if (!this.inputHandler || !globals_1.globals.notebookTracker)
+                    return;
+                const currentNotebookPanel = globals_1.globals.notebookTracker.currentWidget;
+                if (!currentNotebookPanel || !currentNotebookPanel.context || !currentNotebookPanel.content) {
+                    console.warn('Could not get notebook context for code reference, inserting raw code as fallback.');
+                    (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(code);
+                    return;
+                }
+                const notebookPath = currentNotebookPanel.context.path;
+                const notebookName = ((_b = notebookPath.split('/').pop()) === null || _b === void 0 ? void 0 : _b.split('.')[0]) || 'notebook';
+                const currentCell = currentNotebookPanel.content.activeCell;
+                if (!currentCell) {
+                    console.warn('Could not get active cell for code reference, inserting raw code as fallback.');
+                    (_c = this.inputHandler) === null || _c === void 0 ? void 0 : _c.appendToInput(code);
+                    return;
+                }
+                const cellIndex = currentNotebookPanel.content.activeCellIndex;
+                let lineNumber = 1; // Default line number
+                let lineEndNumber = 1; // Default end line number
+                // --- DEBUG LOG --- 
+                console.log('Are we currently in a code cell?');
+                // check if currentCell is in editor 
+                console.log(currentCell.editor);
+                // --- END DEBUG LOG ---
+                if (currentCell.editor) {
+                    const editor = currentCell.editor;
+                    const cmEditor = editor.editor; // Access CodeMirror editor instance (EditorView)
+                    if (cmEditor && cmEditor.state) {
+                        const state = cmEditor.state;
+                        const selection = state.selection.main;
+                        if (!selection.empty) {
+                            lineNumber = state.doc.lineAt(selection.from).number; // 1-based start line
+                            lineEndNumber = state.doc.lineAt(selection.to).number; // 1-based end line
+                        }
+                        else {
+                            // Fallback for cursor position if no selection
+                            const cursor = editor.getCursorPosition();
+                            if (cursor) {
+                                lineNumber = cursor.line + 1; // 1-based line number
+                                lineEndNumber = lineNumber; // Start and end are the same for cursor
+                            }
+                        }
+                    }
+                    else {
+                        // Fallback if cmEditor or state is not available (should not happen often)
+                        console.warn('Could not access CodeMirror state for line numbers.');
+                        const cursor = editor.getCursorPosition();
+                        if (cursor) {
+                            lineNumber = cursor.line + 1;
+                            lineEndNumber = lineNumber;
+                        }
+                    }
+                }
+                else {
+                    console.warn('Could not access cell editor for line numbers.');
+                    // Keep default line numbers 1, 1 if editor is not available
+                }
+                // --- DEBUG LOG --- 
+                console.log(`[SimpleSidebarWidget.insertCode] Determined lines: Start=${lineNumber}, End=${lineEndNumber}`);
+                // --- END DEBUG LOG ---
+                // Pass both start and end line numbers
+                const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber, lineEndNumber);
+                const placeholder = `@code[${refId}]`;
+                this.inputHandler.appendToInput(placeholder);
+            },
             insertCell: (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@cell ${content}`); },
-            insertFilePath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@file ${path}`); },
-            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@dir ${path}`); },
+            insertFilePath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@file[${path}]`); },
+            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@dir[${path}]`); },
             getSelectedText: notebook_integration_1.getSelectedText,
             getCurrentCellContent: notebook_integration_1.getCurrentCellContent,
-            insertCellByIndex: (index) => (0, notebook_integration_1.insertCellContentByIndex)(index, (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@${content}`); }),
+            insertCellByIndex: (index) => {
+                var _a;
+                const oneBasedIndex = index + 1;
+                const refText = `@Cell[${oneBasedIndex}]`;
+                (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(refText);
+            },
             insertCollapsedCodeRef: (code, cellIndex, lineNumber, notebookName) => {
+                // Handle reference from cursor position (assume start/end line are the same)
                 if (!this.inputHandler)
                     return;
-                const refId = this.inputHandler.addCodeReference(code);
-                const placeholder = (0, code_ref_widget_1.createCodeRefPlaceholder)(refId, notebookName, lineNumber);
+                const lineEndNumber = lineNumber; // Start and end are the same for a single line reference
+                const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber, lineEndNumber);
+                const placeholder = `@code[${refId}]`;
                 this.inputHandler.appendToInput(placeholder);
             }
         });
@@ -2254,9 +2585,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             addRenderedMessage: (messageElement) => this.uiManager.addChatMessageElement(messageElement)
         };
         const inputHandlerCallbacks = {
-            handleSendMessage: (message, isMarkdown) => {
+            handleSendMessage: (message) => {
                 if (this.messageHandler) {
-                    this.messageHandler.handleSendMessage(message, isMarkdown);
+                    this.messageHandler.handleSendMessage(message);
                 }
                 else {
                     console.error('MessageHandler not initialized when trying to send message from InputHandler');
@@ -2265,7 +2596,8 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             showPopupMenu: (left, top) => this.popupMenuManager.showPopupMenu(left, top),
             hidePopupMenu: () => this.popupMenuManager.hidePopupMenu(),
             updatePlaceholder: (isMarkdown) => {
-                this.layoutElements.inputField.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
+                // Use dataset for data-placeholder attribute
+                this.layoutElements.inputField.dataset.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
             },
             toggleInputExpansionUI: (isExpanded) => {
                 const button = this.layoutElements.expandButton;
@@ -2333,6 +2665,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             const newChat = this.chatState.createNewChat();
             this.historyHandler.loadChat(newChat.id);
         }
+        // Setup global keyboard shortcuts with the UIManager for proper @ key handling
         (0, shortcut_handler_1.setupShortcuts)(this.inputHandler, this.popupMenuManager, shortcutCallbacks);
         this.node.appendChild(this.layoutElements.mainElement);
         this.node.appendChild(this.settingsModalContainer);
@@ -2392,8 +2725,9 @@ class ChatState {
         const newChat = {
             id: chatId,
             title: title,
-            messages: []
-            // createdAt: new Date() 
+            messages: [],
+            // Optional: Add timestamp or other metadata if needed later
+            // createdAt: Date; 
         };
         this.chatHistory.push(newChat);
         this.currentChatId = chatId;
@@ -2563,102 +2897,6 @@ exports.SettingsState = SettingsState;
 
 /***/ }),
 
-/***/ "./lib/ui/code-ref-widget.js":
-/*!***********************************!*\
-  !*** ./lib/ui/code-ref-widget.js ***!
-  \***********************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.createCodeRefWidgetHTML = createCodeRefWidgetHTML;
-exports.attachCodeRefEventListeners = attachCodeRefEventListeners;
-exports.defaultCodeRefToggleLogic = defaultCodeRefToggleLogic;
-exports.createCodeRefPlaceholder = createCodeRefPlaceholder;
-const dom_elements_1 = __webpack_require__(/*! ./dom-elements */ "./lib/ui/dom-elements.js");
-/**
- * Creates the HTML element for a collapsible code reference widget.
- *
- * @param data - The data for the code reference.
- * @returns The HTMLElement representing the code reference widget.
- */
-function createCodeRefWidgetHTML(data) {
-    const widget = (0, dom_elements_1.createSpan)({
-        classes: 'jp-llm-ext-code-ref-widget',
-        attributes: {
-            'data-ref-id': data.refId,
-            'data-code': encodeURIComponent(data.code), // Store original code safely
-            'data-ref': data.codeRef
-        }
-    });
-    const label = (0, dom_elements_1.createSpan)({
-        classes: 'jp-llm-ext-code-ref-label',
-        text: data.codeRef
-    });
-    const toggleButton = (0, dom_elements_1.createButton)({
-        classes: 'jp-llm-ext-code-ref-toggle',
-        text: '⯈', // Right-pointing triangle initially
-        attributes: { title: 'Expand/collapse code' }
-    });
-    const content = (0, dom_elements_1.createSpan)({
-        classes: 'jp-llm-ext-code-ref-content',
-        text: data.code, // Display the raw code for now
-        style: { display: 'none' } // Hidden initially
-    });
-    // Assemble the widget
-    widget.appendChild(label);
-    widget.appendChild(toggleButton);
-    widget.appendChild(content);
-    return widget;
-}
-/**
- * Attaches event listeners (specifically click for toggle) to a code ref widget.
- *
- * @param element - The code ref widget HTMLElement.
- * @param toggleCallback - A function to call when the toggle button is clicked.
- */
-function attachCodeRefEventListeners(element, toggleCallback) {
-    const toggleButton = element.querySelector('.jp-llm-ext-code-ref-toggle');
-    const contentElement = element.querySelector('.jp-llm-ext-code-ref-content');
-    if (toggleButton && contentElement) {
-        toggleButton.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            toggleCallback(toggleButton, contentElement);
-        });
-    }
-}
-/**
- * Default logic for toggling the visibility of the code ref content.
- * This can be passed as the callback to attachCodeRefEventListeners.
- *
- * @param toggleButton - The button element that was clicked.
- * @param contentElement - The content element to toggle.
- */
-function defaultCodeRefToggleLogic(toggleButton, contentElement) {
-    const isVisible = contentElement.style.display !== 'none';
-    contentElement.style.display = isVisible ? 'none' : 'block'; // Or 'inline-block'/'inline' depending on desired layout
-    toggleButton.textContent = isVisible ? '⯈' : '⯆'; // Update triangle direction
-}
-/**
- * Creates a textual placeholder for a code reference.
- *
- * @param refId - The unique identifier for the reference (e.g., "ref-1").
- * @param notebookName - The name of the notebook (optional, for future display enhancements).
- * @param lineNumber - The starting line number of the code (optional, for future display enhancements).
- * @returns A string placeholder like "[ref-1]".
- */
-function createCodeRefPlaceholder(refId, notebookName, // Keep optional for now
-lineNumber // Keep optional for now
-) {
-    // Keep it simple for now, just the ID.
-    // Display details like notebook/line could be added later if needed.
-    return `[${refId}]`;
-}
-
-
-/***/ }),
-
 /***/ "./lib/ui/dom-elements.js":
 /*!********************************!*\
   !*** ./lib/ui/dom-elements.js ***!
@@ -2666,7 +2904,6 @@ lineNumber // Keep optional for now
 /***/ ((__unused_webpack_module, exports) => {
 
 
-// import { ReadonlyPartialJSONObject } from '@lumino/coreutils';
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createDiv = createDiv;
 exports.createButton = createButton;
@@ -2871,15 +3108,21 @@ function buildLayout(callbacks = {}) {
     controlsRow.appendChild(controlsContainer);
     // Row 2: Input Field
     const inputRow = (0, dom_elements_1.createDiv)({ classes: 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row' });
-    const inputField = (0, dom_elements_1.createTextArea)({
+    const inputField = (0, dom_elements_1.createDiv)({
         classes: 'jp-llm-ext-input-field',
-        attributes: { placeholder: 'Ask me anything...', rows: '1' }
+        attributes: {
+            contenteditable: 'true',
+            role: 'textbox',
+            'aria-multiline': 'true',
+            'data-placeholder': 'Ask me anything...'
+        },
+        style: { minHeight: '20px', overflowY: 'hidden' }
     });
     if (callbacks.onInputFieldKeyPress) {
         inputField.addEventListener('keypress', callbacks.onInputFieldKeyPress);
     }
     if (callbacks.onInputFieldValueChange) {
-        inputField.addEventListener('input', () => callbacks.onInputFieldValueChange(inputField.value));
+        inputField.addEventListener('input', () => callbacks.onInputFieldValueChange(inputField.textContent || ''));
     }
     inputRow.appendChild(inputField);
     // Row 3: Main Buttons (Send, New Chat, History)
@@ -2960,13 +3203,7 @@ const marked_1 = __webpack_require__(/*! marked */ "webpack/sharing/consume/defa
 const dompurify_1 = __importDefault(__webpack_require__(/*! dompurify */ "webpack/sharing/consume/default/dompurify/dompurify"));
 // import hljs from 'highlight.js'; // Removed unused import
 const dom_elements_1 = __webpack_require__(/*! ./dom-elements */ "./lib/ui/dom-elements.js");
-// Removed unused import block for code-ref-widget
-// import {
-//   CodeRefData,
-//   createCodeRefWidgetHTML,
-//   attachCodeRefEventListeners,
-//   defaultCodeRefToggleLogic
-// } from './code-ref-widget';
+const globals_1 = __webpack_require__(/*! ../core/globals */ "./lib/core/globals.js"); // Import globals
 // Removed unused import block for clipboard utils (used via callbacks)
 // import { copyToClipboard, copyImageToClipboard, copyMessageToClipboard } from '../utils/clipboard';
 // Removed unused import (used via callbacks)
@@ -3016,11 +3253,177 @@ function renderUserMessage(text, options = {}, callbacks = {}) {
     }
     else {
         // Non-Markdown user message (plain text)
-        // TODO: Integrate Code Reference rendering for plain text messages here too
-        messageDiv.textContent = text;
+        // Replace simple textContent assignment with ref-aware rendering
+        // messageDiv.textContent = text;
+        renderMessageContentWithRefs(messageDiv, text, callbacks);
     }
     // TODO: Add user message specific actions if needed (e.g., copy text)
     return messageDiv;
+}
+/**
+ * NEW: Renders message content, replacing @references with widgets.
+ */
+function renderMessageContentWithRefs(container, text, callbacks) {
+    // --- DEBUG LOG --- 
+    console.log('[renderMessageContentWithRefs] Processing text:', JSON.stringify(text)); // Log exact text
+    // --- END DEBUG LOG ---
+    // Regex to find @file, @dir, @Cell, @code references (with optional surrounding whitespace)
+    const refRegex = /\s*(@(file|dir|Cell|code)\[([^\]]+?)\])\s*/g;
+    let lastIndex = 0;
+    let match;
+    // Reset regex state just in case
+    refRegex.lastIndex = 0;
+    while ((match = refRegex.exec(text)) !== null) {
+        // Append text before the match
+        if (match.index > lastIndex) {
+            container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+        }
+        // Process the matched reference
+        const fullMatchWithWhitespace = match[0]; // Includes potential whitespace
+        const fullMatch = match[1]; // The actual @type[value] part
+        const type = match[2];
+        const value = match[3];
+        try {
+            const widget = createRefWidget(type, value, fullMatch, callbacks); // Pass the clean match
+            container.appendChild(widget);
+        }
+        catch (error) {
+            console.error(`Failed to create widget for reference: ${fullMatch}`, error);
+            // Fallback: append the original reference text (with potential whitespace)
+            container.appendChild(document.createTextNode(fullMatchWithWhitespace));
+        }
+        lastIndex = refRegex.lastIndex;
+    }
+    // Append any remaining text after the last match
+    if (lastIndex < text.length) {
+        container.appendChild(document.createTextNode(text.substring(lastIndex)));
+    }
+}
+/**
+ * NEW: Creates a reference widget span.
+ */
+function createRefWidget(type, value, originalRefText, // The full @type[value] string
+callbacks) {
+    const widget = document.createElement('span');
+    widget.className = `jp-llm-ext-ref-widget ref-${type.toLowerCase()}`;
+    widget.setAttribute('contenteditable', 'false');
+    widget.dataset.refText = originalRefText; // Store the original reference
+    let displayText = '';
+    let titleText = originalRefText; // Default tooltip
+    switch (type) {
+        case 'file':
+            displayText = value.split(/[\\/]/).pop() || value; // Extract filename
+            titleText = `File: ${value}`;
+            break;
+        case 'dir':
+            displayText = value.split(/[\\/]/).pop() || value || '/'; // Extract dirname, handle root
+            titleText = `Directory: ${value}`;
+            break;
+        case 'Cell': {
+            const cellIndex = parseInt(value) - 1; // Convert back to 0-based index
+            const notebookContext = callbacks.getCurrentNotebookContext ? callbacks.getCurrentNotebookContext() : undefined;
+            // --- DEBUG LOG --- 
+            console.log(`[createRefWidget @Cell] Input Value: ${value}, Parsed Index: ${cellIndex}, Notebook Context:`, notebookContext);
+            // --- END DEBUG LOG --- 
+            const notebookName = (notebookContext === null || notebookContext === void 0 ? void 0 : notebookContext.name) || 'notebook';
+            let cellTypeChar = '?';
+            if (notebookContext && globals_1.globals.notebookTracker) {
+                const currentNotebookPanel = globals_1.globals.notebookTracker.find(widget => widget.context.path === notebookContext.path);
+                if (currentNotebookPanel && currentNotebookPanel.model) {
+                    const cellModel = currentNotebookPanel.model.cells.get(cellIndex);
+                    if (cellModel) {
+                        cellTypeChar = cellModel.type === 'markdown' ? 'M' : 'C';
+                    }
+                }
+            }
+            displayText = `${notebookName}-${cellTypeChar}-${value}`; // value is 1-based index
+            titleText = `Cell ${value} (${cellTypeChar === 'M' ? 'Markdown' : 'Code'}) in ${notebookName}`;
+            break;
+        }
+        case 'code': {
+            const refId = value;
+            const refData = callbacks.getCodeRefData ? callbacks.getCodeRefData(refId) : undefined;
+            // --- DEBUG LOG --- 
+            console.log(`[createRefWidget @code] Input Value (refId): ${refId}, Ref Data Found:`, refData);
+            // --- END DEBUG LOG --- 
+            if (refData) {
+                // Construct display text using start and end lines
+                const startLine = refData.lineNumber;
+                const endLine = refData.lineEndNumber;
+                const linePart = startLine === endLine ? `${startLine}` : `${startLine}_${endLine}`;
+                displayText = `${refData.notebookName}-${refData.cellIndex + 1}-${linePart}`;
+                // Update title text as well
+                const titleLinePart = startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}-${endLine}`;
+                titleText = `Code Reference: ${refData.notebookName}, Cell ${refData.cellIndex + 1}, ${titleLinePart}`;
+            }
+            else {
+                displayText = `code-ref-${refId}`; // Fallback display
+                titleText = `Code Reference ID: ${refId} (Data not found)`;
+            }
+            break;
+        }
+    }
+    widget.textContent = displayText;
+    widget.title = titleText; // Add tooltip
+    return widget;
+}
+/**
+ * NEW: Recursively finds and replaces @references within text nodes of an element.
+ */
+function renderRefsInElement(element, callbacks) {
+    // Use the same updated regex here
+    const refRegex = /\s*(@(file|dir|Cell|code)\[([^\]]+?)\])\s*/g;
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
+    let node;
+    const nodesToProcess = [];
+    while ((node = walker.nextNode())) {
+        if (node instanceof Text &&
+            node.textContent &&
+            !(node.parentElement && node.parentElement.closest('.jp-llm-ext-ref-widget'))) {
+            // Test with the specific regex before adding
+            refRegex.lastIndex = 0; // Reset before test
+            if (refRegex.test(node.textContent)) {
+                nodesToProcess.push(node);
+            }
+        }
+    }
+    // Now, process the collected text nodes
+    nodesToProcess.forEach(textNode => {
+        const parent = textNode.parentNode;
+        if (!parent)
+            return;
+        const text = textNode.textContent || '';
+        const fragment = document.createDocumentFragment();
+        let lastIndex = 0;
+        let match;
+        refRegex.lastIndex = 0; // Reset regex state for each node
+        while ((match = refRegex.exec(text)) !== null) {
+            // Append text before the match
+            if (match.index > lastIndex) {
+                fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+            }
+            // Process the matched reference
+            const fullMatchWithWhitespace = match[0];
+            const fullMatch = match[1];
+            const type = match[2];
+            const value = match[3];
+            try {
+                const widget = createRefWidget(type, value, fullMatch, callbacks);
+                fragment.appendChild(widget);
+            }
+            catch (error) {
+                console.error(`Failed to create widget for reference: ${fullMatch}`, error);
+                fragment.appendChild(document.createTextNode(fullMatchWithWhitespace)); // Fallback
+            }
+            lastIndex = refRegex.lastIndex;
+        }
+        // Append any remaining text after the last match
+        if (lastIndex < text.length) {
+            fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+        }
+        // Replace the original text node with the fragment
+        parent.replaceChild(fragment, textNode);
+    });
 }
 /**
  * Renders a bot message (text, markdown, images, code blocks).
@@ -3052,7 +3455,10 @@ function renderBotMessage(text, options = { isMarkdown: true }, callbacks = {}) 
             const rawHtml = marked_1.marked.parse(processedText);
             const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
             contentDiv.innerHTML = sanitizedHtml;
-            // Enhance code blocks after setting innerHTML
+            // --- NEW: Render references within the sanitized HTML --- 
+            renderRefsInElement(contentDiv, callbacks);
+            // --- End NEW ---
+            // Enhance code blocks after setting innerHTML and rendering refs
             const codeBlocks = contentDiv.querySelectorAll('pre code');
             codeBlocks.forEach(block => {
                 enhanceCodeBlock(block, callbacks);
@@ -3218,6 +3624,9 @@ function renderBotMessageFinal(contentDiv, streamingDiv, completeResponse, optio
             const rawHtml = marked_1.marked.parse(processedText);
             const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
             contentDiv.innerHTML = sanitizedHtml;
+            // --- NEW: Render references within the sanitized HTML --- 
+            renderRefsInElement(contentDiv, effectiveCallbacks);
+            // --- End NEW ---
             // --- Interrupt Handling ---
             const isInterrupt = completeResponse.startsWith('**[INTERRUPT]**');
             if (isInterrupt) {
@@ -3577,53 +3986,36 @@ exports.UIManager = void 0;
  * This acts as a central point for UI manipulations, simplifying dependencies for handlers.
  */
 class UIManager {
-    // Add this getter method
-    getIsMarkdownMode() {
-        return this.isMarkdownMode;
-    }
-    constructor(
-    // docManager: IDocumentManager, // Commented out - unused parameter
-    popupMenuManager, 
-    // widgetNode: HTMLElement, // Commented out - unused parameter
-    callbacks, layoutElements) {
+    constructor(popupMenuManager, callbacks, layoutElements) {
         this.notificationTimeout = null; // Timeout for the shortcut indicator
         // Internal UI state
         this.isInputExpanded = false;
         this.isMarkdownMode = false;
-        // this.docManager = docManager; // Commented out - unused assignment
-        this.popupMenuManager = popupMenuManager; // Needed for '@' button action
-        // this.widgetNode = widgetNode; // Commented out - unused assignment
-        this.callbacks = callbacks; // Callbacks to trigger widget/handler logic
-        this.layoutElements = layoutElements; // Keep reference if needed elsewhere
-        // --- Assign internal references from provided layoutElements ---
-        if (!layoutElements.messageContainer || !layoutElements.inputField ||
-            !layoutElements.titleInput || !layoutElements.historyContainer ||
-            !layoutElements.bottomBarContainer || !layoutElements.markdownToggleButton ||
-            !layoutElements.expandButton) {
-            console.error('UIManager: Critical layout elements missing during initialization!');
-            // Potentially throw an error or handle gracefully
-            return;
-        }
+        this.popupMenuManager = popupMenuManager;
+        this.callbacks = callbacks;
+        this.layoutElements = layoutElements; // Store the layout elements passed in
+        // Assign class properties directly from the passed layoutElements
+        this.inputField = layoutElements.inputField; // Use provided input field
         this.messageContainer = layoutElements.messageContainer;
-        this.inputField = layoutElements.inputField;
-        this.titleInput = layoutElements.titleInput;
         this.historyContainer = layoutElements.historyContainer;
+        this.titleInput = layoutElements.titleInput;
         this.bottomBarContainer = layoutElements.bottomBarContainer;
-        this.markdownToggle = layoutElements.markdownToggleButton; // Use markdownToggleButton
-        this.expandButton = layoutElements.expandButton;
-        // --------------------------------------------------------------
-        // Initialize elements that are created outside createLayout if any
-        // In this case, all core elements are created within createLayout
-        // Create and append the indicator element
+        // Initialize and append the keyboard shortcut indicator
         this.keyboardShortcutIndicator = document.createElement('div');
-        this.keyboardShortcutIndicator.className = 'jp-llm-ext-keyboard-shortcut-indicator';
-        // Append it to the main element managed by the UIManager
-        // Ensure mainElement exists before appending
-        if (this.layoutElements.mainElement) {
-            this.layoutElements.mainElement.appendChild(this.keyboardShortcutIndicator);
+        this.keyboardShortcutIndicator.className = 'jp-llm-ext-shortcut-indicator';
+        this.keyboardShortcutIndicator.style.display = 'none'; // Hidden by default
+        // Append the indicator to the main layout or another appropriate place
+        // Ensure the necessary element (e.g., bottomBarContainer) exists before appending
+        if (this.bottomBarContainer) { // Check if bottomBarContainer exists from layoutElements
+            // Prepend within the main content wrapper, before other elements
+            // Or append to bottom bar, depending on desired position
+            // Appending after bottomBarContainer seems reasonable
+            this.bottomBarContainer.insertAdjacentElement('afterend', this.keyboardShortcutIndicator);
         }
         else {
-            console.error('UIManager: Main layout element not found during indicator initialization.');
+            // If bottomBarContainer is not available, maybe append to mainElement? 
+            // Or log an error if it's essential.
+            console.error('UIManager: bottomBarContainer element not found during indicator initialization.');
         }
     }
     /**
@@ -3667,39 +4059,92 @@ class UIManager {
         // Input Row
         const middleRow = document.createElement('div');
         middleRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-input-row';
-        this.inputField = document.createElement('textarea');
-        this.inputField.placeholder = 'Ask me anything...';
-        this.inputField.rows = 1;
+        this.inputField = document.createElement('div');
+        this.inputField.setAttribute('contenteditable', 'true');
+        this.inputField.setAttribute('role', 'textbox');
+        this.inputField.setAttribute('aria-multiline', 'true');
+        this.inputField.setAttribute('data-placeholder', 'Ask me anything...');
         this.inputField.className = 'jp-llm-ext-input-field';
-        // Send on Enter (handled by callbacks.handleSendMessage)
-        this.inputField.addEventListener('keypress', (event) => {
+        // --- Input Event Listener for @ detection ---
+        this.inputField.addEventListener('input', (event) => {
+            this.handleInputForReference();
+        });
+        // --- End Input Event Listener ---
+        this.inputField.addEventListener('keydown', (event) => {
+            console.log(`UI_MANAGER KeyDown: Key='${event.key}', Shift='${event.shiftKey}', Code='${event.code}'`);
+            const selection = window.getSelection();
+            // --- Backspace handling for widgets ---
+            if (event.key === 'Backspace' && selection && selection.isCollapsed) {
+                const range = selection.getRangeAt(0);
+                const nodeBefore = range.startContainer.childNodes[range.startOffset - 1] || range.startContainer.previousSibling;
+                // Check nodeBefore more carefully
+                let potentialWidget = null;
+                if (range.startOffset > 0 && range.startContainer.childNodes.length >= range.startOffset) {
+                    potentialWidget = range.startContainer.childNodes[range.startOffset - 1];
+                }
+                else if (range.startOffset === 0 && range.startContainer.previousSibling) {
+                    potentialWidget = range.startContainer.previousSibling;
+                }
+                else if (range.startContainer !== this.inputField && range.startContainer.parentNode === this.inputField && range.startOffset === 0) {
+                    // Cursor might be at the start of a text node following a widget
+                    potentialWidget = range.startContainer.previousSibling;
+                }
+                if (potentialWidget &&
+                    potentialWidget.nodeType === Node.ELEMENT_NODE &&
+                    potentialWidget.classList.contains('jp-llm-ext-ref-widget')) {
+                    event.preventDefault(); // Stop default backspace
+                    potentialWidget.remove(); // Remove the entire widget node
+                    // Manually trigger input event for consistency?
+                    this.inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                    return; // Stop further processing for this keydown
+                }
+            }
+            // --- End Backspace handling ---
+            // --- @ Key Direct Handling ---
+            // REMOVED: This logic is now centralized in shortcut-handler.ts
+            // --- End @ Key Direct Handling ---
             if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                this.callbacks.handleSendMessage();
+                event.preventDefault(); // Prevent default newline insertion
+                const message = this.getSerializedInput();
+                if (message.trim()) {
+                    this.callbacks.handleSendMessage(message);
+                    this.clearInputField();
+                }
             }
-        });
-        // Input listener (e.g., for hiding '@' popup - might move to InputHandler later)
-        this.inputField.addEventListener('input', () => {
-            var _a;
-            // Basic logic for hiding popup if @ removed - refine later
-            const cursorPosition = this.inputField.selectionStart;
-            const textBeforeCursor = this.inputField.value.slice(0, cursorPosition);
-            const hasAtNow = textBeforeCursor.endsWith('@') &&
-                (cursorPosition === 1 ||
-                    !!((_a = textBeforeCursor[cursorPosition - 2]) === null || _a === void 0 ? void 0 : _a.match(/\s/)));
-            // This needs the widget's `hasAtSymbol` state or similar
-            // For now, this logic might be incomplete or moved.
-            if (!hasAtNow) {
-                this.popupMenuManager.hidePopupMenu();
+            // --- New: Handle Tab/Escape for popup interaction ---
+            else if (this.popupMenuManager.isPopupMenuVisible()) {
+                if (event.key === 'Tab' || event.key === 'Escape' || event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Enter') {
+                    // Let the PopupMenuManager's document keydown handler manage these
+                    // We just need to prevent the default input field behavior
+                    if (event.key !== 'Enter') { // Allow Enter to potentially work if menu doesn't handle it
+                        event.preventDefault();
+                        // We don't stop propagation here; let the document handler in PopupMenuManager receive it.
+                    }
+                }
             }
+            // --- End New ---
         });
+        // --- Copy/Paste Event Listeners ---
+        this.inputField.addEventListener('copy', (event) => {
+            this.handleCopy(event);
+        });
+        this.inputField.addEventListener('paste', (event) => {
+            this.handlePaste(event);
+        });
+        // --- End Copy/Paste ---
         middleRow.appendChild(this.inputField);
         // Buttons Row (Send, New Chat, History)
         const bottomRow = document.createElement('div');
         bottomRow.className = 'jp-llm-ext-bottom-bar-row jp-llm-ext-buttons-row';
         const sendButton = this.createButton('Send', 'Send message');
         sendButton.classList.add('jp-llm-ext-send-button'); // Specific class for send
-        sendButton.addEventListener('click', this.callbacks.handleSendMessage);
+        sendButton.addEventListener('click', () => {
+            const message = this.getSerializedInput();
+            if (message.trim()) {
+                this.callbacks.handleSendMessage(message);
+                this.clearInputField();
+            }
+        });
         const newChatButton = this.createButton('+ New Chat', 'Start a new chat');
         newChatButton.addEventListener('click', this.callbacks.handleNewChat);
         const historyButton = this.createButton('History', 'View chat history');
@@ -3741,11 +4186,12 @@ class UIManager {
         this.markdownToggle.addEventListener('change', (e) => {
             const target = e.target;
             this.isMarkdownMode = target.checked;
-            // Update placeholder based on mode
-            this.inputField.placeholder = this.isMarkdownMode
+            const placeholderText = this.isMarkdownMode
                 ? 'Write markdown here...\\n\\n# Example heading\\n- List item\\n\\n```code block```'
                 : 'Ask me anything...';
-            // Future: Notify widget/handler if needed: this.callbacks.handleToggleMarkdown(this.isMarkdownMode);
+            this.inputField.setAttribute('data-placeholder', placeholderText);
+            this.inputField.blur();
+            this.inputField.focus();
         });
         const toggleLabel = document.createElement('label');
         toggleLabel.htmlFor = 'markdown-toggle';
@@ -3758,7 +4204,6 @@ class UIManager {
         // '@' Button
         const atButton = this.createButton('@', 'Browse cells, code, files, and more');
         atButton.addEventListener('click', (event) => {
-            // Pass event and button to the callback for positioning
             this.callbacks.handleShowPopupMenu(event, event.currentTarget);
         });
         // Expand Button (store reference)
@@ -3784,15 +4229,14 @@ class UIManager {
             return; // Ensure elements exist
         this.isInputExpanded = !this.isInputExpanded;
         if (this.isInputExpanded) {
-            this.inputField.style.height = '200px'; // Use CSS classes ideally
-            this.inputField.style.resize = 'vertical';
+            this.inputField.style.height = '200px'; // Keep for now, consider CSS classes
+            this.inputField.style.resize = 'vertical'; // Works on divs too (if overflow visible/auto)
             this.expandButton.textContent = '⤡';
             this.expandButton.title = 'Collapse input';
         }
         else {
             this.inputField.style.height = ''; // Reset height
             this.inputField.style.resize = 'none';
-            this.inputField.rows = 1; // Ensure collapse
             this.expandButton.textContent = '⤢';
             this.expandButton.title = 'Expand input';
         }
@@ -3945,6 +4389,284 @@ class UIManager {
             this.notificationTimeout = null;
         }
     }
+    /**
+     * Checks the input field content and cursor position to determine if
+     * the reference suggestion popup should be shown or hidden.
+     * Triggered on 'input' events.
+     */
+    handleInputForReference() {
+        var _a, _b;
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount || !selection.isCollapsed) {
+            // Need a collapsed selection (cursor) inside the input field
+            this.popupMenuManager.hidePopupMenu();
+            return;
+        }
+        const range = selection.getRangeAt(0);
+        const container = range.startContainer;
+        const offset = range.startOffset;
+        // Ensure the cursor is within the input field itself
+        if (!this.inputField.contains(container)) {
+            this.popupMenuManager.hidePopupMenu();
+            return;
+        }
+        // Combine text content from preceding siblings if cursor is at the start of a text node
+        let textBeforeCursor = '';
+        let currentContainer = container;
+        let currentOffset = offset;
+        while (currentContainer) {
+            if (currentContainer.nodeType === Node.TEXT_NODE) {
+                textBeforeCursor = ((_a = currentContainer.textContent) === null || _a === void 0 ? void 0 : _a.substring(0, currentOffset)) + textBeforeCursor;
+            }
+            else if (currentContainer.nodeType === Node.ELEMENT_NODE && currentContainer.classList.contains('jp-llm-ext-ref-widget')) {
+                // If we encounter a widget before the cursor, we can't be right after '@'
+                textBeforeCursor = '[widget]' + textBeforeCursor; // Add placeholder to break '@' sequence
+            }
+            else if (currentContainer.nodeType === Node.ELEMENT_NODE && currentContainer.tagName === 'BR') {
+                textBeforeCursor = '\n' + textBeforeCursor; // Treat BR as newline
+            }
+            // Move to the previous sibling or parent's previous sibling
+            if (currentContainer.previousSibling) {
+                currentContainer = currentContainer.previousSibling;
+                // If moving to a new node, take its full content
+                currentOffset = (currentContainer.textContent || '').length;
+            }
+            else {
+                // Move up to parent, continue search from before the parent
+                currentContainer = currentContainer.parentNode;
+                if (currentContainer === this.inputField || !currentContainer) {
+                    break; // Stop if we reached the input field or top
+                }
+                currentOffset = Array.prototype.indexOf.call(((_b = currentContainer.parentNode) === null || _b === void 0 ? void 0 : _b.childNodes) || [], currentContainer);
+            }
+        }
+        console.log(`UI_MANAGER handleInput: Text before cursor: "${textBeforeCursor}"`);
+        // --- Check for trigger conditions --- 
+        const endsWithAt = textBeforeCursor.endsWith('@');
+        const endsWithAtSpace = textBeforeCursor.endsWith('@ ');
+        if (endsWithAt || endsWithAtSpace) {
+            if (this.popupMenuManager.isPopupMenuVisible()) {
+                // TODO: If visible, maybe just update the query in the popup?
+                console.log('UI_MANAGER handleInput: Popup already visible, skipping show.');
+            }
+            else {
+                // Find the start of the query (after '@' or '@ ')
+                const atIndex = textBeforeCursor.lastIndexOf('@');
+                let queryStartIndex = atIndex + 1;
+                if (endsWithAtSpace) {
+                    queryStartIndex = atIndex + 2;
+                }
+                const query = textBeforeCursor.substring(queryStartIndex);
+                // --- Insert temporary span to get reliable coordinates --- 
+                const tempAnchorId = 'jp-llm-temp-popup-anchor';
+                let tempSpan = document.getElementById(tempAnchorId);
+                if (tempSpan)
+                    tempSpan.remove(); // Clean up previous if any
+                tempSpan = document.createElement('span');
+                tempSpan.id = tempAnchorId;
+                // Style to be invisible and take no space
+                tempSpan.style.visibility = 'hidden';
+                tempSpan.style.width = '0';
+                tempSpan.style.height = '0';
+                tempSpan.style.overflow = 'hidden';
+                tempSpan.textContent = '\u200B'; // Zero-width space might help rendering
+                // Insert the span at the current cursor position
+                range.insertNode(tempSpan);
+                const spanRect = tempSpan.getBoundingClientRect();
+                tempSpan.remove(); // Remove immediately after getting coords
+                // --- End temporary span logic ---
+                if (spanRect.top === 0 && spanRect.left === 0) {
+                    console.error("UI_MANAGER handleInput: Failed to get valid coordinates from temp anchor span.");
+                    // Fallback or alternative positioning might be needed here
+                    // Maybe position relative to input field bottom-left?
+                    this.popupMenuManager.hidePopupMenu(); // Don't show if coords are bad
+                }
+                else {
+                    console.log(`UI_MANAGER handleInput: Anchor coords from temp span: Top=${spanRect.top}, Left=${spanRect.left}`);
+                    // Show the TOP LEVEL suggestions using the reliable coordinates
+                    // Pass the coordinates directly to showPopupMenu
+                    this.popupMenuManager.showPopupMenu(spanRect.top, spanRect.left);
+                }
+            }
+        }
+        else {
+            // If text doesn't end with @ or @-space, hide the popup
+            // Only hide if it was previously showing the 'top' or 'references' menu triggered by '@'
+            // Avoid hiding menus triggered by the button click unnecessarily
+            if (this.popupMenuManager.isPopupMenuVisible()) { // && (this.popupMenuManager.getCurrentMenuLevel() === 'references' || /* Need way to know if triggered by @ */ )) {
+                console.log('UI_MANAGER handleInput: Hiding popup, trigger condition no longer met.');
+                this.popupMenuManager.hidePopupMenu();
+            }
+        }
+        // TODO: Update popup query if it's already visible and the text after @ changes
+        // (Need more robust logic here, considering backspace, etc.)
+    }
+    /**
+     * Serializes the content of the input field, converting known widgets
+     * back to their reference strings (e.g., @file:path/to/file.txt).
+     *
+     * NOTE: This currently uses a simple text serialization. For full fidelity
+     * preserving structure (like multiple paragraphs), a more complex approach
+     * (e.g., HTML processing or a dedicated editor model) would be needed.
+     *
+     * @returns {string} The serialized plain text content of the input field.
+     */
+    getSerializedInput() {
+        let serialized = '';
+        const nodes = this.inputField.childNodes;
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            if (node.nodeType === Node.TEXT_NODE) {
+                serialized += node.textContent;
+            }
+            else if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node;
+                if (element.classList.contains('jp-llm-ext-ref-widget') && element.dataset.referenceText) {
+                    // Append the reference text stored in the data attribute
+                    serialized += element.dataset.referenceText;
+                }
+                else if (element.tagName === 'BR') {
+                    // Convert BR tags back to newlines
+                    serialized += '\n';
+                }
+                else if (element.tagName === 'DIV') {
+                    // Handle DIV elements (might be inserted by browser on paste/enter)
+                    // Add newline before if needed, then serialize children recursively?
+                    if (i > 0) { // Add newline only if not the first element
+                        serialized += '\n';
+                    }
+                    serialized += this.serializeNodeChildren(element); // Recursively serialize children
+                }
+                else {
+                    // Include text content of other unexpected elements, but log a warning
+                    console.warn('UIManager getSerializedInput: Encountered unexpected element:', element.tagName);
+                    serialized += element.textContent;
+                }
+            } // Ignore other node types (comments, etc.)
+        }
+        return serialized.trim(); // Trim leading/trailing whitespace
+    }
+    // Helper to serialize children of a node (e.g., for DIVs)
+    serializeNodeChildren(parentNode) {
+        let content = '';
+        const nodes = parentNode.childNodes;
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            if (node.nodeType === Node.TEXT_NODE) {
+                content += node.textContent;
+            }
+            else if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node;
+                if (element.classList.contains('jp-llm-ext-ref-widget') && element.dataset.referenceText) {
+                    content += element.dataset.referenceText;
+                }
+                else if (element.tagName === 'BR') {
+                    content += '\n';
+                }
+                else {
+                    // Recursively handle nested elements if necessary, or just get text content
+                    content += this.serializeNodeChildren(element);
+                }
+            }
+        }
+        return content;
+    }
+    clearInputField() {
+        this.inputField.innerHTML = ''; // Clear all content
+        // Reset expansion state if needed
+        if (this.isInputExpanded) {
+            this.toggleInputExpansion();
+        }
+        // Ensure placeholder reappears if using CSS for it
+        this.inputField.dispatchEvent(new Event('input')); // Trigger event to update UI state if necessary
+    }
+    /**
+     * Handles the 'copy' event to put serialized plain text onto the clipboard.
+     */
+    handleCopy(event) {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || !event.clipboardData) {
+            return; // Nothing selected or no clipboard data object
+        }
+        const range = selection.getRangeAt(0);
+        // Ensure the selection is within our input field
+        if (!this.inputField.contains(range.commonAncestorContainer)) {
+            return;
+        }
+        const selectedText = this.serializeRangeContent(range);
+        event.preventDefault(); // Prevent default copy behavior
+        event.clipboardData.setData('text/plain', selectedText);
+        console.log('UIManager handleCopy: Copied serialized text:', selectedText);
+    }
+    /**
+     * Handles the 'paste' event to insert plain text content.
+     */
+    handlePaste(event) {
+        var _a;
+        if (!event.clipboardData) {
+            return;
+        }
+        const text = event.clipboardData.getData('text/plain');
+        if (text) {
+            event.preventDefault(); // Prevent default paste behavior
+            // Insert the plain text at the current cursor position
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents(); // Delete selected content if any
+                const textNode = document.createTextNode(text);
+                range.insertNode(textNode);
+                // Move cursor after inserted text
+                range.setStartAfter(textNode);
+                range.setEndAfter(textNode);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                // Ensure scroll into view and trigger input event for potential updates
+                this.inputField.focus();
+                (_a = textNode.parentElement) === null || _a === void 0 ? void 0 : _a.scrollIntoView({ block: 'nearest' });
+                this.inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+            }
+            console.log('UIManager handlePaste: Pasted text:', text);
+        }
+    }
+    // --- Methods for updating UI elements will be added later ---
+    // e.g., updateMessageContainer(html: string), showHistoryView(), showChatView()
+    // --- Potentially add methods to get element references if needed externally ---
+    // public getInputField(): HTMLTextAreaElement { return this.inputField; }
+    // etc.
+    // Helper to serialize a range (needed for copy)
+    serializeRangeContent(range) {
+        const fragment = range.cloneContents();
+        let tempDiv = document.createElement('div');
+        tempDiv.appendChild(fragment);
+        // Now, serialize tempDiv's content like we do for getSerializedInput
+        let serialized = '';
+        const nodes = tempDiv.childNodes;
+        const serializeNode = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                serialized += node.textContent;
+            }
+            else if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node;
+                if (element.classList.contains('jp-llm-ext-ref-widget') && element.dataset.referenceText) {
+                    serialized += element.dataset.referenceText;
+                }
+                else if (element.tagName === 'BR') {
+                    serialized += '\n';
+                }
+                else { // For other elements (like DIVs potentially in fragment), serialize children
+                    const childNodes = element.childNodes;
+                    for (let j = 0; j < childNodes.length; j++) {
+                        serializeNode(childNodes[j]);
+                    }
+                }
+            }
+        };
+        for (let i = 0; i < nodes.length; i++) {
+            serializeNode(nodes[i]);
+        }
+        return serialized;
+    }
 }
 exports.UIManager = UIManager;
 
@@ -4036,6 +4758,111 @@ function copyImageToClipboard(imageUrl, feedbackCallback) {
         console.error('Error preparing image copy:', error);
         alert('Error copying image: ' + error); // Keep alert for critical user feedback
         feedbackCallback === null || feedbackCallback === void 0 ? void 0 : feedbackCallback(false); // Indicate failure
+    }
+}
+
+
+/***/ }),
+
+/***/ "./lib/utils/content-editable-utils.js":
+/*!*********************************************!*\
+  !*** ./lib/utils/content-editable-utils.js ***!
+  \*********************************************/
+/***/ ((__unused_webpack_module, exports) => {
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getCaretPosition = getCaretPosition;
+exports.setCaretPosition = setCaretPosition;
+/**
+ * Gets the caret position within a contenteditable element.
+ * Returns the linear offset from the start of the element's text content.
+ */
+function getCaretPosition(element) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !element.contains(selection.anchorNode)) {
+        // Check if selection is within the element
+        return 0;
+    }
+    const range = selection.getRangeAt(0);
+    // Create a range that spans from the beginning of the element to the caret
+    const preCaretRange = range.cloneRange();
+    preCaretRange.selectNodeContents(element);
+    preCaretRange.setEnd(range.startContainer, range.startOffset);
+    // The length of the text content within this pre-caret range is the position
+    // Using toString() is generally more reliable than textContent for range length
+    return preCaretRange.toString().length;
+}
+/**
+ * Sets the caret position within a contenteditable element.
+ * @param element The contenteditable element.
+ * @param position The desired linear offset from the start of the text content.
+ */
+function setCaretPosition(element, position) {
+    var _a;
+    const selection = window.getSelection();
+    if (!selection) {
+        return;
+    }
+    const range = document.createRange();
+    let charCount = 0;
+    let foundNode = false;
+    let nodeStack = [element]; // Use a stack for DFS traversal
+    // Depth-first search to find the correct text node and offset
+    while (nodeStack.length > 0) {
+        const node = nodeStack.pop();
+        if (node.nodeType === Node.TEXT_NODE) {
+            const textLength = ((_a = node.textContent) === null || _a === void 0 ? void 0 : _a.length) || 0;
+            if (position >= charCount && position <= charCount + textLength) {
+                range.setStart(node, position - charCount);
+                range.setEnd(node, position - charCount);
+                foundNode = true;
+                break; // Found the node, exit loop
+            }
+            charCount += textLength;
+        }
+        else if (node.nodeType === Node.ELEMENT_NODE) {
+            const elementNode = node;
+            if (elementNode.tagName === 'BR') {
+                if (position === charCount) { // Position is right before BR
+                    range.setStartBefore(node);
+                    range.setEndBefore(node);
+                    foundNode = true;
+                    break;
+                }
+                charCount += 1; // Treat BR as one character
+            }
+            else if (elementNode.getAttribute('contenteditable') === 'false') {
+                // Treat non-editable elements (like our widgets) as single characters
+                if (position === charCount) {
+                    // Position is right before the widget
+                    range.setStartBefore(node);
+                    range.setEndBefore(node);
+                    foundNode = true;
+                    break;
+                }
+                charCount += 1;
+            }
+            else {
+                // Add child nodes to the stack in reverse order for correct DFS
+                const children = node.childNodes;
+                for (let i = children.length - 1; i >= 0; i--) {
+                    nodeStack.push(children[i]);
+                }
+            }
+        }
+    }
+    // If the position is beyond the content or wasn't found, place cursor at the end
+    if (!foundNode) {
+        range.selectNodeContents(element);
+        range.collapse(false); // Collapse to the end
+    }
+    selection.removeAllRanges();
+    selection.addRange(range);
+    // Restore focus only if the element was previously focused or is the target
+    // This avoids stealing focus unnecessarily
+    if (document.activeElement !== element) {
+        element.focus({ preventScroll: true }); // preventScroll helps avoid jumping
     }
 }
 
@@ -4371,4 +5198,4 @@ function insertCellContentByIndex(index, insertCallback) {
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.5a53c88dd7e4fdc12b94.js.map
+//# sourceMappingURL=lib_index_js.09415b66c01c9b7528f0.js.map

@@ -1,27 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SettingsHandler = void 0;
-// import { SettingsModal } from '../ui/settings-modal'; // Commented out - unused import
 /**
  * Handles the logic related to the settings modal:
  * displaying, hiding, populating, saving, and showing feedback.
  */
 class SettingsHandler {
-    constructor(state, 
-    // successCallback: (message: string) => void, // Commented out - unused parameter
-    settingsModalContainer, uiManager // Pass UIManager for notifications
+    constructor(state, settingsModalContainer, uiManager // Pass UIManager for notifications
     ) {
         this.state = state;
-        // this.apiClient = apiClient; // Removed: unused variable
-        // this.successCallback = successCallback; // Commented out - unused assignment
         this.settingsModalContainer = settingsModalContainer;
         this.uiManager = uiManager;
-        // Attach internal listeners if the modal has its own save/cancel buttons
-        // This assumes the modal element was created with listeners calling these methods.
-        // If createSettingsModalElement in ui/settings-modal.ts attaches listeners that 
-        // call callbacks passed during creation, then this handler doesn't need 
-        // to attach listeners directly, just provide the callbacks (e.g., this.saveSettings.bind(this)).
-        // For now, let's assume the callbacks passed to createSettingsModalElement handle this.
     }
     /**
      * Populates the settings form with current values and displays the modal.

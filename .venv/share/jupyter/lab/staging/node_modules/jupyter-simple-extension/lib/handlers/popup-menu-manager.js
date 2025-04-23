@@ -114,32 +114,36 @@ class PopupMenuManager {
         await this.renderMenuContent();
         // Ensure it's attached to the widget node if somehow detached
         this.widgetNode.appendChild(this.popupMenuContainer);
-        // Position the popup menu - handled in updatePopupPosition
-        this.updatePopupPosition();
-        // Focus the search input if we are in file/directory view, otherwise focus the first item
-        if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-            setTimeout(() => {
-                // Focus after timeout to ensure DOM is ready
+        // Position the popup menu - DEFER calculation slightly
+        setTimeout(() => {
+            console.log("POPUP: Deferred updatePopupPosition call.");
+            try {
+                this.updatePopupPosition();
+            }
+            catch (error) {
+                console.error("POPUP: Error during deferred updatePopupPosition:", error);
+            }
+            // Focus the search input *after* positioning if in file/dir view
+            // Otherwise, focus first menu item
+            if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
                 this.searchInput.focus();
-                console.log('POPUP: Focused search input');
-            }, 50); // Slightly longer timeout
-            this.selectedMenuItemIndex = -1; // Don't select an item if search is focused
-        }
-        else {
-            // Reset and select the first menu item for top level
-            this.selectedMenuItemIndex = -1;
-            setTimeout(() => this.selectNextMenuItem(), 50);
-        }
+                console.log('POPUP: Focused search input after deferred positioning.');
+                this.selectedMenuItemIndex = -1; // Don't select an item if search is focused
+            }
+            else { // Top level or cells
+                this.selectedMenuItemIndex = -1;
+                this.selectNextMenuItem(); // Select first item
+                // Optionally focus the first item for immediate keyboard nav
+                // const menuItems = this.getMenuItems();
+                // if (menuItems.length > 0) menuItems[0].focus(); 
+            }
+        }, 0); // 0ms delay is usually sufficient
     }
     hidePopupMenu() {
         if (this.popupMenuContainer.style.display !== 'none') {
-            console.log('POPUP: Hiding menu.');
+            console.log('POPUP: Hiding menu. Called from:', new Error().stack);
             this.popupMenuContainer.style.display = 'none';
-            // No need to explicitly remove from widgetNode unless causing issues
-            // If performance becomes an issue with many menus, consider removing/re-adding
-            // if (this.popupMenuContainer.parentNode === this.widgetNode) {
-            //     this.widgetNode.removeChild(this.popupMenuContainer);
-            // }
+            this.currentMenuLevel = 'top'; // Reset level
         }
     }
     async renderMenuContent() {
@@ -154,11 +158,12 @@ class PopupMenuManager {
             while (this.popupMenuContainer.firstChild) {
                 this.popupMenuContainer.removeChild(this.popupMenuContainer.firstChild);
             }
-            // If not at top level, add a search input for filtering items
+            // Only add search input if NOT at top level
             if (this.currentMenuLevel !== 'top') {
                 // Add search input at the top of the menu
                 this.popupMenuContainer.appendChild(this.searchInput);
-                // Path display and back button removed for cleaner UI
+                this.searchInput.value = ''; // Clear for file/dir/cell levels
+                this.lastSearchTerm = '';
             }
             // Render different menu content based on current level
             switch (this.currentMenuLevel) {
@@ -176,9 +181,13 @@ class PopupMenuManager {
             // Reset selection after rendering
             this.selectedMenuItemIndex = -1;
             this.updateSelectionHighlight();
-            // Update the position to maintain the fixed bottom edge
-            if (this.popupMenuContainer.style.display !== 'none' && this._anchorX !== undefined && this._anchorY !== undefined) {
+            // Update the position (might have changed due to content rendering)
+            console.log("POPUP: ===> About to call updatePopupPosition after renderMenuContent");
+            try {
                 this.updatePopupPosition();
+            }
+            catch (err) {
+                console.error("POPUP: Error calling updatePopupPosition after render:", err);
             }
         }
         catch (error) {
@@ -506,18 +515,27 @@ class PopupMenuManager {
             case 'select-cell':
                 if (path) {
                     const cellIndex = parseInt(path);
-                    if (!isNaN(cellIndex) && this.callbacks.insertCellByIndex) {
-                        this.callbacks.insertCellByIndex(cellIndex);
+                    if (!isNaN(cellIndex)) {
+                        // Construct the reference text (e.g., "@Cell 3")
+                        // const refText = `@Cell ${cellIndex + 1}`; // Use 1-based index for display
+                        // console.log("TODO: Implement cell reference insertion: ", refText);
+                        this.callbacks.insertCellByIndex(cellIndex); // Call the appropriate callback
                         this.hidePopupMenu();
                     }
                     else {
-                        console.error('POPUP: Invalid cell index or callback missing.');
+                        console.error('POPUP: Invalid cell index.');
                     }
+                }
+                else {
+                    console.error('POPUP: Cell selected but index (path) is missing.');
                 }
                 break;
             case 'select-file':
                 if (path) {
-                    this.callbacks.insertFilePath(path);
+                    // Construct the reference text (e.g., "@file path/to/file.py")
+                    // const refText = `@file ${path}`;
+                    // console.log("TODO: Implement file reference insertion: ", refText);
+                    this.callbacks.insertFilePath(path); // Call the appropriate callback
                     this.hidePopupMenu();
                 }
                 else {
@@ -541,7 +559,10 @@ class PopupMenuManager {
                 break;
             case 'select-directory-callback': // New action to select dir when in directory view
                 if (path) {
-                    this.callbacks.insertDirectoryPath(path); // Use the callback
+                    // Construct the reference text (e.g., "@dir path/to/directory")
+                    // const refText = `@dir ${path}`;
+                    // console.log("TODO: Implement directory reference insertion: ", refText);
+                    this.callbacks.insertDirectoryPath(path); // Call the appropriate callback
                     this.hidePopupMenu();
                 }
                 else {
@@ -733,7 +754,7 @@ class PopupMenuManager {
     getParentDirectory(path) {
         if (!path)
             return '';
-        const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\\\'));
+        const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
         if (lastSlash === -1)
             return ''; // No directory part, likely root or just a filename
         return path.substring(0, lastSlash);
@@ -742,207 +763,230 @@ class PopupMenuManager {
      * Handle keyboard navigation when the popup menu is shown
      */
     handleKeyDown(event) {
-        var _a;
-        // Skip if menu not visible
-        if (this.popupMenuContainer.style.display === 'none') {
+        // Only handle keys if the popup is visible
+        if (!this.isPopupMenuVisible()) {
             return;
         }
-        console.log(`POPUP KeyDown: Key='${event.key}', Target='${(_a = event.target) === null || _a === void 0 ? void 0 : _a.tagName}', SearchFocused='${document.activeElement === this.searchInput}'`);
-        // Special handling for when search input is focused
-        if (document.activeElement === this.searchInput) {
-            // The input's own keydown handler will handle most keys
-            // But for certain keys like arrow keys, we may need to move focus
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                // Move selection to first/last item
+        console.log(`POPUP Document KeyDown: Key='${event.key}', Target=`, event.target);
+        // Allow default browser search behavior (e.g., Cmd+F)
+        if (event.metaKey || event.ctrlKey) {
+            return;
+        }
+        // If focus is inside the search input, let its handler manage navigation keys
+        if (event.target === this.searchInput) {
+            console.log('POPUP (Document): Key event target is search input, skipping document handler.');
+            // Allow Backspace etc. to work naturally in search input
+            if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+                // Let the search input's keydown handle Escape, stop propagation
+                // But let the main handler process Up/Down/Enter/Tab by blurring
+                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    // Trigger blur to shift focus to menu items
+                    this.searchInput.blur();
+                    // Prevent default scrolling behavior
+                    event.preventDefault();
+                    // Process the key event now in the menu context
+                    this.processMenuNavigation(event.key);
+                }
+                else if (event.key === 'Enter') {
+                    this.searchInput.blur();
+                    event.preventDefault();
+                    this.processMenuNavigation(event.key);
+                }
+                else if (event.key === 'Tab') {
+                    // Allow tabbing away (or maybe cycle focus?)
+                    this.searchInput.blur();
+                    // Don't prevent default - allow tabbing
+                }
+                else if (event.key === 'Escape') {
+                    // Already handled by searchInput's listener, just stop propagation
+                    event.stopPropagation();
+                }
+            }
+            else {
+                // Allow other keys (typing) in the search input
+                return;
+            }
+        }
+        else {
+            // Focus is NOT in the search input, process normally
+            this.processMenuNavigation(event.key);
+            // Prevent default browser actions for these keys when menu is active
+            if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
                 event.preventDefault();
                 event.stopPropagation();
-                // Delay before moving focus - this gives time for the search input's
-                // own keydown handler to process the key first
-                setTimeout(() => {
-                    if (event.key === 'ArrowDown') {
-                        this.searchInput.blur();
-                        this.selectNextMenuItem();
-                    }
-                    else { // ArrowUp
-                        this.searchInput.blur();
-                        this.selectPreviousMenuItem();
-                    }
-                }, 0);
-                return;
             }
-            // IMPORTANT: For Backspace in search input, just return without handling
-            // Let the default behavior happen
-            if (event.key === 'Backspace') {
-                // Just perform default behavior in search input
-                return;
-            }
-            // Let all other keys be handled by the search input's own handler
-            return;
         }
-        // From here, search input is NOT focused
-        const menuItems = this.getMenuItems();
-        switch (event.key) {
+    }
+    processMenuNavigation(key) {
+        switch (key) {
             case 'ArrowDown':
-                if (menuItems.length > 0) {
-                    console.log('POPUP KeyDown (Menu Focused): ArrowDown');
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.selectNextMenuItem();
-                }
+                console.log('POPUP: Arrow Down pressed');
+                this.selectNextMenuItem();
                 break;
             case 'ArrowUp':
-                if (menuItems.length > 0) {
-                    console.log('POPUP KeyDown (Menu Focused): ArrowUp');
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.selectPreviousMenuItem();
-                }
-                break;
-            case 'Backspace':
-                console.log('POPUP KeyDown (Menu Focused): Backspace');
-                // Only prevent default and navigate back if we have history
-                if (this.menuHistory.length > 0) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.navigateBackMenu();
-                }
-                else {
-                    console.log('POPUP KeyDown (Menu Focused): No history, allowing Backspace default action');
-                    // Allow default - don't prevent or stop propagation
-                }
+                console.log('POPUP: Arrow Up pressed');
+                this.selectPreviousMenuItem();
                 break;
             case 'Enter':
-                console.log('POPUP KeyDown (Menu Focused): Enter');
-                // Only activate if an item is selected
-                if (this.selectedMenuItemIndex >= 0 && this.selectedMenuItemIndex < menuItems.length) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    menuItems[this.selectedMenuItemIndex].click();
-                }
-                break;
-            case 'Tab':
-                console.log('POPUP KeyDown (Menu Focused): Tab');
-                // Basic Tab support: move focus between search and first/last item
-                event.preventDefault();
-                event.stopPropagation();
-                if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-                    this.searchInput.focus();
-                    this.deselectAllMenuItems(); // Deselect items when search gets focus via Tab
+            case 'Tab': // Treat Tab like Enter for selection
+                console.log(`POPUP: ${key} pressed`);
+                if (this.selectedMenuItemIndex >= 0) {
+                    const menuItems = this.getMenuItems();
+                    if (menuItems[this.selectedMenuItemIndex]) {
+                        console.log('POPUP: Simulating click on selected item:', menuItems[this.selectedMenuItemIndex].textContent);
+                        // Simulate click to trigger handleMenuClick
+                        menuItems[this.selectedMenuItemIndex].click();
+                    }
+                    else {
+                        console.log('POPUP: Selected index out of bounds?');
+                    }
                 }
                 else {
-                    // Maybe close menu on Tab from top level? Or do nothing.
-                    this.hidePopupMenu();
+                    console.log('POPUP: Enter/Tab pressed but no item selected');
+                    // If no item is selected, maybe select the first one and activate?
+                    const menuItems = this.getMenuItems();
+                    if (menuItems.length > 0) {
+                        menuItems[0].click(); // Activate first item
+                    }
                 }
                 break;
             case 'Escape':
-                console.log('POPUP KeyDown (Menu Focused): Escape');
-                event.preventDefault();
-                event.stopPropagation();
-                this.hidePopupMenu();
-                break;
-            default:
-                console.log(`POPUP KeyDown (Menu Focused): Default key '${event.key}'`);
-                // If typing a character and in file/dir view, focus search
-                if ((this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') &&
-                    event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                    event.preventDefault(); // Prevent character appearing elsewhere
-                    event.stopPropagation();
-                    this.searchInput.focus();
-                    // Manually append the typed character as focus happens after keydown default action
-                    this.searchInput.value += event.key;
-                    // Trigger input event manually to update list
-                    this.searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                console.log('POPUP: Escape pressed');
+                // If in a submenu, navigate back; otherwise, hide.
+                if (this.menuHistory.length > 0) {
+                    this.navigateBackMenu();
                 }
-                // Allow other keys (e.g., modifiers) to pass through if not handled
+                else {
+                    this.hidePopupMenu();
+                }
                 break;
         }
     }
     updateSelectionHighlight() {
         const menuItems = this.getMenuItems();
-        console.log(`POPUP updateSelectionHighlight: Highlighting index ${this.selectedMenuItemIndex} among ${menuItems.length} items.`);
         menuItems.forEach((item, index) => {
             if (index === this.selectedMenuItemIndex) {
-                if (!item.classList.contains('selected')) {
-                    item.classList.add('selected');
-                    console.log(`POPUP updateSelectionHighlight: Added 'selected' to item ${index}`);
-                    // Ensure item is visible
-                    item.scrollIntoView({ block: 'nearest' });
-                }
+                item.classList.add('jp-llm-ext-popup-menu-item-selected');
+                // Scroll into view if necessary
+                item.scrollIntoView({ block: 'nearest' });
             }
             else {
-                if (item.classList.contains('selected')) {
-                    item.classList.remove('selected');
-                    console.log(`POPUP updateSelectionHighlight: Removed 'selected' from item ${index}`);
-                }
+                item.classList.remove('jp-llm-ext-popup-menu-item-selected');
             }
         });
     }
     deselectAllMenuItems() {
         const menuItems = this.getMenuItems();
-        menuItems.forEach(item => item.classList.remove('selected'));
+        menuItems.forEach(item => {
+            item.classList.remove('jp-llm-ext-popup-menu-item-selected');
+        });
         this.selectedMenuItemIndex = -1;
     }
     selectNextMenuItem() {
         const menuItems = this.getMenuItems();
-        if (!menuItems.length) {
-            console.log('POPUP selectNext: No items to select.');
-            this.selectedMenuItemIndex = -1; // Ensure index is reset
+        if (menuItems.length === 0)
             return;
+        this.selectedMenuItemIndex++;
+        if (this.selectedMenuItemIndex >= menuItems.length) {
+            this.selectedMenuItemIndex = 0; // Wrap around
         }
-        const oldIndex = this.selectedMenuItemIndex;
-        // Deselect current first is handled by updateSelectionHighlight
-        // Move to the next item or loop back to the first
-        this.selectedMenuItemIndex = (this.selectedMenuItemIndex + 1) % menuItems.length;
-        console.log(`POPUP selectNext: Index changed from ${oldIndex} to ${this.selectedMenuItemIndex}`);
         this.updateSelectionHighlight();
+        console.log(`POPUP: Selected item index: ${this.selectedMenuItemIndex}`);
     }
     selectPreviousMenuItem() {
         const menuItems = this.getMenuItems();
-        if (!menuItems.length) {
-            console.log('POPUP selectPrevious: No items to select.');
-            this.selectedMenuItemIndex = -1; // Ensure index is reset
+        if (menuItems.length === 0)
             return;
+        this.selectedMenuItemIndex--;
+        if (this.selectedMenuItemIndex < 0) {
+            this.selectedMenuItemIndex = menuItems.length - 1; // Wrap around
         }
-        const oldIndex = this.selectedMenuItemIndex;
-        // Deselect current first is handled by updateSelectionHighlight
-        // Move to the previous item or loop to the last
-        this.selectedMenuItemIndex = this.selectedMenuItemIndex <= 0 ?
-            menuItems.length - 1 : this.selectedMenuItemIndex - 1;
-        console.log(`POPUP selectPrevious: Index changed from ${oldIndex} to ${this.selectedMenuItemIndex}`);
         this.updateSelectionHighlight();
+        console.log(`POPUP: Selected item index: ${this.selectedMenuItemIndex}`);
     }
     /**
-     * Get all interactive menu items
+     * Get all interactive menu items currently displayed
      */
     getMenuItems() {
-        const items = Array.from(this.popupMenuContainer.querySelectorAll('.jp-llm-ext-popup-menu-item'));
-        // Filter out non-interactive items like loading, empty, error
-        return items.filter(item => {
-            const actionId = item.dataset.actionId;
-            return actionId !== 'loading' && actionId !== 'empty' && actionId !== 'error';
-        });
+        return Array.from(this.popupMenuContainer.querySelectorAll('.jp-llm-ext-popup-menu-item'));
     }
     /**
-     * Update popup position, keeping the bottom edge fixed at the anchor point
+     * Updates the position of the popup menu based on the active reference range
+     * or the initial anchor point. Tries to position the BOTTOM of the menu
+     * just ABOVE the range/anchor.
      */
     updatePopupPosition() {
-        var _a, _b;
-        // Make sure anchor points are defined
-        const anchorX = (_a = this._anchorX) !== null && _a !== void 0 ? _a : 0;
-        const anchorY = (_b = this._anchorY) !== null && _b !== void 0 ? _b : 0;
-        // Position the popup menu
-        this.popupMenuContainer.style.position = 'absolute';
-        this.popupMenuContainer.style.left = `${anchorX}px`;
-        // Show the menu so we can calculate its height
+        if (!this.widgetNode)
+            return;
+        const widgetRect = this.widgetNode.getBoundingClientRect();
+        let targetTop;
+        let targetLeft;
+        // Use the anchor coordinates provided (now from the reliable temp span)
+        if (this._anchorX !== undefined && this._anchorY !== undefined) {
+            console.log(`POPUP: Positioning based on anchor point: (${this._anchorX}, ${this._anchorY})`);
+            // Target position relative to viewport
+            targetTop = this._anchorY;
+            targetLeft = this._anchorX;
+        }
+        else {
+            console.warn("POPUP: Cannot update position - no anchor point provided.");
+            return;
+        }
+        // Make sure the popup is visible and rendered to get its height
+        this.popupMenuContainer.style.visibility = 'hidden'; // Keep it hidden while calculating
         this.popupMenuContainer.style.display = 'block';
-        // Get the actual height after rendering
-        const menuHeight = this.popupMenuContainer.offsetHeight;
-        // Add a small gap (10px) between the bottom of the menu and the trigger point
-        const gap = 10;
-        // Position above the cursor/button to keep bottom edge at the anchor point:
-        // y - gap = bottom edge of popup, so popup top = y - gap - menuHeight
-        this.popupMenuContainer.style.top = `${anchorY - gap - menuHeight}px`;
-        console.log(`POPUP: Positioned menu at height ${menuHeight}px with bottom at ${anchorY - gap}px`);
+        const popupHeight = this.popupMenuContainer.offsetHeight;
+        const popupWidth = this.popupMenuContainer.offsetWidth;
+        // Calculate desired 'top' style relative to the widgetNode
+        // Position the bottom of the popup just above the target's top
+        let top = (targetTop - widgetRect.top) - popupHeight;
+        // Calculate desired 'left' style relative to the widgetNode
+        let left = targetLeft - widgetRect.left;
+        // --- Boundary checks (relative to widget) ---
+        const widgetClientWidth = this.widgetNode.clientWidth; // Use clientWidth for inner width
+        const widgetClientHeight = this.widgetNode.clientHeight;
+        // Prevent going off the left edge of the widget
+        if (left < 0) {
+            left = 5; // Small padding
+            console.log("POPUP Adjust: Corrected left edge");
+        }
+        // Prevent going off the right edge of the widget
+        if (left + popupWidth > widgetClientWidth) {
+            left = widgetClientWidth - popupWidth - 5; // Adjust left, add padding
+            console.log("POPUP Adjust: Corrected right edge");
+        }
+        // Prevent going off the top edge of the widget
+        if (top < 0) {
+            // If it goes off the top, try positioning it *below* the target instead
+            const spaceBelow = widgetClientHeight - (targetTop - widgetRect.top + 10); // Space below target
+            if (spaceBelow >= popupHeight) {
+                top = (targetTop - widgetRect.top) + 10; // Position below target with padding
+                console.log("POPUP Adjust: Flipping below target (was off top)");
+            }
+            else {
+                // Not enough space below either, clamp to top
+                top = 5; // Small padding from top
+                console.log("POPUP Adjust: Clamped to top edge (no space below)");
+            }
+        }
+        console.log(`POPUP: Setting position - Top: ${top}px, Left: ${left}px (Relative to Widget)`);
+        this.popupMenuContainer.style.top = `${top}px`;
+        this.popupMenuContainer.style.left = `${left}px`;
+        // Make it visible again
+        this.popupMenuContainer.style.display = 'block';
+        this.popupMenuContainer.style.visibility = 'visible';
+    }
+    /**
+     * Checks if the popup menu is currently visible.
+     */
+    isPopupMenuVisible() {
+        return this.popupMenuContainer.style.display !== 'none';
+    }
+    /**
+     * Gets the current level of the popup menu.
+     */
+    getCurrentMenuLevel() {
+        return this.currentMenuLevel;
     }
 }
 exports.PopupMenuManager = PopupMenuManager;
