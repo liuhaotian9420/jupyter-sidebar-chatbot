@@ -9,6 +9,7 @@ exports.renderBotMessage = renderBotMessage;
 exports.renderBotMessageStreamingStart = renderBotMessageStreamingStart;
 exports.renderBotMessageStreamingUpdate = renderBotMessageStreamingUpdate;
 exports.renderBotMessageFinal = renderBotMessageFinal;
+exports.renderReferenceWidgetInline = renderReferenceWidgetInline;
 const marked_1 = require("marked");
 const dompurify_1 = __importDefault(require("dompurify"));
 // import hljs from 'highlight.js'; // Removed unused import
@@ -636,6 +637,122 @@ function addBotMessageActions(messageDiv, messageText, callbacks = {}) {
         messageDiv.appendChild(actionsDiv);
         console.log('Action buttons added to bot message:', actionsDiv); // Keep debug log
     }
+}
+/**
+ * Renders a reference widget as an HTMLElement suitable for inline display
+ * (e.g., within the input field or a message).
+ *
+ * @param type - The type of reference ('code', 'cell', 'file', 'dir').
+ * @param data - The data associated with the reference (CodeRefData, path string, etc.).
+ * @param refId - Optional reference ID (e.g., 'ref-1') to store on the element.
+ * @returns An HTMLElement representing the widget.
+ */
+function renderReferenceWidgetInline(type, data, // string for file/dir paths
+placeholder, // ADDED: The original placeholder text (e.g., @code[ref-1])
+refId // Keep refId separate for map lookups if needed
+) {
+    const widget = document.createElement('span');
+    widget.classList.add('jp-llm-ext-ref-widget', `jp-llm-ext-ref-${type}`);
+    widget.contentEditable = 'false'; // Make the widget non-editable itself
+    widget.style.display = 'inline-block'; // Ensure it behaves like a block for styling/selection
+    widget.style.cursor = 'pointer'; // Change cursor to pointer to indicate clickability
+    widget.dataset.placeholder = placeholder; // ADDED: Store the placeholder
+    const displayTextSpan = document.createElement('span'); // Span for the main text
+    const previewDiv = document.createElement('div'); // Div for the preview content
+    previewDiv.className = 'jp-llm-ext-ref-preview';
+    previewDiv.style.display = 'none'; // Initially hidden
+    previewDiv.style.border = '1px solid var(--jp-border-color1)';
+    previewDiv.style.padding = '4px';
+    previewDiv.style.marginTop = '2px';
+    previewDiv.style.fontSize = '0.9em';
+    previewDiv.style.backgroundColor = 'var(--jp-layout-color0)';
+    previewDiv.style.whiteSpace = 'pre-wrap'; // Preserve line breaks
+    previewDiv.style.fontFamily = 'monospace';
+    previewDiv.style.cursor = 'text'; // Keep text cursor for preview
+    let displayText = '';
+    let baseTitle = ''; // Tooltip for the main widget text, without preview
+    let previewContent = '';
+    switch (type) {
+        case 'code':
+        case 'cell': { // Combine logic for code and cell previews
+            const refData = data;
+            const isCode = type === 'code';
+            const lines = refData.lineNumber === refData.lineEndNumber
+                ? `L${refData.lineNumber}`
+                : `L${refData.lineNumber}-${refData.lineEndNumber}`;
+            displayText = isCode
+                ? `@code (${refData.notebookName}:${lines})`
+                : `@Cell (${refData.notebookName}:Cell ${refData.cellIndex + 1})`;
+            baseTitle = isCode
+                ? `Code: ${refData.notebookName}, Cell ${refData.cellIndex + 1}, ${lines}`
+                : `Cell: ${refData.notebookName}, Index ${refData.cellIndex + 1}`;
+            if (refId)
+                widget.dataset.refId = refId;
+            widget.dataset.notebookName = refData.notebookName;
+            widget.dataset.cellIndex = String(refData.cellIndex);
+            widget.dataset.content = refData.content; // Store content
+            if (isCode) {
+                widget.dataset.startLine = String(refData.lineNumber);
+                widget.dataset.endLine = String(refData.lineEndNumber);
+            }
+            // Prepare preview content
+            if (refData.content) {
+                const contentLines = refData.content.split('\n');
+                previewContent = contentLines.slice(0, 3).join('\n');
+                if (contentLines.length > 3) {
+                    previewContent += '\n...';
+                }
+            }
+            break;
+        }
+        case 'file':
+            const filePath = data;
+            const fileName = filePath.split(/[\/\\]/).pop() || filePath; // Handle windows paths
+            displayText = `@file (${fileName})`;
+            baseTitle = `File: ${filePath}`; // Tooltip shows full path
+            widget.dataset.path = filePath; // Store full path
+            // No preview for files/dirs
+            widget.style.cursor = 'default'; // No expansion for file/dir
+            break;
+        case 'dir':
+            const dirPath = data;
+            const dirName = dirPath.split(/[\/\\]/).pop() || dirPath || '/'; // Handle windows paths
+            displayText = `@dir (${dirName})`;
+            baseTitle = `Directory: ${dirPath}`; // Tooltip shows full path
+            widget.dataset.path = dirPath; // Store full path
+            // No preview for files/dirs
+            widget.style.cursor = 'default'; // No expansion for file/dir
+            break;
+        default:
+            displayText = '@unknown-ref';
+            baseTitle = 'Unknown Reference';
+            widget.style.cursor = 'default';
+    }
+    displayTextSpan.textContent = displayText;
+    widget.title = baseTitle; // Set base tooltip for the main part
+    widget.appendChild(displayTextSpan);
+    // Add preview div and click listener only if there's preview content
+    if (previewContent) {
+        previewDiv.textContent = previewContent;
+        widget.appendChild(previewDiv);
+        // Add click listener to the main widget span to toggle preview
+        widget.addEventListener('click', (event) => {
+            // Prevent the click from propagating to the input div listener if needed
+            event.stopPropagation();
+            const isHidden = previewDiv.style.display === 'none';
+            previewDiv.style.display = isHidden ? 'block' : 'none';
+            // Optional: Change an indicator icon here
+        });
+        // Prevent clicks *inside* the preview div from closing it
+        previewDiv.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+    }
+    else {
+        // Ensure cursor remains default if no preview/expansion
+        widget.style.cursor = 'default';
+    }
+    return widget;
 }
 // Potential future additions:
 // - renderErrorMessage

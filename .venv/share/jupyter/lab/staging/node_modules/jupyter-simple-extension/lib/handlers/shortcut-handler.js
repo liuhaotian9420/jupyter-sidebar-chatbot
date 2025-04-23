@@ -30,7 +30,7 @@ popupMenuManager, callbacks) {
                 inputField.getAttribute('contenteditable') === 'true' &&
                 inputField.classList.contains('jp-llm-ext-input-field');
             // Handle the case where the input field is NOT the active element first
-            if (!isContentEditableInput) { // Only handle if NOT our input field
+            if (isContentEditableInput) { // Only handle if NOT our input field
                 console.log("SHORTCUT HANDLER: Input field is NOT active element. Handling '@' globally.");
                 // If not in our input field, prevent default, show widget, focus, insert '@', and show popup.
                 event.preventDefault();
@@ -107,7 +107,7 @@ popupMenuManager, callbacks) {
                                     }
                                     else {
                                         console.log(`SHORTCUT HANDLER: Anchor coords from temp span: Top=${spanRect.top}, Left=${spanRect.left}`);
-                                        popupMenuManager.showPopupMenu(spanRect.left, spanRect.top);
+                                        popupMenuManager.showPopupMenu({ x: spanRect.left, y: spanRect.top });
                                         showIndicator('Browsing references...');
                                     }
                                 }
@@ -150,10 +150,9 @@ popupMenuManager, callbacks) {
                 // Priority 2: Active cell selected (not necessarily editor focus)
             }
             else if (isCellSelected && activeCellIndex !== undefined && activeCellIndex !== null) {
-                // Mimic selecting '@Cells' -> clicking a cell
-                // Insert reference like "@Cell 3" (using 1-based index for display)
-                appendToInput(`@Cell[${activeCellIndex + 1}]`); // Add trailing space
-                showIndicator('Cell reference inserted');
+                // Call the new InputHandler method to create the reference and insert its representation
+                inputHandler.handleInsertCellReferenceFromShortcut();
+                showIndicator('Cell reference inserted'); // Message remains the same
                 handled = true;
             }
             else {

@@ -5,8 +5,8 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 export interface MenuActionCallbacks {
     insertCode: (code: string) => void;
     insertCell: (content: string) => void;
-    insertFilePath: (path: string) => void;
-    insertDirectoryPath: (path: string) => void;
+    handleInsertFileWidget: (path: string) => void;
+    handleInsertDirWidget: (path: string) => void;
     getSelectedText: () => string | null;
     getCurrentCellContent: () => string | null;
     insertCellByIndex: (index: number) => void;
@@ -32,11 +32,14 @@ export declare class PopupMenuManager {
     private _anchorY?;
     private allowedExtensions;
     private fileCache;
-    constructor(docManager: IDocumentManager, widgetNode: HTMLElement, callbacks: MenuActionCallbacks);
     private boundHandleKeyDown;
+    constructor(docManager: IDocumentManager, widgetNode: HTMLElement, callbacks: MenuActionCallbacks);
     dispose(): void;
     private handleDocumentClick;
-    showPopupMenu(x: number, y: number): Promise<void>;
+    showPopupMenu(trigger: {
+        x: number;
+        y: number;
+    } | HTMLElement): Promise<void>;
     hidePopupMenu(): void;
     private renderMenuContent;
     private renderTopLevelItems;
@@ -72,8 +75,8 @@ export declare class PopupMenuManager {
     private getMenuItems;
     /**
      * Updates the position of the popup menu based on the active reference range
-     * or the initial anchor point. Tries to position the BOTTOM of the menu
-     * just ABOVE the range/anchor.
+     * or the initial anchor point. Tries to position the BOTTOM-LEFT corner of the menu
+     * just AT THE TOP-LEFT corner of the range/anchor.
      */
     private updatePopupPosition;
     /**

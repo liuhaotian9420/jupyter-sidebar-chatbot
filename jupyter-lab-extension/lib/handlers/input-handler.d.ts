@@ -8,11 +8,12 @@ export interface InputHandlerCallbacks {
     resetCodeRefMap: () => void;
 }
 export interface CodeRefData {
-    code: string;
+    type: 'code' | 'cell';
+    content: string;
     notebookName: string;
     cellIndex: number;
-    lineNumber: number;
-    lineEndNumber: number;
+    lineNumber?: number;
+    lineEndNumber?: number;
 }
 /**
  * Handles events and logic related to the chat input field.
@@ -48,14 +49,15 @@ export declare class InputHandler {
     toggleInputExpansion(forceState?: boolean): void;
     /**
      * Adds a code reference to the internal map and returns its ID.
-     * @param code The actual code content.
+     * @param codeContent The actual code content.
      * @param notebookName The name of the notebook the code is from.
      * @param cellIndex The index of the cell the code is from (0-based).
      * @param lineNumber The starting line number of the code within the cell (1-based).
      * @param lineEndNumber The ending line number of the code within the cell (1-based).
      * @returns The generated reference ID (e.g., "ref-1").
      */
-    addCodeReference(code: string, notebookName: string, cellIndex: number, lineNumber: number, // Start line
+    addCodeReference(codeContent: string, // Renamed parameter
+    notebookName: string, cellIndex: number, lineNumber: number, // Start line
     lineEndNumber: number): string;
     /**
      * Returns the current map of code references.
@@ -73,6 +75,17 @@ export declare class InputHandler {
      */
     private resolveCodeReferences;
     handleInsertCodeReferenceFromShortcut(selectedText: string): void;
+    addCellReference(notebookName: string, cellIndex: number): string | null;
+    handleInsertCellReferenceFromShortcut(): void;
+    handleInsertFileWidget(filePath: string): void;
+    handleInsertDirWidget(dirPath: string): void;
+    handleInsertCellWidgetFromPopup(cellIndex: number): void;
+    handleInsertCodeWidgetFromPopup(codeContent: string, notebookName: string, cellIndex: number, lineNumber: number): void;
+    private _serializeInputContent;
+    private _handleClick;
+    private activePreviewElement;
+    private showWidgetPreview;
+    private removeWidgetPreview;
     private _handleKeyPress;
     private _handleInput;
     /**
@@ -132,4 +145,5 @@ export declare class InputHandler {
      * Gets the current value of the hasAtSymbol flag. Called by shortcut handler.
      */
     getHasAtSymbol(): boolean;
+    private _handleKeyDown;
 }

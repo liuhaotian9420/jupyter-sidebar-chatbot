@@ -59,6 +59,18 @@ export declare function renderBotMessageStreamingUpdate(streamingDiv: HTMLDivEle
  */
 export declare function renderBotMessageFinal(contentDiv: HTMLDivElement, streamingDiv: HTMLDivElement, completeResponse: string, options?: Partial<MessageRenderOptions & MessageRendererCallbacks>, callbacks?: Partial<MessageRendererCallbacks>): HTMLDivElement;
 /**
+ * Renders a reference widget as an HTMLElement suitable for inline display
+ * (e.g., within the input field or a message).
+ *
+ * @param type - The type of reference ('code', 'cell', 'file', 'dir').
+ * @param data - The data associated with the reference (CodeRefData, path string, etc.).
+ * @param refId - Optional reference ID (e.g., 'ref-1') to store on the element.
+ * @returns An HTMLElement representing the widget.
+ */
+export declare function renderReferenceWidgetInline(type: 'code' | 'cell' | 'file' | 'dir', data: CodeRefData | string, // string for file/dir paths
+placeholder: string, // ADDED: The original placeholder text (e.g., @code[ref-1])
+refId?: string): HTMLElement;
+/**
  * Handles rendering individual messages (user, bot, system) into HTML elements.
  */
 export declare class MessageRenderer {

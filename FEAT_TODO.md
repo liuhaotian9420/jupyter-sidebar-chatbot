@@ -33,3 +33,16 @@
 - [x] **(P1)** Add a warning indicator via `showIndicator` in `shortcut-handler.ts` if `Ctrl+L` is pressed when neither code is selected nor a cell is active.
 - [x] **(P2)** Update `FEAT_TODO.md` (this task).
 - [x] **(P2)** Update `TESTING_TODO.md` with testing tasks for the new shortcut behavior.
+
+---
+
+### Feature: inline-ref-widgets-enhancements (Timestamp: 2024-10-27T16:00:00Z)
+
+**Goal:** Enhance the inline reference widgets within the `contenteditable` input field for immediate rendering, selection/deletion, and content preview.
+
+**Tasks:**
+- [x] **(P0)** Implement immediate rendering of reference widgets in the `contenteditable` input `div` upon insertion, mimicking the style in user messages.
+- [x] **(P1)** Ensure the rendered widgets in the input `div` can be selected and deleted using standard editing actions (e.g., backspace, selection + delete).
+- [x] **(P1)** Add an "expand" functionality (e.g., on hover or click) to code/cell widgets within the input `div` to show a preview of the first 3 lines.
+- [ ] **(P2)** Update `FEAT_TODO.md` with these tasks (this task).
+- [ ] **(P2)** Update `TESTING_TODO.md` with corresponding test cases.

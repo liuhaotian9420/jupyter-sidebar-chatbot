@@ -83,7 +83,7 @@ export class SimpleSidebarWidget extends Widget {
   private handleShowPopupMenu = (event: MouseEvent, targetButton: HTMLElement) => { 
       console.log('Handle Show Popup Menu clicked');
       const rect = targetButton.getBoundingClientRect();
-      this.popupMenuManager.showPopupMenu(rect.left, rect.bottom + 5);
+      this.popupMenuManager.showPopupMenu({x: rect.left, y: rect.bottom + 5});
   };
   private handleUpdateTitle = () => {
       const newTitle = this.layoutElements.titleInput?.value || 'Chat';
@@ -214,25 +214,19 @@ export class SimpleSidebarWidget extends Widget {
             this.inputHandler.appendToInput(placeholder);
         },
         insertCell: (content: string) => this.inputHandler?.appendToInput(`@cell ${content}`),
-        insertFilePath: (path: string) => this.inputHandler?.appendToInput(`@file[${path}]`),
-        insertDirectoryPath: (path: string) => this.inputHandler?.appendToInput(`@dir[${path}]`),
+        handleInsertFileWidget: (path: string) => this.inputHandler?.handleInsertFileWidget(path),
+        handleInsertDirWidget: (path: string) => this.inputHandler?.handleInsertDirWidget(path),
         getSelectedText: getSelectedText,
         getCurrentCellContent: getCurrentCellContent,
         insertCellByIndex: (index: number) => { 
-            const oneBasedIndex = index + 1; 
-            const refText = `@Cell[${oneBasedIndex}]`; 
-            this.inputHandler?.appendToInput(refText); 
+            this.inputHandler?.handleInsertCellWidgetFromPopup(index); 
         },
         // TODO: insertCollapsedCodeRef should later be merged with insertCode
         // as we only expect one kind of behavior from the input handler.
         // this change will also involve ui changes
         insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => {
-            // Handle reference from cursor position (assume start/end line are the same)
             if (!this.inputHandler) return;
-            const lineEndNumber = lineNumber; // Start and end are the same for a single line reference
-            const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber, lineEndNumber);
-            const placeholder = `@code[${refId}]`; 
-            this.inputHandler.appendToInput(placeholder);
+            this.inputHandler.handleInsertCodeWidgetFromPopup(code, notebookName, cellIndex, lineNumber);
         }
     });
 
@@ -255,7 +249,7 @@ export class SimpleSidebarWidget extends Widget {
     };
     const showPopupMenuCallback = (event: MouseEvent) => {
          const rect = (event.target as HTMLElement).getBoundingClientRect();
-         this.popupMenuManager.showPopupMenu(rect.left + 60, rect.top - 20);
+         this.popupMenuManager.showPopupMenu({x: rect.left + 60, y: rect.top - 20});
          event.preventDefault();
          event.stopPropagation();
     };
@@ -326,7 +320,7 @@ export class SimpleSidebarWidget extends Widget {
             console.error('MessageHandler not initialized when trying to send message from InputHandler');
           }
         },
-        showPopupMenu: (left: number, top: number) => this.popupMenuManager.showPopupMenu(left, top),
+        showPopupMenu: (left: number, top: number) => this.popupMenuManager.showPopupMenu({x: left, y: top}),
         hidePopupMenu: () => this.popupMenuManager.hidePopupMenu(),
         updatePlaceholder: (isMarkdown: boolean) => {
             // Use dataset for data-placeholder attribute

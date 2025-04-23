@@ -1,5 +1,6 @@
 import { getCaretPosition, setCaretPosition } from '../utils/content-editable-utils'; // Helper needed
 import { globals } from '../core/globals'; // Import globals
+import { renderReferenceWidgetInline } from '../ui/message-renderer';
 
 // Interface for callbacks provided to the InputHandler
 export interface InputHandlerCallbacks {
@@ -54,6 +55,8 @@ export class InputHandler {
     // Bind event listeners
     this.chatInput.addEventListener('keypress', this._handleKeyPress);
     this.chatInput.addEventListener('input', this._handleInput);
+    this.chatInput.addEventListener('keydown', this._handleKeyDown);
+    this.chatInput.addEventListener('click', this._handleClick); // ADDED Click Listener
     // Note: Actual markdown toggle and expand buttons are likely managed by UIManager,
     // which would then call methods like `setMarkdownMode` or `toggleExpansion` on this handler.
   }
@@ -64,6 +67,8 @@ export class InputHandler {
   dispose(): void {
     this.chatInput.removeEventListener('keypress', this._handleKeyPress);
     this.chatInput.removeEventListener('input', this._handleInput);
+    this.chatInput.removeEventListener('keydown', this._handleKeyDown);
+    this.chatInput.removeEventListener('click', this._handleClick); // ADDED
   }
 
   /**
@@ -295,41 +300,50 @@ export class InputHandler {
         return;
       }
 
-      // 2. Add Code Reference to Map
-      const refId = this.addCodeReference(
-        selectedText,
-        notebookName,
-        cellIndex,
-        startLine,
-        endLine
-      );
+      // 2. Create Ref Data (but don't necessarily add to map yet? Or do?)
+      // Let's add it now for consistency.
+      const refData: CodeRefData = {
+          type: 'code',
+          content: selectedText,
+          notebookName,
+          cellIndex,
+          lineNumber: startLine,
+          lineEndNumber: endLine
+      };
+      const refId = `ref-${this.nextRefId++}`;
+      this.codeRefMap.set(refId, refData);
+      console.log(`Added code reference via shortcut: ${refId}`);
 
-      // 3. Insert Representation into Input Field
-      const displayLines = startLine === endLine ? `L${startLine}` : `L${startLine}-${endLine}`;
-      // Format consistent with addCodeReference log and likely widget display
-      const refDisplayText = `@code(${notebookName}:Cell ${cellIndex + 1}:${displayLines})`; 
+      // ADDED: Construct placeholder
+      const placeholder = `@code[${refId}]`;
 
+      // 3. Insert RENDERED WIDGET Representation into Input Field
       this.chatInput.focus(); // Ensure focus
       const winSelection = window.getSelection();
       if (!winSelection || winSelection.rangeCount === 0) {
-        console.error('Cannot insert reference display text: No window selection found.');
-        // Fallback: append (though cursor position might be wrong)
-        this.appendToInput(refDisplayText + ' '); 
+        console.error('Cannot insert reference widget: No window selection found.');
+        // Fallback might be complex, maybe just log error for now
         return;
       }
 
       const range = winSelection.getRangeAt(0);
-      
-      // Assuming the shortcut handler WILL NOT insert '@code ' anymore,
-      // we insert the refDisplayText at the current cursor position.
 
-      const textNode = document.createTextNode(refDisplayText + ' '); // Add trailing space
+      // Render the widget - Pass placeholder
+      const widgetElement = renderReferenceWidgetInline('code', refData, placeholder, refId);
+      // Create a zero-width space text node for cursor positioning
+      const zeroWidthSpace = document.createTextNode('\u200B');
+      // Add a normal space for separation
+      const spaceNode = document.createTextNode(' ');
+
       range.deleteContents(); // Clear any existing selection in the input field
-      range.insertNode(textNode);
+      range.insertNode(spaceNode); // Insert space first
+      range.insertNode(widgetElement); // Insert the widget element
+      range.insertNode(zeroWidthSpace); // Insert ZWS after widget
 
-      // Move cursor after inserted text
-      range.setStartAfter(textNode);
-      range.setEndAfter(textNode);
+
+      // Move cursor after the zero-width space (effectively after the widget + space)
+      range.setStartAfter(zeroWidthSpace);
+      range.setEndAfter(zeroWidthSpace);
       winSelection.removeAllRanges();
       winSelection.addRange(range);
       // --- End Insertion Logic ---
@@ -407,33 +421,48 @@ export class InputHandler {
             return;
         }
 
-        // 2. Add Cell Reference to Map
+        // 2. Add Cell Reference to Map and get data
         const refId = this.addCellReference(notebookName, cellIndex);
 
         if (!refId) {
             console.error('Failed to add cell reference to map.');
             return; // Stop if we couldn't create the reference data
         }
+        const refData = this.codeRefMap.get(refId);
+        if (!refData) {
+             console.error(`Failed to retrieve data for cell reference ${refId}.`);
+             return;
+        }
 
-        // 3. Insert Representation into Input Field (using user's format)
-        const refDisplayText = `@Cell[${cellIndex + 1}]`; 
+        // ADDED: Construct placeholder
+        const placeholder = `@Cell[${cellIndex + 1}]`;
 
+        // 3. Insert RENDERED WIDGET Representation into Input Field
         this.chatInput.focus(); // Ensure focus
         const winSelection = window.getSelection();
         if (!winSelection || winSelection.rangeCount === 0) {
-            console.error('Cannot insert reference display text: No window selection found.');
-            this.appendToInput(refDisplayText + ' '); // Fallback
+            console.error('Cannot insert reference widget: No window selection found.');
             return;
         }
 
         const range = winSelection.getRangeAt(0);
-        const textNode = document.createTextNode(refDisplayText + ' '); // Add trailing space
-        range.deleteContents(); // Clear any existing selection in the input field
-        range.insertNode(textNode);
 
-        // Move cursor after inserted text
-        range.setStartAfter(textNode);
-        range.setEndAfter(textNode);
+        // Render the widget - Pass placeholder
+        const widgetElement = renderReferenceWidgetInline('cell', refData, placeholder, refId);
+        // Create a zero-width space text node for cursor positioning
+        const zeroWidthSpace = document.createTextNode('\u200B');
+         // Add a normal space for separation
+        const spaceNode = document.createTextNode(' ');
+
+        range.deleteContents(); // Clear any existing selection in the input field
+        range.insertNode(spaceNode); // Insert space first
+        range.insertNode(widgetElement); // Insert the widget element
+        range.insertNode(zeroWidthSpace); // Insert ZWS after widget
+
+
+        // Move cursor after the zero-width space
+        range.setStartAfter(zeroWidthSpace);
+        range.setEndAfter(zeroWidthSpace);
         winSelection.removeAllRanges();
         winSelection.addRange(range);
 
@@ -445,18 +474,410 @@ export class InputHandler {
     }
   }
 
+  // NEW method for inserting File widgets from Popup
+  public handleInsertFileWidget(filePath: string): void {
+    try {
+        this.chatInput.focus(); // Ensure focus
+        const winSelection = window.getSelection();
+        if (!winSelection || winSelection.rangeCount === 0) {
+            console.error('Cannot insert file widget: No window selection found.');
+            return;
+        }
+
+        const range = winSelection.getRangeAt(0);
+
+        // ADDED: Construct placeholder
+        const placeholder = `@file[${filePath}]`;
+
+        // Render the widget - Pass placeholder (no refId needed)
+        const widgetElement = renderReferenceWidgetInline('file', filePath, placeholder);
+        // Create a zero-width space text node for cursor positioning
+        const zeroWidthSpace = document.createTextNode('\u200B');
+         // Add a normal space for separation
+        const spaceNode = document.createTextNode(' ');
+
+        // Check if the character before the cursor is '@' and replace it
+        // This needs careful checking of the range container and offset
+        let replacedAtSymbol = false;
+        if (range.startOffset > 0 && range.startContainer.nodeType === Node.TEXT_NODE) {
+            const textBefore = range.startContainer.textContent?.substring(0, range.startOffset);
+            if (textBefore?.endsWith('@')) {
+                // Modify the range to include the '@'
+                range.setStart(range.startContainer, range.startOffset - 1);
+                replacedAtSymbol = true;
+                 console.log("Replacing @ symbol before inserting file widget."); // Debug log
+            }
+        }
+
+        range.deleteContents(); // Deletes the selection OR the '@' if range was modified
+
+        range.insertNode(spaceNode); // Insert space first (after potential @ deletion)
+        range.insertNode(widgetElement); // Insert the widget element
+        range.insertNode(zeroWidthSpace); // Insert ZWS after widget
+
+
+        // Move cursor after the zero-width space
+        range.setStartAfter(zeroWidthSpace);
+        range.setEndAfter(zeroWidthSpace);
+        winSelection.removeAllRanges();
+        winSelection.addRange(range);
+
+        // Trigger input event manually
+        this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+    } catch (error) {
+        console.error('Error handling insert file widget:', error);
+    }
+  }
+
+  // NEW method for inserting Directory widgets from Popup
+  public handleInsertDirWidget(dirPath: string): void {
+    try {
+        this.chatInput.focus(); // Ensure focus
+        const winSelection = window.getSelection();
+        if (!winSelection || winSelection.rangeCount === 0) {
+            console.error('Cannot insert directory widget: No window selection found.');
+            return;
+        }
+
+        const range = winSelection.getRangeAt(0);
+
+        // ADDED: Construct placeholder
+        const placeholder = `@dir[${dirPath}]`;
+
+        // Render the widget - Pass placeholder (no refId needed)
+        const widgetElement = renderReferenceWidgetInline('dir', dirPath, placeholder);
+        // Create a zero-width space text node for cursor positioning
+        const zeroWidthSpace = document.createTextNode('\u200B');
+         // Add a normal space for separation
+        const spaceNode = document.createTextNode(' ');
+
+         // Check if the character before the cursor is '@' and replace it
+         let replacedAtSymbol = false;
+         if (range.startOffset > 0 && range.startContainer.nodeType === Node.TEXT_NODE) {
+            const textBefore = range.startContainer.textContent?.substring(0, range.startOffset);
+            if (textBefore?.endsWith('@')) {
+                // Modify the range to include the '@'
+                range.setStart(range.startContainer, range.startOffset - 1);
+                replacedAtSymbol = true;
+                console.log("Replacing @ symbol before inserting dir widget."); // Debug log
+            }
+        }
+
+        range.deleteContents(); // Deletes the selection OR the '@'
+
+
+        range.insertNode(spaceNode); // Insert space first
+        range.insertNode(widgetElement); // Insert the widget element
+        range.insertNode(zeroWidthSpace); // Insert ZWS after widget
+
+
+        // Move cursor after the zero-width space
+        range.setStartAfter(zeroWidthSpace);
+        range.setEndAfter(zeroWidthSpace);
+        winSelection.removeAllRanges();
+        winSelection.addRange(range);
+
+        // Trigger input event manually
+        this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+    } catch (error) {
+        console.error('Error handling insert directory widget:', error);
+    }
+  }
+
+  // NEW method for inserting Cell widgets from Popup
+  public handleInsertCellWidgetFromPopup(cellIndex: number): void {
+    const currentNotebookWidget = globals.notebookTracker?.currentWidget;
+
+    if (!currentNotebookWidget) {
+      console.error('Cannot insert cell widget: Missing notebook context.');
+      return;
+    }
+
+    try {
+        // 1. Gather Context (Notebook Name)
+        const notebookPath = currentNotebookWidget.context.path;
+        const notebookName = notebookPath.split('/').pop()?.split('.')[0] || 'notebook';
+
+        // Provided cellIndex is 0-based already
+        if (cellIndex === undefined || cellIndex === null || cellIndex < 0) {
+            console.error(`Cannot insert cell widget: Invalid cell index ${cellIndex}.`);
+            return;
+        }
+
+        // 2. Add Cell Reference to Map and get data
+        const refId = this.addCellReference(notebookName, cellIndex);
+
+        if (!refId) {
+            console.error('Failed to add cell reference to map for index:', cellIndex);
+            return; // Stop if we couldn't create the reference data
+        }
+        const refData = this.codeRefMap.get(refId);
+        if (!refData) {
+             console.error(`Failed to retrieve data for cell reference ${refId}.`);
+             return;
+        }
+
+        // ADDED: Construct placeholder
+        const placeholder = `@Cell[${cellIndex + 1}]`;
+
+        // 3. Insert RENDERED WIDGET Representation into Input Field
+        this.chatInput.focus(); // Ensure focus
+        const winSelection = window.getSelection();
+        if (!winSelection || winSelection.rangeCount === 0) {
+            console.error('Cannot insert cell widget: No window selection found.');
+            return;
+        }
+
+        const range = winSelection.getRangeAt(0);
+
+        // Render the widget - Pass placeholder
+        const widgetElement = renderReferenceWidgetInline('cell', refData, placeholder, refId);
+        const zeroWidthSpace = document.createTextNode('\u200B');
+        const spaceNode = document.createTextNode(' ');
+
+         // Check if the character before the cursor is '@' and replace it
+         let replacedAtSymbol = false;
+         if (range.startOffset > 0 && range.startContainer.nodeType === Node.TEXT_NODE) {
+            const textBefore = range.startContainer.textContent?.substring(0, range.startOffset);
+            if (textBefore?.endsWith('@')) {
+                range.setStart(range.startContainer, range.startOffset - 1);
+                replacedAtSymbol = true;
+                console.log("Replacing @ symbol before inserting cell widget.");
+            }
+        }
+
+        range.deleteContents(); // Deletes the selection OR the '@'
+        range.insertNode(spaceNode);
+        range.insertNode(widgetElement);
+        range.insertNode(zeroWidthSpace);
+
+        // Move cursor after the zero-width space
+        range.setStartAfter(zeroWidthSpace);
+        range.setEndAfter(zeroWidthSpace);
+        winSelection.removeAllRanges();
+        winSelection.addRange(range);
+
+        // Trigger input event manually
+        this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+    } catch (error) {
+        console.error('Error handling insert cell widget from popup:', error);
+    }
+  }
+
+  // NEW method for inserting Code widgets from Popup (via insertCollapsedCodeRef callback)
+  public handleInsertCodeWidgetFromPopup(
+    codeContent: string,
+    notebookName: string,
+    cellIndex: number,
+    lineNumber: number // Assumes start line = end line from popup callback
+  ): void {
+     try {
+        // 1. Create Ref Data (assume start=end line)
+        const lineEndNumber = lineNumber; 
+        const refData: CodeRefData = {
+            type: 'code',
+            content: codeContent,
+            notebookName,
+            cellIndex,
+            lineNumber,
+            lineEndNumber
+        };
+        const refId = `ref-${this.nextRefId++}`;
+        this.codeRefMap.set(refId, refData);
+        console.log(`Added code reference via popup: ${refId}`);
+
+        // ADDED: Construct placeholder
+        const placeholder = `@code[${refId}]`;
+
+        // 2. Insert RENDERED WIDGET Representation into Input Field
+        this.chatInput.focus(); // Ensure focus
+        const winSelection = window.getSelection();
+        if (!winSelection || winSelection.rangeCount === 0) {
+            console.error('Cannot insert code widget: No window selection found.');
+            return;
+        }
+
+        const range = winSelection.getRangeAt(0);
+
+        // Render the widget - Pass placeholder
+        const widgetElement = renderReferenceWidgetInline('code', refData, placeholder, refId);
+        const zeroWidthSpace = document.createTextNode('\u200B');
+        const spaceNode = document.createTextNode(' ');
+
+        // Check if the character before the cursor is '@' and replace it
+         let replacedAtSymbol = false;
+         if (range.startOffset > 0 && range.startContainer.nodeType === Node.TEXT_NODE) {
+            const textBefore = range.startContainer.textContent?.substring(0, range.startOffset);
+            if (textBefore?.endsWith('@')) {
+                range.setStart(range.startContainer, range.startOffset - 1);
+                replacedAtSymbol = true;
+                console.log("Replacing @ symbol before inserting code widget.");
+            }
+        }
+        
+        range.deleteContents(); // Deletes the selection OR the '@'
+        range.insertNode(spaceNode);
+        range.insertNode(widgetElement);
+        range.insertNode(zeroWidthSpace);
+
+        // Move cursor after the zero-width space
+        range.setStartAfter(zeroWidthSpace);
+        range.setEndAfter(zeroWidthSpace);
+        winSelection.removeAllRanges();
+        winSelection.addRange(range);
+
+        // Trigger input event manually
+        this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+    } catch (error) {
+        console.error('Error handling insert code widget from popup:', error);
+    }
+  }
+
+  // NEW method to serialize input content, converting widgets back to placeholders
+  private _serializeInputContent(): string {
+    let serialized = '';
+    const nodes = this.chatInput.childNodes;
+
+    nodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            // Append text content directly
+            serialized += node.textContent || '';
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            const element = node as HTMLElement;
+            // Check if it's our widget span
+            if (element.classList?.contains('jp-llm-ext-ref-widget')) {
+                // Append the stored placeholder text
+                const placeholder = element.dataset.placeholder;
+                if (placeholder) {
+                    serialized += placeholder;
+                } else {
+                    // Fallback: append the visible text if placeholder is missing (shouldn't happen)
+                    console.warn('Widget found without data-placeholder:', element);
+                    serialized += element.textContent || '';
+                }
+            } else if (element.tagName === 'BR') {
+                 // Handle <br> as newline
+                 serialized += '\n';
+            } else if (element.tagName === 'DIV') {
+                 // Handle <div> elements, potentially introduced by pasting or Shift+Enter
+                 // Recursively serialize or just add newline?
+                 // Add newline before and serialize inner content recursively?
+                 // For now, let's treat div boundaries as potential newlines, similar to <br>
+                 // We might need a more robust HTML -> text conversion later
+                 serialized += '\n'; // Simplified handling
+            } else {
+                // Append text content of other unknown elements?
+                 serialized += element.textContent || '';
+            }
+        }
+    });
+
+    // Trim potentially leading/trailing whitespace introduced during serialization
+    // or by the structure of the contenteditable div
+    return serialized.trim(); 
+  }
+
+  // NEW Click handler for widget interactions (e.g., expand)
+  private _handleClick = (event: MouseEvent): void => {
+    const target = event.target as HTMLElement;
+    const widget = target.closest('.jp-llm-ext-ref-widget') as HTMLElement;
+
+    if (widget && widget.isContentEditable) {
+        // Don't trigger preview if clicking inside the main editable div itself
+        // Only trigger if clicking directly on a non-editable widget span
+         if(widget === this.chatInput) return; // Ignore clicks on the main div background
+    }
+
+    if (widget && !widget.isContentEditable) { // Ensure it's our non-editable widget span
+        const type = widget.dataset.type as 'code' | 'cell' | 'file' | 'dir' | undefined;
+        const content = widget.dataset.content;
+        const refId = widget.dataset.refId;
+        const path = widget.dataset.path;
+
+        console.log(`Widget clicked: Type=${type}, RefID=${refId}, Path=${path}`);
+
+        if ((type === 'code' || type === 'cell') && content) {
+            event.preventDefault(); // Prevent potential text selection issues
+            event.stopPropagation(); // Stop event from bubbling further
+
+            this.showWidgetPreview(widget, content);
+        } else {
+            // Handle click on file/dir or widget without content? Maybe do nothing.
+            // Or potentially remove existing preview if any
+            this.removeWidgetPreview();
+        }
+    } else {
+         // Click was not on a widget, remove any existing preview
+         this.removeWidgetPreview();
+    }
+  };
+
+  // --- Widget Preview Logic ---
+  private activePreviewElement: HTMLDivElement | null = null;
+
+  private showWidgetPreview(widgetElement: HTMLElement, content: string): void {
+     // Remove existing preview first
+     this.removeWidgetPreview();
+
+     console.log('Showing preview for widget:', widgetElement);
+     const firstThreeLines = content.split('\n').slice(0, 3).join('\n');
+
+     const preview = document.createElement('div');
+     preview.className = 'jp-llm-ext-widget-preview';
+     // Basic styling (move to CSS later)
+     preview.style.position = 'absolute';
+     preview.style.border = '1px solid var(--jp-border-color1)';
+     preview.style.background = 'var(--jp-layout-color0)';
+     preview.style.padding = '5px';
+     preview.style.fontSize = '0.9em';
+     preview.style.maxWidth = '400px';
+     preview.style.maxHeight = '100px';
+     preview.style.overflow = 'hidden';
+     preview.style.whiteSpace = 'pre-wrap'; // Preserve whitespace and newlines
+     preview.style.fontFamily = 'monospace';
+     preview.style.zIndex = '10000'; // Ensure it's on top
+     preview.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+
+     preview.textContent = firstThreeLines + (content.split('\n').length > 3 ? '\n...' : '');
+
+     // Position near the widget
+     const widgetRect = widgetElement.getBoundingClientRect();
+     // Position above the widget for now
+     preview.style.bottom = `${window.innerHeight - widgetRect.top + 5}px`; 
+     preview.style.left = `${widgetRect.left}px`;
+
+     document.body.appendChild(preview); // Append to body to avoid layout issues
+     this.activePreviewElement = preview;
+  }
+
+  private removeWidgetPreview(): void {
+    if (this.activePreviewElement) {
+        console.log('Removing active preview');
+        this.activePreviewElement.remove();
+        this.activePreviewElement = null;
+    }
+  }
+
   // --- Private Event Handlers ---
 
   private _handleKeyPress = (event: KeyboardEvent): void => {
     // Handle Enter key press (send message)
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault(); // Prevent default newline insertion
-      // Use textContent for div
-      let message = this.chatInput.textContent || '';
-      message = message.trim(); // Just trim the raw message
+      
+      // OLD: Use textContent for div
+      // let message = this.chatInput.textContent || '';
+      // NEW: Use serialization method
+      let message = this._serializeInputContent();
+
+      message = message.trim(); // Trim whitespace
       
       if (message) {
-        this.callbacks.handleSendMessage(message); // Pass raw message with placeholders
+        this.callbacks.handleSendMessage(message); // Pass serialized message with placeholders
       }
     }
     // --- Handle Tab/Escape/Arrows for popup interaction ---
@@ -557,4 +978,98 @@ export class InputHandler {
   public getHasAtSymbol(): boolean {
       return this.hasAtSymbol;
   }
+
+  // NEW Keydown handler for widget deletion etc.
+  private _handleKeyDown = (event: KeyboardEvent): void => {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount || !selection.isCollapsed) {
+        // Only handle single cursor position, not range selection
+        return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const container = range.startContainer;
+    const offset = range.startOffset;
+    const key = event.key;
+
+    let widgetToDelete: HTMLElement | null = null;
+    let nodeToCheck: Node | null = null;
+
+    if (key === 'Backspace') {
+        if (offset > 0 && container.nodeType === Node.TEXT_NODE) {
+            // Cursor is within a text node, check the node *before* this text node
+            // But only if the cursor is at the *start* of the text node (offset === 0? No, check previousSibling always?)
+            // Let's check the node directly preceding the container
+             nodeToCheck = container.previousSibling;
+        } else if (offset > 0 && container === this.chatInput) {
+            // Cursor is between nodes in the main input div
+            nodeToCheck = container.childNodes[offset - 1];
+        } else if (offset === 0 && container !== this.chatInput) {
+            // Cursor is at the beginning of a non-div node (e.g., start of a text node after a widget)
+            // Need to check the node before the container
+            nodeToCheck = container.previousSibling;
+        }
+        
+        // Check if the node to check is a ZWS or space node, if so, check the node before that
+        if (nodeToCheck && nodeToCheck.nodeType === Node.TEXT_NODE && (nodeToCheck.textContent === '\u200B' || nodeToCheck.textContent === ' ')) {
+             nodeToCheck = nodeToCheck.previousSibling;
+        }
+        
+    } else if (key === 'Delete') {
+        if (container.nodeType === Node.TEXT_NODE && offset < (container as Text).length) {
+            // Cursor is within a text node, check the node *after* this text node
+            nodeToCheck = container.nextSibling;
+        } else if (container === this.chatInput && offset < container.childNodes.length) {
+             // Cursor is between nodes in the main input div
+            nodeToCheck = container.childNodes[offset];
+        } else if (container !== this.chatInput && offset === (container.textContent?.length || 0)) {
+             // Cursor is at the end of a non-div node (e.g., end of a text node before a widget)
+             // Need to check the node after the container
+             nodeToCheck = container.nextSibling;
+        }
+
+        // Check if the node to check is a ZWS or space node, if so, check the node after that
+        if (nodeToCheck && nodeToCheck.nodeType === Node.TEXT_NODE && (nodeToCheck.textContent === '\u200B' || nodeToCheck.textContent === ' ')) {
+            nodeToCheck = nodeToCheck.nextSibling;
+        }
+    }
+
+    // Check if the final nodeToCheck is a widget
+    if (nodeToCheck && nodeToCheck.nodeType === Node.ELEMENT_NODE && (nodeToCheck as HTMLElement).classList?.contains('jp-llm-ext-ref-widget')) {
+        widgetToDelete = nodeToCheck as HTMLElement;
+        console.log(`${key} pressed adjacent to widget:`, widgetToDelete);
+    }
+
+    if (widgetToDelete) {
+        event.preventDefault();
+        
+        const parent = widgetToDelete.parentNode;
+        if (parent) {
+            // Define nodes to remove: widget itself, potentially space before, potentially ZWS after
+            const nodesToRemove: Node[] = [widgetToDelete];
+            const spaceBefore = widgetToDelete.previousSibling;
+            const zwsAfter = widgetToDelete.nextSibling;
+
+            if (spaceBefore && spaceBefore.nodeType === Node.TEXT_NODE && spaceBefore.textContent === ' ') {
+                nodesToRemove.unshift(spaceBefore); // Add space to beginning of removal list
+            }
+            if (zwsAfter && zwsAfter.nodeType === Node.TEXT_NODE && zwsAfter.textContent === '\u200B') {
+                 nodesToRemove.push(zwsAfter); // Add ZWS to end of removal list
+            }
+
+            // Remove all identified nodes
+            nodesToRemove.forEach(node => parent.removeChild(node));
+            
+            // Optional: Remove ref from map if it was a code/cell ref
+            const refId = widgetToDelete.dataset.refId;
+            if (refId && this.codeRefMap.has(refId)) {
+                this.codeRefMap.delete(refId);
+                console.log('Removed reference from map:', refId);
+            }
+
+             // Trigger input event manually after deletion
+             this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        }
+    }
+  };
 } 

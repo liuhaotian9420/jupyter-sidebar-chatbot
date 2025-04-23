@@ -8,8 +8,8 @@ import { globals } from '../core/globals';
 export interface MenuActionCallbacks {
     insertCode: (code: string) => void;
     insertCell: (content: string) => void;
-    insertFilePath: (path: string) => void;
-    insertDirectoryPath: (path: string) => void; 
+    handleInsertFileWidget: (path: string) => void;
+    handleInsertDirWidget: (path: string) => void;
     getSelectedText: () => string | null;
     getCurrentCellContent: () => string | null;
     insertCellByIndex: (index: number) => void; // New callback for cell selection
@@ -36,6 +36,7 @@ export class PopupMenuManager {
     private _anchorY?: number;
     private allowedExtensions: string[] = ['.py', '.ipynb', '.md', '.json', '.txt', '.csv'];
     private fileCache: Map<string, {name: string; path: string; type: 'file' | 'directory'; relativePath: string}[]> = new Map();
+    private boundHandleKeyDown: (event: KeyboardEvent) => void;
 
     constructor(docManager: IDocumentManager, widgetNode: HTMLElement, callbacks: MenuActionCallbacks) {
         this.docManager = docManager;
@@ -45,6 +46,7 @@ export class PopupMenuManager {
         this.popupMenuContainer = document.createElement('div');
         this.popupMenuContainer.className = 'jp-llm-ext-popup-menu-container';
         this.popupMenuContainer.style.display = 'none'; 
+        this.popupMenuContainer.style.position = 'absolute'; // Crucial for positioning relative to widgetNode
         // Attach to the widget node instead of the body
         this.widgetNode.appendChild(this.popupMenuContainer);
 
@@ -110,9 +112,6 @@ export class PopupMenuManager {
         }
     }
 
-    // Store bound function to correctly remove event listener later
-    private boundHandleKeyDown: (event: KeyboardEvent) => void;
-
     dispose(): void {
         document.removeEventListener('click', this.handleDocumentClick.bind(this), true);
         // Remove using the exact same bound function
@@ -136,12 +135,25 @@ export class PopupMenuManager {
         }
     }
 
-    async showPopupMenu(x: number, y: number): Promise<void> { 
-        console.log(`POPUP: Showing menu at (${x}, ${y})`);
-        // Store the initial anchor point for positioning
-        this._anchorX = x;
-        this._anchorY = y;
-        
+    async showPopupMenu(trigger: { x: number; y: number } | HTMLElement): Promise<void> { 
+        let anchorX: number;
+        let anchorY: number;
+
+        if (trigger instanceof HTMLElement) {
+            const rect = trigger.getBoundingClientRect();
+            anchorX = rect.left; // Use button's top-left for anchor
+            anchorY = rect.top;
+            console.log(`POPUP: Showing menu triggered by element at (${anchorX}, ${anchorY})`);
+        } else {
+            anchorX = trigger.x;
+            anchorY = trigger.y;
+            console.log(`POPUP: Showing menu triggered by coordinates at (${anchorX}, ${anchorY})`);
+        }
+
+        // Store the calculated anchor point for positioning
+        this._anchorX = anchorX;
+        this._anchorY = anchorY;
+
         if (this.popupMenuContainer.style.display === 'none') {
             this.currentMenuLevel = 'top';
             this.currentMenuPath = '';
@@ -156,6 +168,9 @@ export class PopupMenuManager {
         // Ensure it's attached to the widget node if somehow detached
         this.widgetNode.appendChild(this.popupMenuContainer);
         
+        // Add keydown listener when showing
+        document.addEventListener('keydown', this.boundHandleKeyDown, true);
+
         // Position the popup menu - DEFER calculation slightly
         setTimeout(() => {
             console.log("POPUP: Deferred updatePopupPosition call.");
@@ -186,6 +201,14 @@ export class PopupMenuManager {
             console.log('POPUP: Hiding menu. Called from:', new Error().stack);
             this.popupMenuContainer.style.display = 'none';
             this.currentMenuLevel = 'top'; // Reset level
+
+            // Remove keydown listener when hiding
+            document.removeEventListener('keydown', this.boundHandleKeyDown, true);
+            console.log("POPUP: Removed keydown listener.");
+
+            // Clear anchors
+            this._anchorX = undefined;
+            this._anchorY = undefined;
         }
     }
 
@@ -625,10 +648,18 @@ export class PopupMenuManager {
                     // Construct the reference text (e.g., "@file path/to/file.py")
                     // const refText = `@file ${path}`;
                     // console.log("TODO: Implement file reference insertion: ", refText);
-                    this.callbacks.insertFilePath(path); // Call the appropriate callback
+                    this.callbacks.handleInsertFileWidget(path); // NEW: Call widget insertion callback
                     this.hidePopupMenu();
                 } else {
                     console.error('POPUP: File selected but path is missing.');
+                }
+                break;
+            case 'select-directory': 
+                if (path) {
+                    this.callbacks.handleInsertDirWidget(path); // NEW: Call widget insertion callback
+                    this.hidePopupMenu();
+                } else {
+                    console.error('POPUP: Directory selected but path is missing.');
                 }
                 break;
             case 'select-directory-navigate': // New action to navigate into dir when in file view
@@ -651,7 +682,7 @@ export class PopupMenuManager {
                     // Construct the reference text (e.g., "@dir path/to/directory")
                     // const refText = `@dir ${path}`;
                     // console.log("TODO: Implement directory reference insertion: ", refText);
-                    this.callbacks.insertDirectoryPath(path); // Call the appropriate callback
+                    this.callbacks.handleInsertDirWidget(path); // Corrected to use the new widget insertion callback
                     this.hidePopupMenu();
                 } else {
                     console.error('POPUP: Directory selected for callback but path is missing.');
@@ -666,7 +697,7 @@ export class PopupMenuManager {
             case 'error':
                 break;
             default:
-                console.warn('Unknown menu action:', actionId);
+                console.log('POPUP: Unknown menu action:', actionId);
                 this.hidePopupMenu(); 
                 break;
         }
@@ -867,55 +898,61 @@ export class PopupMenuManager {
      * Handle keyboard navigation when the popup menu is shown
      */
     private handleKeyDown(event: KeyboardEvent): void {
-        // Only handle keys if the popup is visible
-        if (!this.isPopupMenuVisible()) {
-            return;
-        }
+        if (this.popupMenuContainer.style.display === 'none') return;
+        console.log(`POPUP (Document): KeyDown intercepted. Key='${event.key}'`);
 
-        console.log(`POPUP Document KeyDown: Key='${event.key}', Target=`, event.target);
+        // Prioritize search input if focused
+        if (document.activeElement === this.searchInput) {
+            console.log('POPUP (Document): KeyDown - Search input is focused, letting it handle.');
 
-        // Allow default browser search behavior (e.g., Cmd+F)
-        if (event.metaKey || event.ctrlKey) {
-            return;
-        }
-
-        // If focus is inside the search input, let its handler manage navigation keys
-        if (event.target === this.searchInput) {
-            console.log('POPUP (Document): Key event target is search input, skipping document handler.');
-            // Allow Backspace etc. to work naturally in search input
-            if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
-                 // Let the search input's keydown handle Escape, stop propagation
-                 // But let the main handler process Up/Down/Enter/Tab by blurring
-                if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                     // Trigger blur to shift focus to menu items
-                     this.searchInput.blur();
-                     // Prevent default scrolling behavior
-                     event.preventDefault();
-                     // Process the key event now in the menu context
-                     this.processMenuNavigation(event.key);
-                } else if (event.key === 'Enter') {
-                    this.searchInput.blur();
-                    event.preventDefault();
-                    this.processMenuNavigation(event.key);
-                } else if (event.key === 'Tab') {
-                    // Allow tabbing away (or maybe cycle focus?)
-                     this.searchInput.blur();
-                     // Don't prevent default - allow tabbing
-                } else if (event.key === 'Escape') {
-                     // Already handled by searchInput's listener, just stop propagation
-                     event.stopPropagation();
-                }
-            } else {
-                // Allow other keys (typing) in the search input
-                 return;
-            }
-        } else {
-             // Focus is NOT in the search input, process normally
-             this.processMenuNavigation(event.key);
-             // Prevent default browser actions for these keys when menu is active
-             if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
-                 event.preventDefault();
+             // Handle Tab and arrow keys specifically to move focus out of search
+             if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                 console.log(`POPUP (Document): Key='${event.key}' in search input - moving focus.`);
+                 this.searchInput.blur(); // Remove focus from search
+                 // Delay slightly to allow blur processing before selecting
+                 setTimeout(() => {
+                     if (event.key === 'ArrowDown') {
+                         this.selectedMenuItemIndex = -1;
+                         this.selectNextMenuItem();
+                     } else if (event.key === 'ArrowUp') {
+                         this.selectedMenuItemIndex = this.getMenuItems().length;
+                         this.selectPreviousMenuItem();
+                     } else { // Tab
+                         // Potentially select first/next element after search?
+                         this.selectedMenuItemIndex = -1;
+                         this.selectNextMenuItem();
+                     }
+                 }, 0);
+                 event.preventDefault(); // Prevent default Tab behavior
                  event.stopPropagation();
+                 return;
+             }
+
+            // Let other keys (like Escape, Enter) be handled by the search input's own listener
+            // OR let them fall through if the input listener doesn't stop propagation.
+             // Escape is handled by search listener, no need to handle here.
+             // Enter might need handling here if search listener doesn't always select.
+             // Text input keys should naturally fall through.
+             return; 
+        }
+
+        // Handle navigation if search is not focused
+        if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+            console.log('POPUP (Document): Handling navigation key:', event.key);
+            event.preventDefault();
+            event.stopPropagation();
+            this.processMenuNavigation(event.key);
+        } else {
+             // If typing characters and NOT in search input, maybe focus search?
+             // Only if in file/directory view?
+             if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
+                 if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                     console.log('POPUP (Document): Focusing search input due to character typed.');
+                     this.searchInput.focus();
+                     // Optionally append the typed character? (Might be complex)
+                     // this.searchInput.value += event.key; 
+                     // this.renderMenuContent();
+                 }
              }
         }
     }
@@ -1017,74 +1054,82 @@ export class PopupMenuManager {
 
     /**
      * Updates the position of the popup menu based on the active reference range
-     * or the initial anchor point. Tries to position the BOTTOM of the menu
-     * just ABOVE the range/anchor.
+     * or the initial anchor point. Tries to position the BOTTOM-LEFT corner of the menu
+     * just AT THE TOP-LEFT corner of the range/anchor.
      */
     private updatePopupPosition(): void {
-        if (!this.widgetNode) return;
-
-        const widgetRect = this.widgetNode.getBoundingClientRect();
-        let targetTop: number;
-        let targetLeft: number;
-
-        // Use the anchor coordinates provided (now from the reliable temp span)
-        if (this._anchorX !== undefined && this._anchorY !== undefined) {
-             console.log(`POPUP: Positioning based on anchor point: (${this._anchorX}, ${this._anchorY})`);
-            // Target position relative to viewport
-            targetTop = this._anchorY;
-            targetLeft = this._anchorX;
-        } else {
-            console.warn("POPUP: Cannot update position - no anchor point provided.");
+        if (!this.widgetNode || this._anchorX === undefined || this._anchorY === undefined) {
+            console.warn("POPUP: Cannot update position - missing widgetNode or anchor points.");
             return;
         }
 
-        // Make sure the popup is visible and rendered to get its height
-        this.popupMenuContainer.style.visibility = 'hidden'; // Keep it hidden while calculating
+        const widgetRect = this.widgetNode.getBoundingClientRect();
+
+        // Target position is the viewport-relative anchor point
+        const targetTop = this._anchorY;
+        const targetLeft = this._anchorX;
+        console.log(`POPUP: Positioning relative to anchor: (${targetLeft}, ${targetTop})`);
+
+        // Make sure the popup is visible and rendered to get its dimensions
+        // Use visibility to prevent flicker while measuring
+        this.popupMenuContainer.style.visibility = 'hidden';
         this.popupMenuContainer.style.display = 'block';
 
         const popupHeight = this.popupMenuContainer.offsetHeight;
         const popupWidth = this.popupMenuContainer.offsetWidth;
 
-        // Calculate desired 'top' style relative to the widgetNode
-        // Position the bottom of the popup just above the target's top
-        let top = (targetTop - widgetRect.top) - popupHeight;
-
-        // Calculate desired 'left' style relative to the widgetNode
-        let left = targetLeft - widgetRect.left;
-
-        // --- Boundary checks (relative to widget) ---
-        const widgetClientWidth = this.widgetNode.clientWidth; // Use clientWidth for inner width
-        const widgetClientHeight = this.widgetNode.clientHeight;
-
-        // Prevent going off the left edge of the widget
-        if (left < 0) {
-            left = 5; // Small padding
-            console.log("POPUP Adjust: Corrected left edge");
+        if (popupHeight === 0 || popupWidth === 0) {
+            console.warn("POPUP: Cannot update position - popup dimensions are zero.");
+            this.popupMenuContainer.style.display = 'none'; // Hide if dimensions are invalid
+            return;
         }
 
-        // Prevent going off the right edge of the widget
-        if (left + popupWidth > widgetClientWidth) {
-            left = widgetClientWidth - popupWidth - 5; // Adjust left, add padding
-            console.log("POPUP Adjust: Corrected right edge");
+        // Calculate desired viewport coordinates for popup's top-left
+        // Goal: popup bottom-left = anchor top-left
+        // popup top = anchor top - popup height
+        // popup left = anchor left
+        let desiredTop = targetTop - popupHeight;
+        let desiredLeft = targetLeft;
+
+        // --- Viewport Boundary checks ---
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Prevent going off the left viewport edge
+        if (desiredLeft < 0) {
+            desiredLeft = 5; // Small padding
+            console.log("POPUP Viewport Adjust: Corrected left edge");
         }
 
-        // Prevent going off the top edge of the widget
-        if (top < 0) {
-            // If it goes off the top, try positioning it *below* the target instead
-            const spaceBelow = widgetClientHeight - (targetTop - widgetRect.top + 10); // Space below target
-            if (spaceBelow >= popupHeight) {
-                 top = (targetTop - widgetRect.top) + 10; // Position below target with padding
-                 console.log("POPUP Adjust: Flipping below target (was off top)");
+        // Prevent going off the right viewport edge
+        if (desiredLeft + popupWidth > viewportWidth) {
+            desiredLeft = viewportWidth - popupWidth - 5; // Adjust left, add padding
+            console.log("POPUP Viewport Adjust: Corrected right edge");
+        }
+
+        // Prevent going off the top viewport edge
+        if (desiredTop < 0) {
+            // If it goes off the top, try positioning it *below* the anchor instead
+            // Goal: popup top-left = anchor bottom-left
+            const desiredTopBelow = targetTop + 5; // Add small gap
+            if (desiredTopBelow + popupHeight <= viewportHeight) {
+                 desiredTop = desiredTopBelow;
+                 console.log("POPUP Viewport Adjust: Flipping below anchor (was off top)");
             } else {
-                 // Not enough space below either, clamp to top
-                 top = 5; // Small padding from top
-                 console.log("POPUP Adjust: Clamped to top edge (no space below)");
+                 // Not enough space below either, clamp to top of viewport
+                 desiredTop = 5; // Small padding from top
+                 console.log("POPUP Viewport Adjust: Clamped to top edge (no space below)");
             }
         }
+        // Note: No check for bottom edge needed if we prioritize positioning above or clamping to top.
 
-        console.log(`POPUP: Setting position - Top: ${top}px, Left: ${left}px (Relative to Widget)`);
-        this.popupMenuContainer.style.top = `${top}px`;
-        this.popupMenuContainer.style.left = `${left}px`;
+        // --- Convert viewport coordinates to style relative to widgetNode ---
+        const styleTop = desiredTop - widgetRect.top;
+        const styleLeft = desiredLeft - widgetRect.left;
+
+        console.log(`POPUP: Setting position - Top: ${styleTop}px, Left: ${styleLeft}px (Relative to Widget)`);
+        this.popupMenuContainer.style.top = `${styleTop}px`;
+        this.popupMenuContainer.style.left = `${styleLeft}px`;
 
         // Make it visible again
         this.popupMenuContainer.style.display = 'block';

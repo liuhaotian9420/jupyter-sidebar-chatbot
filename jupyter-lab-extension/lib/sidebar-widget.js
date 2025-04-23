@@ -94,7 +94,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.handleShowPopupMenu = (event, targetButton) => {
             console.log('Handle Show Popup Menu clicked');
             const rect = targetButton.getBoundingClientRect();
-            this.popupMenuManager.showPopupMenu(rect.left, rect.bottom + 5);
+            this.popupMenuManager.showPopupMenu({ x: rect.left, y: rect.bottom + 5 });
         };
         this.handleUpdateTitle = () => {
             var _a;
@@ -183,27 +183,21 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                 this.inputHandler.appendToInput(placeholder);
             },
             insertCell: (content) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@cell ${content}`); },
-            insertFilePath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@file[${path}]`); },
-            insertDirectoryPath: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(`@dir[${path}]`); },
+            handleInsertFileWidget: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.handleInsertFileWidget(path); },
+            handleInsertDirWidget: (path) => { var _a; return (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.handleInsertDirWidget(path); },
             getSelectedText: notebook_integration_1.getSelectedText,
             getCurrentCellContent: notebook_integration_1.getCurrentCellContent,
             insertCellByIndex: (index) => {
                 var _a;
-                const oneBasedIndex = index + 1;
-                const refText = `@Cell[${oneBasedIndex}]`;
-                (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.appendToInput(refText);
+                (_a = this.inputHandler) === null || _a === void 0 ? void 0 : _a.handleInsertCellWidgetFromPopup(index);
             },
             // TODO: insertCollapsedCodeRef should later be merged with insertCode
             // as we only expect one kind of behavior from the input handler.
             // this change will also involve ui changes
             insertCollapsedCodeRef: (code, cellIndex, lineNumber, notebookName) => {
-                // Handle reference from cursor position (assume start/end line are the same)
                 if (!this.inputHandler)
                     return;
-                const lineEndNumber = lineNumber; // Start and end are the same for a single line reference
-                const refId = this.inputHandler.addCodeReference(code, notebookName, cellIndex, lineNumber, lineEndNumber);
-                const placeholder = `@code[${refId}]`;
-                this.inputHandler.appendToInput(placeholder);
+                this.inputHandler.handleInsertCodeWidgetFromPopup(code, notebookName, cellIndex, lineNumber);
             }
         });
         // --- 2. Define Callbacks (used by buildLayout and Handlers) ---
@@ -228,7 +222,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         };
         const showPopupMenuCallback = (event) => {
             const rect = event.target.getBoundingClientRect();
-            this.popupMenuManager.showPopupMenu(rect.left + 60, rect.top - 20);
+            this.popupMenuManager.showPopupMenu({ x: rect.left + 60, y: rect.top - 20 });
             event.preventDefault();
             event.stopPropagation();
         };
@@ -300,7 +294,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
                     console.error('MessageHandler not initialized when trying to send message from InputHandler');
                 }
             },
-            showPopupMenu: (left, top) => this.popupMenuManager.showPopupMenu(left, top),
+            showPopupMenu: (left, top) => this.popupMenuManager.showPopupMenu({ x: left, y: top }),
             hidePopupMenu: () => this.popupMenuManager.hidePopupMenu(),
             updatePlaceholder: (isMarkdown) => {
                 // Use dataset for data-placeholder attribute

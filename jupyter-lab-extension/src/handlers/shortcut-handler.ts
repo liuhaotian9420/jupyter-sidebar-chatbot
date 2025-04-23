@@ -49,7 +49,7 @@ export function setupShortcuts(
                 (inputField as HTMLElement).classList.contains('jp-llm-ext-input-field');
 
             // Handle the case where the input field is NOT the active element first
-            if (!isContentEditableInput) { // Only handle if NOT our input field
+            if (isContentEditableInput) { // Only handle if NOT our input field
                 console.log("SHORTCUT HANDLER: Input field is NOT active element. Handling '@' globally.");
                 // If not in our input field, prevent default, show widget, focus, insert '@', and show popup.
                 event.preventDefault();
@@ -131,7 +131,7 @@ export function setupShortcuts(
                                         console.error("SHORTCUT HANDLER: Failed to get valid coordinates from temp anchor span.");
                                     } else {
                                          console.log(`SHORTCUT HANDLER: Anchor coords from temp span: Top=${spanRect.top}, Left=${spanRect.left}`);
-                                         popupMenuManager.showPopupMenu(spanRect.left, spanRect.top); 
+                                         popupMenuManager.showPopupMenu({x: spanRect.left, y: spanRect.top}); 
                                          showIndicator('Browsing references...');
                                     }
                                 } else {
