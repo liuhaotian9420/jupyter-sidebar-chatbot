@@ -100,12 +100,12 @@ This list tracks the progress of testing the refactored Jupyter LLM Extension ba
 - *Covered in Images:* Adding image path to cell.
 
 ## P1: Update Imports/Exports
-- [ ] Review `src/core/` files for unused/incorrect imports/exports.
-- [ ] Review `src/handlers/` files for unused/incorrect imports/exports.
-- [ ] Review `src/state/` files for unused/incorrect imports/exports.
-- [ ] Review `src/ui/` files for unused/incorrect imports/exports.
-- [ ] Review `src/utils/` files for unused/incorrect imports/exports.
-- [ ] Review top-level `src/` files (e.g., `index.ts`, `globals.ts`) for unused/incorrect imports/exports.
+- [X] Review `src/core/` files for unused/incorrect imports/exports.
+- [X] Review `src/handlers/` files for unused/incorrect imports/exports.
+- [X] Review `src/state/` files for unused/incorrect imports/exports.
+- [X] Review `src/ui/` files for unused/incorrect imports/exports.
+- [X] Review `src/utils/` files for unused/incorrect imports/exports.
+- [X] Review top-level `src/` files (e.g., `index.ts`, `globals.ts`) for unused/incorrect imports/exports.
 
 ## P2: Review CSS (`index.css`)
 - [x] Inspect main chat container element structure and classes.

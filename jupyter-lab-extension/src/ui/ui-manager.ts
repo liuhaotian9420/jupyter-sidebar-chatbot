@@ -1,5 +1,3 @@
-// import { Widget } from '@lumino/widgets'; // Commented out - unused import
-// import { IDocumentManager } from '@jupyterlab/docmanager'; // Commented out - unused import
 import { PopupMenuManager } from '../handlers/popup-menu-manager';
 import { LayoutElements } from './layout-builder';
 
@@ -34,10 +32,8 @@ export interface UIElements {
  * This acts as a central point for UI manipulations, simplifying dependencies for handlers.
  */
 export class UIManager {
-    // private docManager: IDocumentManager; // Commented out - unused
     private popupMenuManager: PopupMenuManager;
     private callbacks: UIManagerCallbacks;
-    // private widgetNode: HTMLElement; // Commented out - unused
     private layoutElements: LayoutElements;
     private notificationTimeout: number | null = null; // Timeout for the shortcut indicator
     private keyboardShortcutIndicator!: HTMLDivElement; // Add property for the indicator
@@ -61,15 +57,11 @@ export class UIManager {
     }
 
     constructor(
-        // docManager: IDocumentManager, // Commented out - unused parameter
         popupMenuManager: PopupMenuManager,
-        // widgetNode: HTMLElement, // Commented out - unused parameter
         callbacks: UIManagerCallbacks,
         layoutElements: LayoutElements
     ) {
-        // this.docManager = docManager; // Commented out - unused assignment
         this.popupMenuManager = popupMenuManager; // Needed for '@' button action
-        // this.widgetNode = widgetNode; // Commented out - unused assignment
         this.callbacks = callbacks; // Callbacks to trigger widget/handler logic
         this.layoutElements = layoutElements; // Keep reference if needed elsewhere
 

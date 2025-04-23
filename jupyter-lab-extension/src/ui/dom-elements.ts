@@ -1,5 +1,3 @@
-// import { ReadonlyPartialJSONObject } from '@lumino/coreutils';
-
 /**
  * Type definition for options used when creating HTML elements.
  */

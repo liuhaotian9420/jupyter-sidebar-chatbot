@@ -7,8 +7,6 @@ export interface HistoryHandlerCallbacks {
     updateTitleInput: (title: string) => void;
     clearMessageContainer: () => void;
     addRenderedMessage: (messageElement: HTMLElement) => void;
-    // Potentially a direct reference to message renderers if preferred
-    // messageRendererCallbacks: MessageRendererCallbacks;
 }
 
 /**

@@ -46,8 +46,9 @@ export class ChatState {
     const newChat: ChatHistoryItem = {
       id: chatId,
       title: title,
-      messages: []
-      // createdAt: new Date() 
+      messages: [],
+      // Optional: Add timestamp or other metadata if needed later
+      // createdAt: Date; 
     };
     
     this.chatHistory.push(newChat);
