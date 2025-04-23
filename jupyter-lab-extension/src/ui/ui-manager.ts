@@ -50,6 +50,8 @@ export class UIManager {
     // Internal UI state
     private isInputExpanded: boolean = false;
     private isMarkdownMode: boolean = false;
+    // Store the range where @ was typed to handle insertion
+    private activeReferenceTriggerRange: Range | null = null;
 
     // Add this getter method
     public getIsMarkdownMode(): boolean {
@@ -61,40 +63,36 @@ export class UIManager {
         callbacks: UIManagerCallbacks,
         layoutElements: LayoutElements
     ) {
-        this.popupMenuManager = popupMenuManager; // Needed for '@' button action
-        this.callbacks = callbacks; // Callbacks to trigger widget/handler logic
-        this.layoutElements = layoutElements; // Keep reference if needed elsewhere
+        this.popupMenuManager = popupMenuManager;
+        this.callbacks = callbacks;
+        this.layoutElements = layoutElements; // Store the layout elements
 
-        // --- Assign internal references from provided layoutElements ---
-        if (!layoutElements.messageContainer || !layoutElements.inputField || 
-            !layoutElements.titleInput || !layoutElements.historyContainer || 
-            !layoutElements.bottomBarContainer || !layoutElements.markdownToggleButton || 
-            !layoutElements.expandButton) {
-            console.error('UIManager: Critical layout elements missing during initialization!');
-            // Potentially throw an error or handle gracefully
-            return; 
-        }
-        this.messageContainer = layoutElements.messageContainer;
-        this.inputField = layoutElements.inputField;
-        this.titleInput = layoutElements.titleInput;
-        this.historyContainer = layoutElements.historyContainer;
-        this.bottomBarContainer = layoutElements.bottomBarContainer;
-        this.markdownToggle = layoutElements.markdownToggleButton; // Use markdownToggleButton
-        this.expandButton = layoutElements.expandButton;
-        // --------------------------------------------------------------
+        // Ensure DOM elements are created before trying to access them
+        const uiElements = this.createLayout();
 
-        // Initialize elements that are created outside createLayout if any
-        // In this case, all core elements are created within createLayout
+        // Assign created elements to class properties
+        this.inputField = uiElements.inputField;
+        this.messageContainer = uiElements.messageContainer;
+        this.historyContainer = uiElements.historyContainer;
+        this.titleInput = uiElements.titleInput;
+        this.bottomBarContainer = uiElements.bottomBarContainer;
 
-        // Create and append the indicator element
+        // Append the main layout to the provided layout container
+        this.layoutElements.container.appendChild(uiElements.mainLayout);
+
+        // Initialize and append the keyboard shortcut indicator
         this.keyboardShortcutIndicator = document.createElement('div');
-        this.keyboardShortcutIndicator.className = 'jp-llm-ext-keyboard-shortcut-indicator';
-        // Append it to the main element managed by the UIManager
-        // Ensure mainElement exists before appending
-        if (this.layoutElements.mainElement) {
-             this.layoutElements.mainElement.appendChild(this.keyboardShortcutIndicator);
+        this.keyboardShortcutIndicator.className = 'jp-llm-ext-shortcut-indicator';
+        this.keyboardShortcutIndicator.style.display = 'none'; // Hidden by default
+
+        // Append the indicator to the main layout or another appropriate place
+        // Ensure mainLayout exists before appending
+        if (uiElements.mainLayout) {
+             // Prepend within the main content wrapper, before other elements
+             // Or append to bottom bar, depending on desired position
+             this.bottomBarContainer.insertAdjacentElement('afterend', this.keyboardShortcutIndicator);
         } else {
-            console.error('UIManager: Main layout element not found during indicator initialization.');
+             console.error('UIManager: Main layout element not found during indicator initialization.');
         }
     }
 
@@ -151,6 +149,13 @@ export class UIManager {
         this.inputField.setAttribute('aria-multiline', 'true');
         this.inputField.setAttribute('data-placeholder', 'Ask me anything...');
         this.inputField.className = 'jp-llm-ext-input-field';
+
+        // --- Input Event Listener for @ detection ---
+        this.inputField.addEventListener('input', (event: Event) => {
+            this.handleInputForReference();
+        });
+        // --- End Input Event Listener ---
+
         this.inputField.addEventListener('keydown', (event: KeyboardEvent) => {
             const selection = window.getSelection();
 
@@ -192,6 +197,18 @@ export class UIManager {
                     this.clearInputField();
                 }
             }
+            // --- New: Handle Tab/Escape for popup interaction ---
+            else if (this.popupMenuManager.isPopupMenuVisible()) {
+                if (event.key === 'Tab' || event.key === 'Escape' || event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Enter') {
+                    // Let the PopupMenuManager's document keydown handler manage these
+                    // We just need to prevent the default input field behavior
+                     if (event.key !== 'Enter') { // Allow Enter to potentially work if menu doesn't handle it
+                        event.preventDefault();
+                        // We don't stop propagation here; let the document handler in PopupMenuManager receive it.
+                    }
+                }
+            }
+            // --- End New ---
         });
         middleRow.appendChild(this.inputField);
 
@@ -565,6 +582,9 @@ export class UIManager {
     public clearInputField(): void {
         if (this.inputField) {
             this.inputField.innerHTML = '';
+            // Reset reference state as well
+            this.activeReferenceTriggerRange = null;
+            this.popupMenuManager.hidePopupMenu(); // Hide if open
             // Optional: Reset any expansion state if needed
             if (this.isInputExpanded) {
                  // Maybe toggle expansion off or just reset height?
@@ -572,6 +592,80 @@ export class UIManager {
             }
             // Re-focus might be desired
             this.inputField.focus();
+        }
+    }
+
+    /**
+     * Handles the input event to detect potential references starting with '@'.
+     * This will be used to trigger the reference popup in a later step.
+     */
+    private handleInputForReference(): void {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0 || !this.inputField) {
+            return;
+        }
+
+        const range = selection.getRangeAt(0);
+        const textNode = range.startContainer;
+        const offset = range.startOffset;
+
+        // Flag to track if we should close the popup
+        let shouldClosePopup = true;
+
+        // Ensure we are dealing with a text node inside the input field
+        if (!textNode || textNode.nodeType !== Node.TEXT_NODE || !this.inputField.contains(textNode)) {
+            // Might be at the boundary or in an empty div, ignore for now
+            // TODO: Handle cases where '@' is typed at the very beginning or after a widget
+            console.debug("Reference detection skipped: Not in a text node or outside input field.");
+            // Close popup if cursor moves out of a valid reference-starting context
+            if (this.popupMenuManager.isPopupMenuVisible()) {
+                this.popupMenuManager.hidePopupMenu();
+                this.activeReferenceTriggerRange = null; // Clear stored range
+            }
+            return;
+        }
+
+        const textContent = textNode.textContent || '';
+
+        // Find the last '@' before the cursor
+        const lastAtPos = textContent.lastIndexOf('@', offset - 1);
+
+        if (lastAtPos !== -1) {
+            // Check if the '@' is preceded by whitespace or is at the beginning of the node
+            const isStartOfRef = lastAtPos === 0 || /\s/.test(textContent[lastAtPos - 1]);
+
+            if (isStartOfRef) {
+                // Extract potential reference text after '@' up to the cursor
+                const potentialRef = textContent.substring(lastAtPos + 1, offset);
+
+                // Basic validation: Allow alphanumeric, underscores, dots, slashes for paths
+                // Allow empty query initially to show popup right after typing '@'
+                if (/^[a-zA-Z0-9_\.\-\/]*$/.test(potentialRef)) {
+                    console.log('UIManager: Potential reference detected:', potentialRef);
+                    // Store the range where the trigger occurred
+                    this.activeReferenceTriggerRange = range;
+                    // Show the suggestions popup
+                    this.popupMenuManager.showReferenceSuggestions(potentialRef, range);
+                    shouldClosePopup = false; // Keep popup open
+                } else {
+                     // Text after @ is not a valid start, or just '@' typed
+                     console.debug("Reference detection: Invalid characters after @ or empty ref.");
+                     // shouldClosePopup remains true
+                }
+            } else {
+                console.debug("Reference detection: '@' not preceded by whitespace.");
+                // shouldClosePopup remains true
+            }
+        } else {
+            console.debug("Reference detection: No '@' found before cursor in current text node.");
+            // shouldClosePopup remains true
+        }
+
+        // Close the popup if no valid reference start was detected in this input event
+        if (shouldClosePopup && this.popupMenuManager.isPopupMenuVisible()) {
+            console.log('UIManager: Closing reference popup due to invalid context.')
+            this.popupMenuManager.hidePopupMenu();
+            this.activeReferenceTriggerRange = null; // Clear stored range
         }
     }
 

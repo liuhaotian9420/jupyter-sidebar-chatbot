@@ -1,6 +1,7 @@
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook'; 
 import { globals } from '../core/globals'; 
+import { Range } from '@lumino/domutils';
 
 /**
  * Interface for actions to be performed when a menu item is selected.
@@ -23,9 +24,11 @@ export interface MenuActionCallbacks {
 export class PopupMenuManager {
     private popupMenuContainer: HTMLDivElement;
     private searchInput: HTMLInputElement;
-    private currentMenuLevel: 'top' | 'files' | 'directories' | 'cells' = 'top';
+    private currentMenuLevel: 'top' | 'files' | 'directories' | 'cells' | 'references' = 'top';
     private currentMenuPath: string = '';
-    private menuHistory: { level: 'top' | 'files' | 'directories' | 'cells', path: string }[] = [];
+    private currentReferenceQuery: string = '';
+    private currentReferenceRange: Range | null = null;
+    private menuHistory: { level: 'top' | 'files' | 'directories' | 'cells' | 'references', path: string }[] = [];
     private docManager: IDocumentManager;
     private widgetNode: HTMLElement; 
     private callbacks: MenuActionCallbacks; 
@@ -37,6 +40,7 @@ export class PopupMenuManager {
     private _anchorY?: number;
     private allowedExtensions: string[] = ['.py', '.ipynb', '.md', '.json', '.txt', '.csv'];
     private fileCache: Map<string, {name: string; path: string; type: 'file' | 'directory'; relativePath: string}[]> = new Map();
+    private activeReferenceRange: Range | null = null;
 
     constructor(docManager: IDocumentManager, widgetNode: HTMLElement, callbacks: MenuActionCallbacks) {
         this.docManager = docManager;
@@ -179,6 +183,10 @@ export class PopupMenuManager {
         if (this.popupMenuContainer.style.display !== 'none') {
             console.log('POPUP: Hiding menu.');
             this.popupMenuContainer.style.display = 'none';
+            // Reset reference state when hiding
+            this.activeReferenceRange = null;
+            this.currentReferenceQuery = '';
+            this.currentMenuLevel = 'top'; // Reset level
             // No need to explicitly remove from widgetNode unless causing issues
             // If performance becomes an issue with many menus, consider removing/re-adding
             // if (this.popupMenuContainer.parentNode === this.widgetNode) {
@@ -202,12 +210,18 @@ export class PopupMenuManager {
                 this.popupMenuContainer.removeChild(this.popupMenuContainer.firstChild);
             }
             
-            // If not at top level, add a search input for filtering items
+            // If not at top level, OR if it's the reference level, add search input
             if (this.currentMenuLevel !== 'top') {
                 // Add search input at the top of the menu
                 this.popupMenuContainer.appendChild(this.searchInput);
-                
-                // Path display and back button removed for cleaner UI
+                // Pre-fill search input if showing references
+                if (this.currentMenuLevel === 'references') {
+                    this.searchInput.value = this.currentReferenceQuery;
+                    this.lastSearchTerm = this.currentReferenceQuery;
+                } else {
+                     this.searchInput.value = ''; // Clear for other levels
+                     this.lastSearchTerm = '';
+                }
             }
 
             // Render different menu content based on current level
@@ -221,6 +235,9 @@ export class PopupMenuManager {
                     break;
                 case 'cells':
                     await this.renderCellItems();
+                    break;
+                case 'references':
+                    await this.renderReferenceSuggestions();
                     break;
             }
             
@@ -671,7 +688,7 @@ export class PopupMenuManager {
         event.stopPropagation();
     }
 
-    async navigateMenu(level: 'files' | 'directories' | 'cells', path: string): Promise<void> { 
+    async navigateMenu(level: 'files' | 'directories' | 'cells' | 'references', path: string): Promise<void> { 
         console.log(`POPUP: Navigating to level: ${level}, path: ${path}`);
         // Only push history if we are actually moving to a new state
         if (this.currentMenuLevel !== level || this.currentMenuPath !== path) {
@@ -1066,28 +1083,174 @@ export class PopupMenuManager {
      * Update popup position, keeping the bottom edge fixed at the anchor point
      */
     private updatePopupPosition(): void {
-        // Make sure anchor points are defined
-        const anchorX = this._anchorX ?? 0;
-        const anchorY = this._anchorY ?? 0;
-        
-        // Position the popup menu
-        this.popupMenuContainer.style.position = 'absolute';
-        this.popupMenuContainer.style.left = `${anchorX}px`;
-        
-        // Show the menu so we can calculate its height
-        this.popupMenuContainer.style.display = 'block';
-        
-        // Get the actual height after rendering
+        if (this.popupMenuContainer.style.display === 'none') {
+            return;
+        }
+
+        let targetX: number;
+        let targetY: number;
+
+        // Use activeReferenceRange if available (for @ suggestions)
+        if (this.activeReferenceRange) {
+            const rect = this.activeReferenceRange.getBoundingClientRect();
+            targetX = rect.left + window.scrollX; // Position near the start of the range
+            targetY = rect.bottom + window.scrollY; // Position below the text line
+            console.log(`POPUP: Positioning based on reference range at (${targetX}, ${targetY})`);
+        } else if (this._anchorX !== undefined && this._anchorY !== undefined) {
+            // Fallback to coordinates from showPopupMenu (e.g., '@' button click)
+            targetX = this._anchorX;
+            targetY = this._anchorY;
+            console.log(`POPUP: Positioning based on anchor coordinates (${targetX}, ${targetY})`);
+        } else {
+            console.warn("POPUP: Cannot update position - no anchor range or coordinates set.");
+            return; // No position data available
+        }
+
+
+        // Ensure the container is in the DOM to measure its dimensions
+        if (!this.popupMenuContainer.offsetParent) {
+            // Temporarily append to body if not in DOM for measurement, though ideally it stays attached to widgetNode
+             if (this.widgetNode && !this.popupMenuContainer.parentNode) {
+                 this.widgetNode.appendChild(this.popupMenuContainer);
+             } else if (!this.popupMenuContainer.parentNode) {
+                 console.warn("POPUP: Cannot measure menu - not attached to DOM and widgetNode unavailable.");
+                 return;
+             }
+        }
+
+
+        const menuWidth = this.popupMenuContainer.offsetWidth;
         const menuHeight = this.popupMenuContainer.offsetHeight;
-        
-        // Add a small gap (10px) between the bottom of the menu and the trigger point
-        const gap = 10;
-        
-        // Position above the cursor/button to keep bottom edge at the anchor point:
-        // y - gap = bottom edge of popup, so popup top = y - gap - menuHeight
-        this.popupMenuContainer.style.top = `${anchorY - gap - menuHeight}px`;
-        
-        console.log(`POPUP: Positioned menu at height ${menuHeight}px with bottom at ${anchorY - gap}px`);
+        // Use visual viewport for positioning relative to what the user sees
+        const viewportWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+        const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        // Get scroll offsets
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
+
+        // Adjust horizontal position (X)
+        // If menu goes off right edge, move it left
+        if (targetX + menuWidth > scrollX + viewportWidth) {
+            targetX = scrollX + viewportWidth - menuWidth - 5; // Adjust with some padding
+        }
+        // Ensure it doesn't go off left edge (less likely)
+        if (targetX < scrollX) {
+            targetX = scrollX + 5;
+        }
+
+        // Adjust vertical position (Y)
+        // If menu goes off bottom edge, move it up
+        if (targetY + menuHeight > scrollY + viewportHeight) {
+            // Try positioning above the anchor point/range instead
+             if (this.activeReferenceRange) {
+                 const rect = this.activeReferenceRange.getBoundingClientRect();
+                 targetY = rect.top + scrollY - menuHeight; // Position above the range
+             } else if (this._anchorY !== undefined) {
+                 targetY = this._anchorY - menuHeight; // Position above the original Y anchor
+             }
+            // If it still goes off the top after moving up, clamp it
+            if (targetY < scrollY) {
+                targetY = scrollY + 5;
+            }
+        }
+        // Ensure it doesn't go off top edge initially (less likely for bottom positioning)
+         if (targetY < scrollY) {
+             targetY = scrollY + 5;
+         }
+
+
+        this.popupMenuContainer.style.left = `${Math.max(0, targetX)}px`;
+        this.popupMenuContainer.style.top = `${Math.max(0, targetY)}px`;
+        this.popupMenuContainer.style.display = 'block'; // Ensure visible after position calculation
+        console.log(`POPUP: Final position set to (${this.popupMenuContainer.style.left}, ${this.popupMenuContainer.style.top}) Width: ${menuWidth}, Height: ${menuHeight}`);
+    }
+
+    /**
+     * Shows reference suggestions based on typed query, positioning near the text.
+     * @param query The text following the '@' symbol.
+     * @param range The DOM Range object representing the '@' query in the input field.
+     */
+    async showReferenceSuggestions(query: string, range: Range): Promise<void> {
+        console.log(`POPUP: Showing reference suggestions for query: "${query}"`);
+        this.activeReferenceRange = range; // Store the range
+        this.currentReferenceQuery = query;
+        this.currentMenuLevel = 'references';
+        this.menuHistory = []; // Reset history for this specific mode
+
+        // Use the range to calculate position
+        const rect = range.getBoundingClientRect();
+        this._anchorX = rect.left;
+        // Position below the text line
+        this._anchorY = rect.bottom + window.scrollY;
+
+        // Ensure current directory path is set
+        await this.setCurrentDirectoryPath();
+
+        // Render the specific content for references
+        await this.renderMenuContent();
+
+        // Make sure it's visible and positioned
+        this.widgetNode.appendChild(this.popupMenuContainer);
+        this.updatePopupPosition(); // Position using _anchorX/_anchorY derived from range
+
+        // Focus search input immediately for references
+        setTimeout(() => {
+            this.searchInput.focus();
+            console.log('POPUP: Focused search input for references');
+        }, 50);
+        this.selectedMenuItemIndex = -1;
+    }
+
+    /**
+     * Renders items for the reference suggestion list.
+     * Filters files based on the currentReferenceQuery and searchInput.
+     */
+    private async renderReferenceSuggestions(): Promise<void> {
+        // Get current search term (might have been refined by user)
+        const searchTerm = this.searchInput.value.toLowerCase();
+
+        // Start with the base path (usually workspace root or notebook dir)
+        const basePath = this.currentMenuPath || ''; // Use current path set by setCurrentDirectoryPath
+        const contents = await this.listCurrentDirectoryContents(basePath, 'file'); // Only list files initially
+
+        if (!contents) {
+            const errorItem = this.createMenuItem('Error loading files', 'error', '', 'Could not list directory contents');
+            errorItem.classList.add('jp-llm-ext-menu-item-disabled'); // Make it non-interactive
+            this.popupMenuContainer.appendChild(errorItem);
+            return;
+        }
+
+        // Filter based on search term and allowed extensions
+        const filteredItems = contents.filter(item => {
+            const lowerCaseName = item.name.toLowerCase();
+            // Match if search term is part of the name
+            const nameMatches = lowerCaseName.includes(searchTerm);
+            // Check if extension is allowed
+            const extensionAllowed = this.allowedExtensions.some(ext => lowerCaseName.endsWith(ext));
+            return nameMatches && extensionAllowed;
+        });
+
+
+        if (filteredItems.length === 0) {
+            const noResultsItem = this.createMenuItem('No matching files found', 'no-results', '', 'Try refining your search or check the directory');
+             noResultsItem.classList.add('jp-llm-ext-menu-item-disabled');
+            this.popupMenuContainer.appendChild(noResultsItem);
+        } else {
+             // Sort alphabetically by name
+            filteredItems.sort((a, b) => a.name.localeCompare(b.name));
+
+            filteredItems.forEach(item => {
+                 // Use relativePath for the actionId payload
+                const menuItem = this.createMenuItem(item.name, 'insert-reference', item.relativePath, `Insert @${item.relativePath}`);
+                this.popupMenuContainer.appendChild(menuItem);
+            });
+        }
+
+        // Update position after rendering items
+        this.updatePopupPosition();
+        // Select first item after filtering/rendering
+        this.selectedMenuItemIndex = -1;
+        setTimeout(() => this.selectNextMenuItem(), 0); // Select first item async
     }
 
     /**
