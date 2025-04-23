@@ -16,7 +16,7 @@
 **Goal:** Implement insertion and rendering of file, directory, cell, and code references as block widgets in user messages.
 
 **Tasks:**
-- [ ] **P0:** Update `PopupMenuManager` callbacks to insert correct reference text (`@file`, `@dir`, `@Cell`, `@code`) via `InputHandler`.
+- [x] **P0:** Update `PopupMenuManager` callbacks to insert correct reference text (`@file`, `@dir`, `@Cell`, `@code`) via `InputHandler`.
 - [ ] **P1:** Enhance `InputHandler` to store necessary metadata for `@code` references (notebook name, cell index, line number).
 - [ ] **P2:** Implement reference widget rendering in `UIManager`/`MessageRenderer` to replace `@...` text with styled, non-editable widgets in user messages, using specified display formats.
 - [ ] **P3:** Add CSS styling for `.jp-llm-ext-ref-widget` and type-specific variants.
