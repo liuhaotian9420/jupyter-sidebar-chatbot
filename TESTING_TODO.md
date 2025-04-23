@@ -124,8 +124,8 @@ This list tracks the progress of testing the refactored Jupyter LLM Extension ba
   - [ ] Test widget creation/replacement logic.
   - [ ] Test backspace handling for deleting widgets.
 - **UI/Integration Tests:**
-  - [ ] Verify typing regular text works as expected.
-  - [ ] Verify typing markdown works as expected.
+  - [x] Verify typing regular text works as expected.
+  - [x] Verify typing markdown works as expected.
   - [ ] Verify inserting a reference using "@" creates a visible, non-editable widget.
   - [ ] Verify deleting a reference widget using backspace removes the entire widget.
   - [ ] Verify sending a message correctly serializes text and reference widgets.
@@ -133,3 +133,25 @@ This list tracks the progress of testing the refactored Jupyter LLM Extension ba
   - [ ] Verify Shift+Enter creates a newline in the input div.
   - [ ] Verify Enter (without Shift) triggers message sending.
   - [ ] Verify the contenteditable div visually resembles the previous textarea.
+
+### Feature: context-refs
+
+**Goal:** Ensure file, directory, cell, and code references can be inserted via the popup menu and are rendered correctly as non-editable widgets in user messages.
+
+**Testing Tasks:**
+- [ ] **UI/Integration:** Verify that selecting 'File' from the popup menu and choosing a file inserts `@file <filepath>` into the input field.
+- [ ] **UI/Integration:** Verify that selecting 'Directory' from the popup menu and choosing a directory inserts `@dir <dirpath>` into the input field.
+- [ ] **UI/Integration:** Verify that selecting 'Cells' from the popup menu and choosing a cell inserts `@Cell <1-based-index>` into the input field.
+- [ ] **UI/Integration:** Verify that selecting 'Code' -> 'Insert as collapsed reference' inserts an `@code <refId>` placeholder and stores associated metadata (notebook, cell, line).
+- [ ] **Rendering:** Confirm that sending a message containing `@file <path>` renders a widget displaying only the filename (`{filename}`).
+- [ ] **Rendering:** Confirm that sending a message containing `@dir <path>` renders a widget displaying only the directory name (`{dirname}`).
+- [ ] **Rendering:** Confirm that sending a message containing `@Cell <index>` renders a widget displaying `{notebookName}-{M/C}-{index}`.
+- [ ] **Rendering:** Confirm that sending a message containing `@code <refId>` renders a widget displaying `{notebookName}-{cellIndex}-{lineNumber}`.
+- [ ] **Rendering:** Verify that rendered widgets are non-editable within the displayed user message.
+- [ ] **Rendering:** Verify that the original reference text is stored in the `data-ref-text` attribute of the widget span.
+- [ ] **Styling:** Check that the rendered widgets have the correct `jp-llm-ext-ref-widget` class and type-specific classes.
+- [ ] **Styling:** Ensure the widgets have the desired block/pill appearance based on the CSS added in P3.
+- [ ] **Edge Cases:** Test with file/directory names containing spaces or special characters.
+- [ ] **Edge Cases:** Test inserting multiple references in one message.
+- [ ] **Edge Cases:** Test references in different notebooks.
+- [ ] **Edge Cases:** Test cell references when cells are added/deleted in the notebook after the reference is created (how should this behave?).
