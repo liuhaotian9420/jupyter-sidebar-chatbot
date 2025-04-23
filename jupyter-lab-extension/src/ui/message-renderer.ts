@@ -1,23 +1,27 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import hljs from 'highlight.js'; // Or import specific languages if needed
+// import hljs from 'highlight.js'; // Removed unused import
 
 import {
   createDiv,
-  createButton,
-  createSpan,
-  createImageElement
+  // createButton, // Removed unused
+  // createSpan, // Removed unused
+  // createImageElement // Removed unused
 } from './dom-elements';
-import {
-  CodeRefData,
-  createCodeRefWidgetHTML,
-  attachCodeRefEventListeners,
-  defaultCodeRefToggleLogic
-} from './code-ref-widget';
+// Removed unused import block for code-ref-widget
+// import {
+//   CodeRefData,
+//   createCodeRefWidgetHTML,
+//   attachCodeRefEventListeners,
+//   defaultCodeRefToggleLogic
+// } from './code-ref-widget';
 
-import { copyToClipboard, copyImageToClipboard, copyMessageToClipboard } from '../utils/clipboard';
-import { addMessageToCell } from '../utils/notebook-integration';
-import { detectLanguage, highlightCode, preprocessMarkdown } from '../utils/highlighting';
+// Removed unused import block for clipboard utils (used via callbacks)
+// import { copyToClipboard, copyImageToClipboard, copyMessageToClipboard } from '../utils/clipboard';
+// Removed unused import (used via callbacks)
+// import { addMessageToCell } from '../utils/notebook-integration';
+import { detectLanguage, highlightCode } from '../utils/highlighting';
+import { preprocessMarkdown } from '../utils/markdown-config';
 
 /**
  * Callbacks for actions within rendered messages.
@@ -144,6 +148,11 @@ export function renderBotMessage(
   return messageDiv;
 }
 
+// Define createMessageWrapper based on createMessageDiv
+function createMessageWrapper(sender: 'user' | 'bot'): HTMLDivElement {
+  return createMessageDiv(sender);
+}
+
 // --- More specific rendering functions or helpers can be added below ---
 
 /**
@@ -179,7 +188,7 @@ function renderImageMessage(
   imgActionsDiv.style.right = '10px';
   imgActionsDiv.style.display = 'flex';
   imgActionsDiv.style.gap = '8px';
-  imgActionsDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.6)';
+  imgActionsDiv.style.backgroundColor = 'rgba(255, 255, 255, 0.6)'; // Added slight background for visibility
   imgActionsDiv.style.borderRadius = '4px';
   imgActionsDiv.style.padding = '4px';
 
@@ -285,27 +294,15 @@ export function renderBotMessageFinal(
   contentDiv: HTMLDivElement,
   streamingDiv: HTMLDivElement,
   completeResponse: string,
-  options: RenderOptions = {}
+  options: Partial<MessageRenderOptions & MessageRendererCallbacks> = {},
+  callbacks: Partial<MessageRendererCallbacks> = {}
 ): HTMLDivElement {
   // Hide streaming div, show final content div
   streamingDiv.style.display = 'none';
   contentDiv.style.display = 'block';
 
-  // TODO: Move utility functions to utils/
-  const preprocessMarkdown = (text: string): string => text; // Placeholder
-  const detectLanguage = (code: string): string => hljs.highlightAuto(code).language || ''; // Placeholder
-  const highlightCode = (code: string, lang: string): string => { // Placeholder
-      if (lang && hljs.getLanguage(lang)) {
-          try {
-              return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
-          } catch (__) {}
-      }
-      return hljs.highlightAuto(code).value;
-  };
-  const copyToClipboard = (text: string, cb?: () => void) => { console.log('Copy:', text); cb?.(); }; // Placeholder
-  const addMessageToCell = (text: string) => { console.log('Add to cell:', text); }; // Placeholder
-  const copyImageToClipboard = (url: string, cb?: () => void) => { console.log('Copy Img:', url); cb?.(); }; // Placeholder
-  const showCopyFeedback = (btn: HTMLButtonElement) => { console.log('Feedback:', btn); }; // Placeholder
+  // Consolidate callbacks access
+  const effectiveCallbacks = { ...options, ...callbacks };
 
   // --- Image Handling ---
   const isImageUrl = completeResponse.trim().startsWith('/images/') && 
@@ -316,7 +313,7 @@ export function renderBotMessageFinal(
 
   if (isImageUrl) {
       const fullImageUrl = `http://127.0.0.1:8000${completeResponse.trim()}`; // TODO: Make base URL configurable
-      renderImageMessage(contentDiv, fullImageUrl, options);
+      renderImageMessage(contentDiv, fullImageUrl, effectiveCallbacks);
   } else {
       // --- Markdown & Code Block Handling ---
       try {
@@ -328,13 +325,13 @@ export function renderBotMessageFinal(
           // --- Interrupt Handling ---
           const isInterrupt = completeResponse.startsWith('**[INTERRUPT]**');
           if (isInterrupt) {
-              renderInterruptButtons(contentDiv, options);
+              renderInterruptButtons(contentDiv, effectiveCallbacks);
           }
 
           // --- Code Block Enhancements ---
           const codeBlocks = contentDiv.querySelectorAll('pre code');
           codeBlocks.forEach(block => {
-              enhanceCodeBlock(block as HTMLElement, options);
+              enhanceCodeBlock(block as HTMLElement, effectiveCallbacks);
           });
 
       } catch (error) {
@@ -562,3 +559,21 @@ function addBotMessageActions(
 // - renderErrorMessage
 // - renderSystemMessage
 // - A main renderMessage function that delegates based on type? 
+
+/**
+ * Handles rendering individual messages (user, bot, system) into HTML elements.
+ */
+export class MessageRenderer {
+  // private callbacks: MessageRendererCallbacks; // Removed unused member
+  // private uiManager: UIManager; // Might not be needed directly if callbacks handle UI updates
+
+  constructor(/* callbacks: MessageRendererCallbacks */ /* , uiManager: UIManager */) {
+    // this.callbacks = callbacks; // Removed unused assignment
+    // this.uiManager = uiManager;
+  }
+
+  // Methods for rendering different types of messages can be added here
+  // For example:
+  // renderUserMessage(text: string, options?: MessageRenderOptions): HTMLDivElement { ... }
+  // renderBotMessage(text: string, options?: MessageRenderOptions): HTMLDivElement { ... }
+}

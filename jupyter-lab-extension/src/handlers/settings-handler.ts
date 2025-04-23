@@ -1,25 +1,29 @@
 import { SettingsState, AppSettings } from '../state/settings-state';
-import { ApiClient } from '../core/api-client';
+// import { ApiClient } from '../core/api-client'; // Commented out - unused import
 import { UIManager } from '../ui/ui-manager'; // Import UIManager if it provides notification service
+// import { SettingsModal } from '../ui/settings-modal'; // Commented out - unused import
 
 /**
  * Handles the logic related to the settings modal: 
  * displaying, hiding, populating, saving, and showing feedback.
  */
 export class SettingsHandler {
-    private settingsState: SettingsState;
-    private apiClient: ApiClient; // Keep a reference if it needs reconfiguration
+    private state: SettingsState;
+    // private apiClient: ApiClient; // Removed: unused variable
+    // private successCallback: (message: string) => void; // Commented out - unused
+    // private modal?: SettingsModal; // Commented out - unused
     private settingsModalContainer: HTMLDivElement;
     private uiManager: UIManager; // To show notifications
 
     constructor(
-        settingsState: SettingsState,
-        apiClient: ApiClient,
+        state: SettingsState,
+        // successCallback: (message: string) => void, // Commented out - unused parameter
         settingsModalContainer: HTMLDivElement,
         uiManager: UIManager // Pass UIManager for notifications
     ) {
-        this.settingsState = settingsState;
-        this.apiClient = apiClient; 
+        this.state = state;
+        // this.apiClient = apiClient; // Removed: unused variable
+        // this.successCallback = successCallback; // Commented out - unused assignment
         this.settingsModalContainer = settingsModalContainer;
         this.uiManager = uiManager;
 
@@ -35,7 +39,7 @@ export class SettingsHandler {
      * Populates the settings form with current values and displays the modal.
      */
     public showModal(): void {
-        const currentSettings = this.settingsState.getSettings();
+        const currentSettings = this.state.getSettings();
         if (currentSettings) {
             try {
                 // Query elements within the modal container
@@ -81,7 +85,7 @@ export class SettingsHandler {
 
         try {
             // Save settings using SettingsState
-            this.settingsState.saveSettings(settings);
+            this.state.saveSettings(settings);
             console.log('Settings saved via SettingsState:', settings);
             
             // Reconfigure ApiClient instance

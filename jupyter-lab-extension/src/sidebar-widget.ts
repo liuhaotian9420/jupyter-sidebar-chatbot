@@ -1,22 +1,33 @@
 import { Widget } from '@lumino/widgets';
 import { IDocumentManager } from '@jupyterlab/docmanager';
+import { JupyterFrontEnd } from '@jupyterlab/application';
 import { extensionIcon } from './core/icons';
 import { ApiClient } from './core/api-client';
-import { PopupMenuManager } from './handlers/popup-menu-manager';
-import { setupShortcuts, removeShortcuts } from './handlers/shortcut-handler';
+import { PopupMenuManager, MenuActionCallbacks } from './handlers/popup-menu-manager';
+import { setupShortcuts, removeShortcuts, ShortcutHandlerCallbacks } from './handlers/shortcut-handler';
 import { buildLayout, LayoutElements } from './ui/layout-builder';
 import { createSettingsModalElement, SettingsModalCallbacks } from './ui/settings-modal';
-import {
-  renderUserMessage,
-  renderBotMessage,
-  MessageRendererCallbacks
-} from './ui/message-renderer';
-import { ChatState, ChatHistoryItem, ChatMessage } from './state/chat-state';
-import { SettingsState, AppSettings } from './state/settings-state';
-import { InputHandler } from './handlers/input-handler';
+import { MessageRendererCallbacks, renderBotMessage } from './ui/message-renderer';
+import { ChatState } from './state/chat-state';
+import { SettingsState } from './state/settings-state';
+import { InputHandler, InputHandlerCallbacks } from './handlers/input-handler';
 import { MessageHandler } from './handlers/message-handler';
-import { HistoryHandler } from './handlers/history-handler';
+import { HistoryHandler, HistoryHandlerCallbacks } from './handlers/history-handler';
 import { SettingsHandler } from './handlers/settings-handler';
+import { UIManager, UIManagerCallbacks } from './ui/ui-manager';
+
+// --- Import Utility Functions ---
+import {
+    copyImageToClipboard as utilCopyImageToClipboard,
+    copyMessageToClipboard as utilCopyMessageToClipboard
+} from './utils/clipboard';
+import {
+    addMessageToCell,
+    getSelectedText,
+    getCurrentCellContent,
+    insertCellContentByIndex
+} from './utils/notebook-integration';
+import { createCodeRefPlaceholder } from './ui/code-ref-widget'; 
 
 /**
  * Main sidebar widget for the AI chat interface - Now acts as an orchestrator.
@@ -33,10 +44,62 @@ export class SimpleSidebarWidget extends Widget {
   private settingsHandler!: SettingsHandler;
   private layoutElements!: LayoutElements;
   private settingsModalContainer!: HTMLDivElement;
+  private uiManager!: UIManager;
 
   // Dependencies (JupyterLab services)
   private docManager: IDocumentManager;
-  private keyboardShortcutIndicator: HTMLDivElement;
+
+  // Placeholder for menu callbacks
+  private menuActionCallbacks: MenuActionCallbacks = {
+    insertCode: (code: string) => this.inputHandler.appendToInput(`\\n\`\`\`\\n${code}\\n\`\`\`\\n`), 
+    insertCell: (content: string) => {/* TODO: Implement add to new cell */}, 
+    insertFilePath: (path: string) => this.inputHandler.appendToInput(` ${path}`),
+    insertDirectoryPath: (path: string) => this.inputHandler.appendToInput(` ${path}`),
+    getSelectedText: () => {/* TODO: Implement get selected text */ return null; },
+    getCurrentCellContent: () => {/* TODO: Implement get current cell */ return null; },
+    insertCellByIndex: (index: number) => {/* TODO: Implement insert cell by index */},
+    insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => {
+        const refId = this.inputHandler.addCodeReference(code);
+        this.inputHandler.appendToInput(` [${refId}:${notebookName} cell ${cellIndex + 1} line ${lineNumber}]`);
+    }
+  };
+
+  // Placeholder for handler methods used in UIManager callbacks
+  private handleNewChat = () => { 
+      console.log('Handle New Chat clicked');
+      const newChat = this.chatState.createNewChat();
+      this.historyHandler?.loadChat(newChat.id);
+  };
+  private handleToggleHistory = () => { 
+      console.log('Handle Toggle History clicked');
+      this.historyHandler.toggleHistoryView(); 
+  };
+  private handleSendMessage = () => { 
+      console.log('Handle Send Message called from UI Manager callback');
+      // Trigger the InputHandler's internal logic which then calls MessageHandler
+      // This feels slightly redundant - maybe InputHandler should trigger send directly?
+      // Or maybe this callback shouldn't exist and UIManager calls InputHandler directly?
+      // For now, simulate Enter press logic:
+      const inputElement = this.layoutElements.inputField; // Get from layoutElements
+      const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
+      inputElement.dispatchEvent(event); 
+  };
+  private handleShowSettings = (event: MouseEvent) => { 
+      console.log('Handle Show Settings clicked');
+      this.settingsHandler.showModal(); 
+  };
+  private handleShowPopupMenu = (event: MouseEvent, targetButton: HTMLElement) => { 
+      console.log('Handle Show Popup Menu clicked');
+      // Calculate position relative to the button
+      const rect = targetButton.getBoundingClientRect();
+      // Position below the button
+      this.popupMenuManager.showPopupMenu(rect.left, rect.bottom + 5);
+  };
+  private handleUpdateTitle = () => {
+      const newTitle = this.layoutElements.titleInput?.value || 'Chat';
+      console.log('Handle Update Title called:', newTitle);
+      this.chatState.updateCurrentChatTitle(newTitle);
+  };
 
   constructor(docManager: IDocumentManager) {
     super();
@@ -54,195 +117,208 @@ export class SimpleSidebarWidget extends Widget {
     this.apiClient = new ApiClient(initialSettings?.apiUrl || undefined);
     this.chatState = new ChatState();
     this.popupMenuManager = new PopupMenuManager(this.docManager, this.node, {
-        // TODO: Verify actual callback names in PopupMenuManager and connect to InputHandler/Utils
         insertCode: (code: string) => this.inputHandler?.appendToInput(`@code ${code}`),
         insertCell: (content: string) => this.inputHandler?.appendToInput(`@cell ${content}`),
         insertFilePath: (path: string) => this.inputHandler?.appendToInput(`@file ${path}`),
-        insertDirectoryPath: (path: string) => this.inputHandler?.appendToInput(`@directory ${path}`), // Added missing callback
-        getSelectedText: () => { /* TODO: Call notebook-integration util */ return ''; },
-        getCurrentCellContent: () => { /* TODO: Call notebook-integration util */ return ''; },
-        insertCellByIndex: (index: number) => { /* TODO: Call notebook-integration util */ },
+        insertDirectoryPath: (path: string) => this.inputHandler?.appendToInput(`@directory ${path}`),
+        getSelectedText: getSelectedText,
+        getCurrentCellContent: getCurrentCellContent,
+        insertCellByIndex: (index: number) => insertCellContentByIndex(index, (content: string) => this.inputHandler?.appendToInput(`@${content}`)),
         insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => {
-            /* TODO: Delegate to InputHandler or code-ref-widget util */
+            if (!this.inputHandler) return;
+            const refId = this.inputHandler.addCodeReference(code);
+            const placeholder = createCodeRefPlaceholder(refId, notebookName, lineNumber);
+            this.inputHandler.appendToInput(placeholder);
         }
     });
 
-    // --- 2. Define Callbacks to Connect Components ---
-    const sendMessageCallback = (message: string /* removed: , isMarkdown: boolean */) => {
-        this.messageHandler.handleSendMessage(message); // Assuming signature is (message: string)
-    };
-    const sendAutoMessageCallback = (message: string) => {
-        this.messageHandler.handleSendAutoMessage(message);
-    };
-    const toggleHistoryCallback = () => {
-        this.historyHandler.toggleHistoryView();
-    };
-    const loadChatCallback = (chatId: string) => {
-        this.historyHandler.loadChat(chatId);
-    };
+    // --- 2. Define Callbacks (used by buildLayout and Handlers) ---
+
+    // Callbacks for UI actions (passed to buildLayout)
     const createNewChatCallback = () => {
         const newChat = this.chatState.createNewChat();
-        this.historyHandler.loadChat(newChat.id); // Assume loadChat handles switching view
+        this.historyHandler?.loadChat(newChat.id);
+    };
+    const toggleHistoryCallback = () => {
+        this.historyHandler?.toggleHistoryView();
+    };
+    const showSettingsCallback = () => {
+        this.settingsHandler?.showModal();
     };
     const updateTitleCallback = (newTitle: string) => {
         this.chatState.updateCurrentChatTitle(newTitle);
-        // TODO: Verify SettingsHandler method for notifications and signature
-        // this.settingsHandler?.showNotification('Chat title updated');
+        this.uiManager?.showNotification('Chat title updated', 'info');
     };
-    const showSettingsCallback = () => {
-        // TODO: Verify SettingsHandler method name
-        // this.settingsHandler.showModal();
+    const showPopupMenuCallback = (event: MouseEvent) => {
+         const rect = (event.target as HTMLElement).getBoundingClientRect();
+         this.popupMenuManager.showPopupMenu(rect.left + 60, rect.top - 20);
+         event.preventDefault();
+         event.stopPropagation();
     };
+    const sendMessageViaButtonCallback = () => {
+        const inputElement = this.layoutElements.inputField; 
+        const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
+        inputElement.dispatchEvent(event); 
+    };
+     const toggleMarkdownModeCallback = (isMarkdown: boolean) => {
+        this.inputHandler?.setMarkdownMode(isMarkdown);
+     };
+     const toggleExpandInputCallback = (button: HTMLButtonElement) => {
+        this.inputHandler?.toggleInputExpansion();
+     };
+
+    // Callbacks for Message Rendering (passed to MessageHandler -> UIManager -> renderers)
     const messageRendererCallbacks: MessageRendererCallbacks = {
-        showCopyFeedback: (button: HTMLButtonElement) => { /* TODO: Implement via util */ },
-        addMessageToCell: (content: string) => { /* TODO: Call notebook-integration util */ },
-        copyToClipboard: (text: string, feedbackCb: () => void) => { /* TODO: Call clipboard util */ },
-        copyImageToClipboard: (imageUrl: string, feedbackCb: () => void) => { /* TODO: Call clipboard util */ },
-        copyMessageToClipboard: (text: string, feedbackCb: () => void) => { /* TODO: Call clipboard util */ },
-        handleConfirmInterrupt: () => {
-            // TODO: Call public method on MessageHandler if addMessage is private
-            // this.messageHandler.addMessage('confirmed', 'user', false);
-            this.messageHandler.handleSendAutoMessage('confirmed');
+         showCopyFeedback: (button: HTMLButtonElement, success: boolean = true) => {
+            const originalHTML = button.innerHTML;
+            button.innerHTML = success ? 'Copied!' : 'Failed!';
+            button.disabled = true;
+            setTimeout(() => {
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }, 1000);
         },
-        handleRejectInterrupt: () => {
-            // TODO: Call public method on MessageHandler if addMessage is private
-            // this.messageHandler.addMessage('rejected', 'user', false);
-            this.messageHandler.handleSendAutoMessage('rejected');
-        }
-    };
-    const settingsModalCallbacks: SettingsModalCallbacks = {
-      // TODO: Verify expected signature for createSettingsModalElement
-      // handleSave: (settings: AppSettings) => this.settingsHandler.saveSettings(settings),
-      handleSave: () => { /* TODO: call appropriate settingsHandler method */ },
-      // TODO: Verify hide method on SettingsHandler
-      // handleCancel: () => this.settingsHandler.hideSettingsModal()
-      handleCancel: () => { /* TODO: call appropriate settingsHandler method */ }
-    };
-    const shortcutCallbacks: any = { // Using any until ShortcutCallbacks type is resolved
-        showIndicator: (text: string) => this.showKeyboardShortcutIndicator(text),
+        addMessageToCell: addMessageToCell,
+        copyToClipboard: (text: string, feedbackCb?: () => void) => {
+             navigator.clipboard.writeText(text).then(() => feedbackCb?.()).catch(err => {
+                 console.error('Failed to copy text: ', err);
+                 feedbackCb?.();
+             });
+        },
+        copyImageToClipboard: (imageUrl: string, feedbackCb?: () => void) => {
+             utilCopyImageToClipboard(imageUrl, (success) => {
+                 feedbackCb?.();
+             });
+        },
+        copyMessageToClipboard: (text: string, feedbackCb: () => void) => {
+            utilCopyMessageToClipboard(text, (success) => {
+                 feedbackCb();
+            });
+        },
+         handleConfirmInterrupt: () => {
+            this.messageHandler?.handleSendAutoMessage('confirmed');
+         },
+         handleRejectInterrupt: () => {
+            this.messageHandler?.handleSendAutoMessage('rejected');
+         }
+     };
+
+     const settingsModalCallbacks: SettingsModalCallbacks = {
+       handleSave: () => { this.settingsHandler?.saveSettings(); },
+       handleCancel: () => { this.settingsHandler?.hideModal(); }
+     };
+
+     const historyHandlerCallbacks: HistoryHandlerCallbacks = {
+        updateTitleInput: (title: string) => this.uiManager.updateTitleInput(title),
+        clearMessageContainer: () => this.uiManager.clearMessageContainer(),
+        addRenderedMessage: (messageElement: HTMLElement) => this.uiManager.addChatMessageElement(messageElement)
+     };
+
+     const inputHandlerCallbacks: InputHandlerCallbacks = {
+        handleSendMessage: (message: string) => {
+          if (this.messageHandler) {
+            this.messageHandler.handleSendMessage(message);
+          } else {
+            console.error('MessageHandler not initialized when trying to send message from InputHandler');
+          }
+        },
+        showPopupMenu: (left: number, top: number) => this.popupMenuManager.showPopupMenu(left, top),
+        hidePopupMenu: () => this.popupMenuManager.hidePopupMenu(),
+        updatePlaceholder: (isMarkdown: boolean) => {
+            this.layoutElements.inputField.placeholder = isMarkdown ? 'Enter markdown...' : 'Ask anything...';
+        },
+        toggleInputExpansionUI: (isExpanded: boolean) => {
+            this.layoutElements.expandButton.textContent = isExpanded ? 'Collapse' : 'Expand';
+            this.layoutElements.expandButton.title = isExpanded ? 'Collapse input' : 'Expand input';
+        },
+        getCodeRefMap: () => this.inputHandler?.getCodeReferenceMap() || new Map<string, string>(),
+        resetCodeRefMap: () => this.inputHandler?.resetCodeReferences()
+      };
+
+     const shortcutCallbacks: ShortcutHandlerCallbacks = {
+        showIndicator: (text: string) => this.uiManager?.showIndicator(text),
         appendToInput: (text: string) => this.inputHandler?.appendToInput(text),
-        focusInput: () => this.layoutElements?.inputField?.focus(),
-        showSidebar: () => { if (this.isHidden) { this.show(); } },
-        showPopupMenu: (x: number, y: number) => this.popupMenuManager.showPopupMenu(x, y)
-    };
+        showWidget: () => { if (this.isHidden) { this.show(); } },
+        focusInput: () => this.layoutElements?.inputField?.focus()
+     };
 
     // --- 3. Build UI Layout ---
     this.layoutElements = buildLayout({
-        // TODO: Verify expected callbacks for buildLayout
-        // handleNewChat: createNewChatCallback,
-        handleToggleHistory: toggleHistoryCallback,
-        handleShowSettings: showSettingsCallback,
-        handleShowPopupMenu: (event: MouseEvent, targetButton: HTMLElement) => {
-            const rect = targetButton.getBoundingClientRect();
-            this.popupMenuManager.showPopupMenu(rect.left + 60, rect.top - 20);
-            event.preventDefault();
-            event.stopPropagation();
-            this.showKeyboardShortcutIndicator('Browse cells, code, files, and more');
-        },
-        handleUpdateTitle: () => {
-            const newTitle = this.layoutElements.titleInput.value;
-            updateTitleCallback(newTitle);
-        }
+        onNewChatClick: createNewChatCallback,
+        onHistoryToggleClick: toggleHistoryCallback,
+        onSettingsClick: showSettingsCallback,
+        onTitleChange: updateTitleCallback,
+        onAtButtonClick: showPopupMenuCallback,
+        onSendMessageClick: sendMessageViaButtonCallback,
+        onMarkdownToggleChange: toggleMarkdownModeCallback,
+        onExpandToggleClick: toggleExpandInputCallback,
     });
     this.settingsModalContainer = createSettingsModalElement(settingsModalCallbacks);
 
-    // --- 4. Initialize Handlers (Inject Dependencies) ---
-    // TODO: Verify constructor signatures for all handlers
-    const messageHandlerDeps: any = {
-        apiClient: this.apiClient,
-        chatState: this.chatState,
-        messageContainer: this.layoutElements.messageContainer,
-        renderers: { renderUserMessage, renderBotMessage },
-        callbacks: messageRendererCallbacks,
-        scrollToBottom: () => this.layoutElements.messageContainer.scrollTop = this.layoutElements.messageContainer.scrollHeight
+    // --- Initialize State Managers ---
+    this.chatState = new ChatState();
+    this.settingsState = new SettingsState();
+
+    // --- Initialize Core Components ---
+    this.apiClient = new ApiClient();
+
+    // --- Initialize UI Manager (needs dependencies) ---
+    const uiManagerCallbacks: UIManagerCallbacks = {
+        handleNewChat: this.handleNewChat,
+        handleToggleHistory: this.handleToggleHistory,
+        handleSendMessage: this.handleSendMessage,
+        handleShowSettings: this.handleShowSettings,
+        handleShowPopupMenu: this.handleShowPopupMenu,
+        handleUpdateTitle: this.handleUpdateTitle
     };
-    // this.messageHandler = new MessageHandler(messageHandlerDeps);
-    this.messageHandler = new MessageHandler(
-        this.apiClient,
-        this.chatState,
-        this.layoutElements.messageContainer,
-        { renderUserMessage, renderBotMessage },
-        messageRendererCallbacks
-        // Add other required args based on actual constructor
+    this.uiManager = new UIManager(
+        this.popupMenuManager, 
+        uiManagerCallbacks, 
+        this.layoutElements
     );
 
-    const historyHandlerDeps: any = {
-        chatState: this.chatState,
-        layoutElements: this.layoutElements,
-        loadChatCallback: loadChatCallback,
-    };
-    // this.historyHandler = new HistoryHandler(historyHandlerDeps);
+    // --- 4. Initialize Handlers (using UI elements and core components) ---
+
+    this.inputHandler = new InputHandler(
+      this.layoutElements.inputField,
+      inputHandlerCallbacks 
+    );
+
+    this.messageHandler = new MessageHandler(
+      this.apiClient,
+      this.chatState,
+      this.uiManager, 
+      messageRendererCallbacks,
+      this.inputHandler
+    ); 
+
     this.historyHandler = new HistoryHandler(
         this.chatState,
-        this.layoutElements,
-        loadChatCallback
-        // Add other required args based on actual constructor
+        this.uiManager,
+        historyHandlerCallbacks,
+        messageRendererCallbacks
     );
 
-    // this.inputHandler = new InputHandler({
-    //     inputElement: this.layoutElements.inputField,
-    //     popupMenuManager: this.popupMenuManager,
-    //     sendMessageCallback: sendMessageCallback,
-    //     docManager: this.docManager
-    // });
-    this.inputHandler = new InputHandler(
-        this.layoutElements.inputField,
-        this.popupMenuManager,
-        {
-            sendMessage: sendMessageCallback,
-            // Add other required callbacks
-        }
-        // Add docManager if needed
-    );
-
-    const settingsHandlerDeps: any = {
-        settingsState: this.settingsState,
-        apiClient: this.apiClient,
-        settingsModalContainer: this.settingsModalContainer,
-        widgetNode: this.node,
-        initialSettings: initialSettings
-    };
-    // this.settingsHandler = new SettingsHandler(settingsHandlerDeps);
     this.settingsHandler = new SettingsHandler(
         this.settingsState,
-        this.apiClient,
         this.settingsModalContainer,
-        this.node
-        // Pass initial settings if required by constructor
+        this.uiManager
     );
 
-    // TODO: Verify setupShortcuts signature
-    setupShortcuts(
-        // this.layoutElements.inputField,
-        this.inputHandler, // Pass InputHandler instance? Check signature
-        this.popupMenuManager,
-        shortcutCallbacks
-    );
+    // --- 5. Final Setup (Attach event listeners, connect signals, etc.) ---
 
-    // --- 5. Initial UI State Setup ---
-    // TODO: Verify LayoutElements properties
-    // this.node.appendChild(this.layoutElements.contentWrapper);
+    const initialChatId = this.chatState.getCurrentChatId();
+    if (initialChatId) {
+        this.historyHandler.loadChat(initialChatId);
+    } else {
+        const newChat = this.chatState.createNewChat();
+        this.historyHandler.loadChat(newChat.id);
+    }
+
+    setupShortcuts(this.inputHandler, this.popupMenuManager, shortcutCallbacks);
+
+    this.node.appendChild(this.layoutElements.mainElement);
     this.node.appendChild(this.settingsModalContainer);
-
-    // TODO: Verify HistoryHandler initialization method
-    // this.historyHandler.initialize();
-
-    // Setup indicator
-    this.keyboardShortcutIndicator = document.createElement('div');
-    this.keyboardShortcutIndicator.className = 'jp-llm-ext-keyboard-shortcut-indicator';
-    this.node.appendChild(this.keyboardShortcutIndicator);
-  }
-
-  /**
-   * Shows a visual indicator for keyboard shortcuts
-   * TODO: This logic might move to a dedicated UI service or ShortcutHandler
-   */
-  private showKeyboardShortcutIndicator(text: string): void {
-    this.keyboardShortcutIndicator.textContent = text;
-    this.keyboardShortcutIndicator.classList.add('visible');
-    setTimeout(() => {
-      this.keyboardShortcutIndicator.classList.remove('visible');
-    }, 1000);
   }
 
   /**
@@ -252,16 +328,10 @@ export class SimpleSidebarWidget extends Widget {
     if (this.isDisposed) {
       return;
     }
-    removeShortcuts();
+    removeShortcuts(); 
 
-    // TODO: Verify dispose methods on handlers
-    // this.inputHandler?.dispose();
-    // this.messageHandler?.dispose();
-    // this.historyHandler?.dispose();
-    // this.settingsHandler?.dispose();
+    this.inputHandler?.dispose();
     this.popupMenuManager?.dispose();
-
-    this.keyboardShortcutIndicator?.remove();
 
     super.dispose();
   }

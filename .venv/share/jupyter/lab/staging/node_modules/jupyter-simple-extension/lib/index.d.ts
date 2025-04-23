@@ -1,6 +1,6 @@
 import { JupyterFrontEndPlugin } from '@jupyterlab/application';
 import '../style/index.css';
-export { ApiClient } from './api-client';
+export { ApiClient } from './core/api-client';
 /**
  * Initialization data for the jupyter-simple-extension extension.
  */

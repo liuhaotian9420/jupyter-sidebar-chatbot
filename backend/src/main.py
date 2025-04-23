@@ -91,8 +91,8 @@ INTERRUPT_MESSAGE = "**[INTERRUPT]** This is an interruption in the conversation
 # Simplified MOCK_RESPONSES - only contains normal responses now
 MOCK_RESPONSES = [
     # Send the URL to the image
-    # image_url,
-    # INTERRUPT_MESSAGE,
+    image_url,
+    INTERRUPT_MESSAGE,
     # A standard text response
     "This is a standard mock response.",
     # Code blocks with different languages

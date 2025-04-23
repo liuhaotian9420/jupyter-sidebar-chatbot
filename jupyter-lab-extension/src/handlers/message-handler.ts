@@ -102,7 +102,7 @@ export class MessageHandler {
     private streamAndRenderResponse(messageToSend: string): void {
         // --- Prepare streaming UI elements (managed by UIManager) ---
         // UIManager should provide a method to create/get these elements
-        const { streamingDiv, contentDiv, botMessageDiv } = this.uiManager.createBotMessageContainer();
+        const { streamingDiv, contentDiv } = this.uiManager.createBotMessageContainer();
 
         let completeResponse = '';
         const cellContext = getCurrentCellContent(); // Use utility

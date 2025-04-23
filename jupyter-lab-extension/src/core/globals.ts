@@ -1,6 +1,6 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { INotebookTracker } from '@jupyterlab/notebook';
-import { IGlobalReferences } from './types';
+import { IGlobalReferences } from '../types';
 
 /**
  * Global references to key components in the application

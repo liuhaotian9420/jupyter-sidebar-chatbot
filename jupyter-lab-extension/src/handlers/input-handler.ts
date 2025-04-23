@@ -1,4 +1,5 @@
-import { PopupMenuManager } from './popup-menu-manager';
+// import { PopupMenuManager, MenuActionCallbacks } from './popup-menu-manager'; // Removed unused import
+// import { UIManager } from '../ui/ui-manager'; // Removed unused import
 
 // Interface for callbacks provided to the InputHandler
 export interface InputHandlerCallbacks {
@@ -18,26 +19,31 @@ export interface InputHandlerCallbacks {
  * Handles events and logic related to the chat input field.
  */
 export class InputHandler {
-  private inputField: HTMLTextAreaElement;
-  private popupMenuManager: PopupMenuManager;
+  private chatInput: HTMLTextAreaElement;
   private callbacks: InputHandlerCallbacks;
+  // private uiManager: UIManager; // Removed unused member
+
+  // --- Code Reference State ---
+  private codeRefMap: Map<string, string> = new Map();
+  private nextRefId = 1;
+  // ---------------------------
 
   private hasAtSymbol: boolean = false;
   private isMarkdownMode: boolean = false; // Internal state, potentially synced with UIManager
   private isInputExpanded: boolean = false; // Internal state, potentially synced with UIManager
 
   constructor(
-    inputField: HTMLTextAreaElement,
-    popupMenuManager: PopupMenuManager,
+    chatInput: HTMLTextAreaElement,
     callbacks: InputHandlerCallbacks
+    // uiManager: UIManager // Removed unused parameter
   ) {
-    this.inputField = inputField;
-    this.popupMenuManager = popupMenuManager;
+    this.chatInput = chatInput;
     this.callbacks = callbacks;
+    // this.uiManager = uiManager; // Removed unused assignment
 
     // Bind event listeners
-    this.inputField.addEventListener('keypress', this._handleKeyPress);
-    this.inputField.addEventListener('input', this._handleInput);
+    this.chatInput.addEventListener('keypress', this._handleKeyPress);
+    this.chatInput.addEventListener('input', this._handleInput);
     // Note: Actual markdown toggle and expand buttons are likely managed by UIManager,
     // which would then call methods like `setMarkdownMode` or `toggleExpansion` on this handler.
   }
@@ -46,8 +52,8 @@ export class InputHandler {
    * Removes event listeners.
    */
   dispose(): void {
-    this.inputField.removeEventListener('keypress', this._handleKeyPress);
-    this.inputField.removeEventListener('input', this._handleInput);
+    this.chatInput.removeEventListener('keypress', this._handleKeyPress);
+    this.chatInput.removeEventListener('input', this._handleInput);
   }
 
   /**
@@ -55,15 +61,18 @@ export class InputHandler {
    */
   public appendToInput(text: string): void {
     try {
-      const currentValue = this.inputField.value;
-      this.inputField.value = currentValue ? `${currentValue}${text}` : text;
+      const currentValue = this.chatInput.value;
+      // Get current cursor position
+      const start = this.chatInput.selectionStart;
+      const end = this.chatInput.selectionEnd;
+      
+      // Insert text at cursor position
+      this.chatInput.value = currentValue.slice(0, start) + text + currentValue.slice(end);
 
-      // Focus the input field and move cursor to end
-      this.inputField.focus();
-      this.inputField.setSelectionRange(
-        this.inputField.value.length,
-        this.inputField.value.length
-      );
+      // Move cursor to end of inserted text
+      const newCursorPos = start + text.length;
+      this.chatInput.focus();
+      this.chatInput.setSelectionRange(newCursorPos, newCursorPos);
     } catch (error) {
       console.error('Error appending to input:', error);
     }
@@ -73,10 +82,11 @@ export class InputHandler {
    * Clears the input field and resets associated state after sending.
    */
   public clearInput(): void {
-     this.inputField.value = '';
-     this.callbacks.resetCodeRefMap(); // Reset code references map
-     this.inputField.rows = 1;
-     this.inputField.style.height = ''; // Reset height
+     this.chatInput.value = '';
+     // Directly reset internal state instead of relying on callback
+     this.resetCodeReferences(); 
+     this.chatInput.rows = 1;
+     this.chatInput.style.height = ''; // Reset height
      this.hasAtSymbol = false; // Reset @ state
       
      // Reset expand button state if it was expanded
@@ -92,7 +102,7 @@ export class InputHandler {
     this.isMarkdownMode = isMarkdown;
     this.callbacks.updatePlaceholder(this.isMarkdownMode);
     // Update placeholder directly (alternative to callback)
-    // this.inputField.placeholder = this.isMarkdownMode ? 
+    // this.chatInput.placeholder = this.isMarkdownMode ? 
     //   'Write markdown here...' : 
     //   'Ask me anything...';
   }
@@ -103,16 +113,75 @@ export class InputHandler {
   public toggleInputExpansion(forceState?: boolean): void {
     this.isInputExpanded = forceState !== undefined ? forceState : !this.isInputExpanded;
     if (this.isInputExpanded) {
-      this.inputField.style.height = '200px'; // Example height
-      this.inputField.style.resize = 'vertical';
+      this.chatInput.style.height = '200px'; // Example height
+      this.chatInput.style.resize = 'vertical';
     } else {
-      this.inputField.style.height = ''; // Reset height
-      this.inputField.style.resize = 'none';
-      this.inputField.rows = 1; // Ensure it collapses back to 1 row height
+      this.chatInput.style.height = ''; // Reset height
+      this.chatInput.style.resize = 'none';
+      this.chatInput.rows = 1; // Ensure it collapses back to 1 row height
     }
     // Notify UIManager/LayoutBuilder to update button appearance
     this.callbacks.toggleInputExpansionUI(this.isInputExpanded);
   }
+
+  // --- Code Reference Methods ---
+  /**
+   * Adds a code reference to the internal map and returns its ID.
+   * @param code The actual code content.
+   * @returns The generated reference ID (e.g., "ref-1").
+   */
+  public addCodeReference(code: string): string {
+      const refId = `ref-${this.nextRefId++}`;
+      this.codeRefMap.set(refId, code);
+      console.log('Added code reference:', refId, '->', code.substring(0, 50) + '...'); // Debug log
+      return refId;
+  }
+
+  /**
+   * Returns the current map of code references.
+   */
+  public getCodeReferenceMap(): Map<string, string> {
+      return this.codeRefMap;
+  }
+
+  /**
+   * Clears the code reference map and resets the ID counter.
+   */
+  public resetCodeReferences(): void {
+      this.codeRefMap.clear();
+      this.nextRefId = 1;
+      console.log('Code references reset.'); // Debug log
+  }
+  
+  /**
+   * Replaces code reference placeholders (e.g., "[ref-1]") in a message string
+   * with the actual code from the map.
+   * @param message The message string potentially containing placeholders.
+   * @returns The message string with placeholders resolved.
+   */
+  private resolveCodeReferences(message: string): string {
+      if (this.codeRefMap.size === 0) {
+          return message; // No references to resolve
+      }
+      
+      // Regex to find placeholders like [ref-1], [ref-12], etc.
+      const placeholderRegex = /\[(ref-\d+)\]/g;
+      
+      let resolvedMessage = message.replace(placeholderRegex, (match, refId) => {
+          const code = this.codeRefMap.get(refId);
+          if (code !== undefined) {
+              console.log('Resolving code reference:', refId); // Debug log
+              // Add context around the replaced code
+              return `\n\`\`\`\n${code}\n\`\`\`\n`; 
+          } else {
+              console.warn('Could not find code for reference:', refId); // Warn if ref ID not found
+              return match; // Keep the placeholder if not found
+          }
+      });
+      
+      return resolvedMessage;
+  }
+  // -----------------------------
 
   // --- Private Event Handlers ---
 
@@ -120,10 +189,13 @@ export class InputHandler {
     // Handle Enter key (send message)
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      const message = this.inputField.value.trim();
-      if (message) {
-          this.callbacks.handleSendMessage(message);
-          // Clearing is handled separately after message send is confirmed successful
+      const rawMessage = this.chatInput.value.trim();
+      if (rawMessage) {
+          // Resolve code references BEFORE sending
+          const resolvedMessage = this.resolveCodeReferences(rawMessage);
+          console.log('Sending resolved message:', resolvedMessage); // Debug log
+          this.callbacks.handleSendMessage(resolvedMessage);
+          // Clearing is handled separately (e.g., by MessageHandler calling clearInput)
       }
     }
     // Note: '@' key handling might be better in handleKeyDown if needed globally,
@@ -133,10 +205,10 @@ export class InputHandler {
 
   private _handleInput = (): void => {
     // Handle @ symbol removal to hide popup
-    const cursorPosition = this.inputField.selectionStart;
+    const cursorPosition = this.chatInput.selectionStart;
     if (cursorPosition === null) return; // Type guard
 
-    const textBeforeCursor = this.inputField.value.slice(0, cursorPosition);
+    const textBeforeCursor = this.chatInput.value.slice(0, cursorPosition);
     // Check if the character immediately before the cursor is '@'
     // and if it's preceded by whitespace or is at the start of the input.
     const isAtSymbolContext = textBeforeCursor.endsWith('@') &&

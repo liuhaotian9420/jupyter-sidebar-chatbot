@@ -633,6 +633,9 @@
             "highlight.js": {
               "requiredVersion": "^11.11.1"
             },
+            "uuid": {
+              "requiredVersion": "^11.1.0"
+            },
             "react-highlight-words": {
               "requiredVersion": "^0.20.0"
             },

@@ -706,6 +706,7 @@
             "dompurify": {},
             "highlight.js": {},
             "marked": {},
+            "uuid": {},
             "jupyter-simple-extension": {
               "version": "0.1.0",
               "singleton": true,

@@ -1,6 +1,7 @@
-import { Widget } from '@lumino/widgets';
-import { IDocumentManager } from '@jupyterlab/docmanager';
+// import { Widget } from '@lumino/widgets'; // Commented out - unused import
+// import { IDocumentManager } from '@jupyterlab/docmanager'; // Commented out - unused import
 import { PopupMenuManager } from '../handlers/popup-menu-manager';
+import { LayoutElements } from './layout-builder';
 
 /**
  * Callbacks for UI actions to be handled by the main widget or handlers.
@@ -29,13 +30,17 @@ export interface UIElements {
 }
 
 /**
- * Manages the creation, manipulation, and state of the sidebar's DOM elements.
+ * Manages UI elements and transitions for the chat interface.
+ * This acts as a central point for UI manipulations, simplifying dependencies for handlers.
  */
 export class UIManager {
-    private docManager: IDocumentManager;
+    // private docManager: IDocumentManager; // Commented out - unused
     private popupMenuManager: PopupMenuManager;
     private callbacks: UIManagerCallbacks;
-    private widgetNode: HTMLElement;
+    // private widgetNode: HTMLElement; // Commented out - unused
+    private layoutElements: LayoutElements;
+    private notificationTimeout: number | null = null; // Timeout for the shortcut indicator
+    private keyboardShortcutIndicator!: HTMLDivElement; // Add property for the indicator
 
     // References to managed elements
     private inputField!: HTMLTextAreaElement;
@@ -51,18 +56,38 @@ export class UIManager {
     private isMarkdownMode: boolean = false;
 
     constructor(
-        docManager: IDocumentManager,
+        // docManager: IDocumentManager, // Commented out - unused parameter
         popupMenuManager: PopupMenuManager,
-        widgetNode: HTMLElement,
-        callbacks: UIManagerCallbacks
+        // widgetNode: HTMLElement, // Commented out - unused parameter
+        callbacks: UIManagerCallbacks,
+        layoutElements: LayoutElements
     ) {
-        this.docManager = docManager; // Needed for PopupMenuManager potentially
+        // this.docManager = docManager; // Commented out - unused assignment
         this.popupMenuManager = popupMenuManager; // Needed for '@' button action
-        this.widgetNode = widgetNode; // Parent node for attaching elements
+        // this.widgetNode = widgetNode; // Commented out - unused assignment
         this.callbacks = callbacks; // Callbacks to trigger widget/handler logic
+        this.layoutElements = layoutElements;
 
         // Initialize elements that are created outside createLayout if any
         // In this case, all core elements are created within createLayout
+
+        // Create and append the indicator element
+        this.keyboardShortcutIndicator = document.createElement('div');
+        this.keyboardShortcutIndicator.className = 'jp-llm-ext-keyboard-shortcut-indicator';
+        // Append it to the main element managed by the UIManager
+        // Ensure mainElement exists before appending
+        if (this.layoutElements.mainElement) {
+             this.layoutElements.mainElement.appendChild(this.keyboardShortcutIndicator);
+        } else {
+            console.error('UIManager: Main layout element not found during indicator initialization.');
+        }
+    }
+
+    /**
+     * Returns the core layout elements.
+     */
+    public getUIElements(): LayoutElements {
+        return this.layoutElements;
     }
 
     /**
@@ -282,6 +307,137 @@ export class UIManager {
             this.messageContainer.scrollTop = this.messageContainer.scrollHeight;
         } else {
             console.error('Message container not initialized in UIManager.');
+        }
+    }
+
+    /**
+     * Switches the view to show the chat history.
+     */
+    public showHistoryView(): void {
+        this.layoutElements.messageContainer.style.display = 'none';
+        this.layoutElements.historyContainer.style.display = 'block';
+        this.layoutElements.bottomBarContainer.style.display = 'none';
+        // Optionally update header/title elements if needed
+    }
+
+    /**
+     * Switches the view to show the main chat interface.
+     */
+    public showChatView(): void {
+        this.layoutElements.historyContainer.style.display = 'none';
+        this.layoutElements.messageContainer.style.display = 'block';
+        this.layoutElements.bottomBarContainer.style.display = 'flex'; // Assuming flex display
+        this.scrollToBottom(); // Scroll down when showing chat
+    }
+
+    /**
+     * Clears all messages from the message container.
+     */
+    public clearMessageContainer(): void {
+        this.layoutElements.messageContainer.innerHTML = '';
+    }
+
+    /**
+     * Updates the value of the title input field.
+     */
+    public updateTitleInput(title: string): void {
+        if (this.layoutElements.titleInput) {
+            this.layoutElements.titleInput.value = title;
+        }
+    }
+
+    /**
+     * Creates and returns a container structure for a bot message,
+     * including elements for streaming text and final rendered content.
+     * This helps manage the transition from streaming to final message display.
+     */
+    public createBotMessageContainer(): {
+        botMessageDiv: HTMLDivElement;
+        streamingDiv: HTMLDivElement;
+        contentDiv: HTMLDivElement;
+    } {
+        const botMessageDiv = document.createElement('div');
+        botMessageDiv.className = 'jp-llm-ext-bot-message'; // Base class
+
+        // Div for streaming content (initially visible)
+        const streamingDiv = document.createElement('div');
+        streamingDiv.className = 'jp-llm-ext-streaming-content';
+        streamingDiv.style.display = 'block'; // Show streaming initially
+
+        // Div for final rendered content (initially hidden)
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'jp-llm-ext-rendered-content';
+        contentDiv.style.display = 'none'; // Hide final content initially
+
+        botMessageDiv.appendChild(streamingDiv);
+        botMessageDiv.appendChild(contentDiv);
+
+        // Add the whole container to the message list *before* streaming starts
+        this.addChatMessageElement(botMessageDiv);
+
+        return { botMessageDiv, streamingDiv, contentDiv };
+    }
+
+    /**
+     * Displays a temporary notification message.
+     * TODO: Implement a more robust notification system (e.g., toast).
+     */
+    public showNotification(message: string, type: 'success' | 'error' | 'info', duration: number = 3000): void {
+        console.log(`Notification (${type}): ${message}`);
+
+        // Basic temporary implementation using the existing indicator element
+        const indicator = this.layoutElements.mainElement.querySelector('.jp-llm-ext-keyboard-shortcut-indicator') as HTMLDivElement;
+        if (indicator) {
+             if (this.notificationTimeout) {
+                clearTimeout(this.notificationTimeout); // Clear previous timeout
+            }
+            indicator.textContent = message;
+            indicator.className = `jp-llm-ext-keyboard-shortcut-indicator visible jp-llm-ext-notification-${type}`; // Add type class
+            
+            this.notificationTimeout = window.setTimeout(() => {
+                indicator.classList.remove('visible');
+                 this.notificationTimeout = null;
+            }, duration);
+        } else {
+            console.warn('Notification indicator element not found for UIManager.');
+        }
+    }
+
+    /**
+     * Shows a visual indicator for keyboard shortcuts.
+     * @param text The text to display in the indicator.
+     */
+    public showIndicator(text: string): void {
+        if (!this.keyboardShortcutIndicator) return; // Guard
+
+        this.keyboardShortcutIndicator.textContent = text;
+        this.keyboardShortcutIndicator.classList.add('visible');
+
+        // Clear any existing timeout to prevent multiple timeouts running
+        if (this.notificationTimeout) {
+            clearTimeout(this.notificationTimeout);
+        }
+
+        // Set new timeout to hide the indicator
+        this.notificationTimeout = window.setTimeout(() => {
+            if (this.keyboardShortcutIndicator) { // Check if element still exists
+                this.keyboardShortcutIndicator.classList.remove('visible');
+            }
+            this.notificationTimeout = null;
+        }, 1000); // Hide after 1 second
+    }
+
+    /**
+     * Clears the indicator immediately and cancels any pending hide timeout.
+     * Useful if the widget is hidden while the indicator is shown.
+     */
+    public clearIndicator(): void {
+         if (!this.keyboardShortcutIndicator) return;
+         this.keyboardShortcutIndicator.classList.remove('visible');
+         this.keyboardShortcutIndicator.textContent = '';
+         if (this.notificationTimeout) {
+            clearTimeout(this.notificationTimeout);
+            this.notificationTimeout = null;
         }
     }
 

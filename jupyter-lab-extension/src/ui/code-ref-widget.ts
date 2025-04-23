@@ -83,4 +83,22 @@ export function defaultCodeRefToggleLogic(toggleButton: HTMLButtonElement, conte
   const isVisible = contentElement.style.display !== 'none';
   contentElement.style.display = isVisible ? 'none' : 'block'; // Or 'inline-block'/'inline' depending on desired layout
   toggleButton.textContent = isVisible ? '⯈' : '⯆'; // Update triangle direction
+}
+
+/**
+ * Creates a textual placeholder for a code reference.
+ * 
+ * @param refId - The unique identifier for the reference (e.g., "ref-1").
+ * @param notebookName - The name of the notebook (optional, for future display enhancements).
+ * @param lineNumber - The starting line number of the code (optional, for future display enhancements).
+ * @returns A string placeholder like "[ref-1]".
+ */
+export function createCodeRefPlaceholder(
+  refId: string, 
+  notebookName?: string, // Keep optional for now
+  lineNumber?: number // Keep optional for now
+): string {
+  // Keep it simple for now, just the ID.
+  // Display details like notebook/line could be added later if needed.
+  return `[${refId}]`;
 } 

@@ -9,7 +9,7 @@ export interface SettingsModalCallbacks {
      * The implementation should read the values from the form inputs,
      * save them, and potentially close the modal.
      */
-    handleSave: () => void;
+    handleSave: (settings: AppSettings) => void;
     /**
      * Called when the Cancel button is clicked.
      * The implementation should typically close the modal.
@@ -101,7 +101,13 @@ export function createSettingsModalElement(callbacks: SettingsModalCallbacks): H
     saveBtn.addEventListener('click', (event: MouseEvent) => {
         event.preventDefault();
         // The callback implementation will handle reading values and saving
-        callbacks.handleSave();
+        const settings: AppSettings = {
+            apiKey: apiKeyInput.value,
+            apiUrl: apiUrlInput.value,
+            rules: rulesInput.value,
+            provider: providerSelect.value
+        };
+        callbacks.handleSave(settings);
     });
 
     const cancelBtn = document.createElement('button');
@@ -120,4 +126,24 @@ export function createSettingsModalElement(callbacks: SettingsModalCallbacks): H
     content.appendChild(form);
     modal.appendChild(content);
     return modal;
-} 
+}
+
+/**
+ * Creates and manages the settings modal dialog.
+ */
+export class SettingsModal {
+    // private modalElement: HTMLDivElement; // Commented out - unused
+    // private settings: AppSettings; // Commented out - unused
+
+    constructor(callbacks: SettingsModalCallbacks) {
+        // this.modalElement = createSettingsModalElement(callbacks); // Commented out - unused assignment
+        // this.settings = { // Commented out - unused initialization
+        //     provider: '', 
+        //     apiKey: '', 
+        //     apiUrl: '', 
+        //     rules: '' 
+        // }; 
+    }
+
+    // ... rest of the existing code ...
+}

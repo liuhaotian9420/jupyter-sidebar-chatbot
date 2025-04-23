@@ -6,14 +6,14 @@ const apputils_1 = require("@jupyterlab/apputils");
 const notebook_1 = require("@jupyterlab/notebook");
 const docmanager_1 = require("@jupyterlab/docmanager");
 const sidebar_widget_1 = require("./sidebar-widget");
-const globals_1 = require("./globals");
+const globals_1 = require("./core/globals");
 const commands_1 = require("./commands");
 const cell_context_tracker_1 = require("./cell-context-tracker");
 // import { ApiClient } from './api-client';
 // Import the main CSS file
 require("../style/index.css");
 // Export ApiClient for use by other components
-var api_client_1 = require("./api-client");
+var api_client_1 = require("./core/api-client");
 Object.defineProperty(exports, "ApiClient", { enumerable: true, get: function () { return api_client_1.ApiClient; } });
 /**
  * Initialization data for the jupyter-simple-extension extension.

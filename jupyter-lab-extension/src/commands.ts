@@ -1,8 +1,12 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { ICommandPalette } from '@jupyterlab/apputils';
 import { ILauncher } from '@jupyterlab/launcher';
-import { extensionIcon } from './icons';
+// import { extensionIcon } from './icons'; // Removed: icons.ts not found
 import { SimpleSidebarWidget } from './sidebar-widget';
+import { LabIcon } from '@jupyterlab/ui-components'; // Import LabIcon if needed as placeholder
+
+// Placeholder icon (replace if you have a specific icon)
+const extensionIcon: LabIcon = LabIcon.resolve({ icon: 'ui-components:jupyterlab' }); // Use resolve for built-in
 
 /**
  * Registers commands for the extension

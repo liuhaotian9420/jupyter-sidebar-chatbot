@@ -1,11 +1,11 @@
 import { IDocumentManager } from '@jupyterlab/docmanager';
-import { NotebookPanel } from '@jupyterlab/notebook'; 
+import { INotebookTracker, NotebookPanel } from '@jupyterlab/notebook'; 
 import { globals } from '../core/globals'; 
 
 /**
  * Interface for actions to be performed when a menu item is selected.
  */
-interface MenuActionCallbacks {
+export interface MenuActionCallbacks {
     insertCode: (code: string) => void;
     insertCell: (content: string) => void;
     insertFilePath: (path: string) => void;
@@ -104,7 +104,7 @@ export class PopupMenuManager {
 
         if (globals.notebookTracker) {
             this.currentNotebook = globals.notebookTracker.currentWidget;
-            globals.notebookTracker.currentChanged.connect((_, notebook) => {
+            globals.notebookTracker.currentChanged.connect((sender: INotebookTracker, notebook: NotebookPanel | null) => {
                 this.currentNotebook = notebook;
             });
         }
@@ -819,7 +819,7 @@ export class PopupMenuManager {
             try {
                 const leftWidgets = Array.from(app.shell.widgets('left'));
                 const fileBrowserWidget = leftWidgets.find(widget => widget.id === 'filebrowser');
-                if (fileBrowserWidget && (fileBrowserWidget as any).model?.path) {
+                if (fileBrowserWidget && typeof (fileBrowserWidget as any).model?.path === 'string') {
                     dirPath = (fileBrowserWidget as any).model.path;
                     console.log(`POPUP: Path from file browser widget model: ${dirPath}`);
                 } else {
