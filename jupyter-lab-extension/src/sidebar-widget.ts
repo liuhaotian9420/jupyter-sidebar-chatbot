@@ -1,13 +1,12 @@
 import { Widget } from '@lumino/widgets';
 import { IDocumentManager } from '@jupyterlab/docmanager';
-import { JupyterFrontEnd } from '@jupyterlab/application';
 import { extensionIcon } from './core/icons';
 import { ApiClient } from './core/api-client';
-import { PopupMenuManager, MenuActionCallbacks } from './handlers/popup-menu-manager';
+import { PopupMenuManager } from './handlers/popup-menu-manager';
 import { setupShortcuts, removeShortcuts, ShortcutHandlerCallbacks } from './handlers/shortcut-handler';
 import { buildLayout, LayoutElements } from './ui/layout-builder';
 import { createSettingsModalElement, SettingsModalCallbacks } from './ui/settings-modal';
-import { MessageRendererCallbacks, renderBotMessage } from './ui/message-renderer';
+import { MessageRendererCallbacks } from './ui/message-renderer';
 import { ChatState } from './state/chat-state';
 import { SettingsState } from './state/settings-state';
 import { InputHandler, InputHandlerCallbacks } from './handlers/input-handler';
@@ -49,21 +48,6 @@ export class SimpleSidebarWidget extends Widget {
   // Dependencies (JupyterLab services)
   private docManager: IDocumentManager;
 
-  // Placeholder for menu callbacks
-  private menuActionCallbacks: MenuActionCallbacks = {
-    insertCode: (code: string) => this.inputHandler.appendToInput(`\\n\`\`\`\\n${code}\\n\`\`\`\\n`), 
-    insertCell: (content: string) => {/* TODO: Implement add to new cell */}, 
-    insertFilePath: (path: string) => this.inputHandler.appendToInput(` ${path}`),
-    insertDirectoryPath: (path: string) => this.inputHandler.appendToInput(` ${path}`),
-    getSelectedText: () => {/* TODO: Implement get selected text */ return null; },
-    getCurrentCellContent: () => {/* TODO: Implement get current cell */ return null; },
-    insertCellByIndex: (index: number) => {/* TODO: Implement insert cell by index */},
-    insertCollapsedCodeRef: (code: string, cellIndex: number, lineNumber: number, notebookName: string) => {
-        const refId = this.inputHandler.addCodeReference(code);
-        this.inputHandler.appendToInput(` [${refId}:${notebookName} cell ${cellIndex + 1} line ${lineNumber}]`);
-    }
-  };
-
   // Placeholder for handler methods used in UIManager callbacks
   private handleNewChat = () => { 
       console.log('Handle New Chat clicked');
@@ -76,11 +60,7 @@ export class SimpleSidebarWidget extends Widget {
   };
   private handleSendMessage = () => { 
       console.log('Handle Send Message called from UI Manager callback');
-      // Trigger the InputHandler's internal logic which then calls MessageHandler
-      // This feels slightly redundant - maybe InputHandler should trigger send directly?
-      // Or maybe this callback shouldn't exist and UIManager calls InputHandler directly?
-      // For now, simulate Enter press logic:
-      const inputElement = this.layoutElements.inputField; // Get from layoutElements
+      const inputElement = this.layoutElements.inputField; 
       const event = new KeyboardEvent('keypress', { key: 'Enter', bubbles: true });
       inputElement.dispatchEvent(event); 
   };
@@ -90,9 +70,7 @@ export class SimpleSidebarWidget extends Widget {
   };
   private handleShowPopupMenu = (event: MouseEvent, targetButton: HTMLElement) => { 
       console.log('Handle Show Popup Menu clicked');
-      // Calculate position relative to the button
       const rect = targetButton.getBoundingClientRect();
-      // Position below the button
       this.popupMenuManager.showPopupMenu(rect.left, rect.bottom + 5);
   };
   private handleUpdateTitle = () => {

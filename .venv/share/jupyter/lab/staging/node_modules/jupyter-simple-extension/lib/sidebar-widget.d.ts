@@ -16,7 +16,6 @@ export declare class SimpleSidebarWidget extends Widget {
     private settingsModalContainer;
     private uiManager;
     private docManager;
-    private menuActionCallbacks;
     private handleNewChat;
     private handleToggleHistory;
     private handleSendMessage;
