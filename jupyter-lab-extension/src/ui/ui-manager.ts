@@ -210,6 +210,16 @@ export class UIManager {
             }
             // --- End New ---
         });
+
+        // --- Copy/Paste Event Listeners ---
+        this.inputField.addEventListener('copy', (event: ClipboardEvent) => {
+            this.handleCopy(event);
+        });
+        this.inputField.addEventListener('paste', (event: ClipboardEvent) => {
+            this.handlePaste(event);
+        });
+        // --- End Copy/Paste ---
+
         middleRow.appendChild(this.inputField);
 
         // Buttons Row (Send, New Chat, History)
@@ -666,6 +676,103 @@ export class UIManager {
             console.log('UIManager: Closing reference popup due to invalid context.')
             this.popupMenuManager.hidePopupMenu();
             this.activeReferenceTriggerRange = null; // Clear stored range
+        }
+    }
+
+    /**
+     * Serializes the content of a DOM Range, handling widgets correctly.
+     * @param range The Range object to serialize.
+     * @returns The serialized plain text content.
+     */
+    private serializeRangeContent(range: Range): string {
+        if (!range) {
+            return '';
+        }
+
+        const fragment = range.cloneContents(); // Get a document fragment of the selection
+        let content = '';
+
+        const serializeNode = (node: Node): void => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                content += node.textContent;
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node as HTMLElement;
+                if (element.tagName === 'DIV' || element.tagName === 'BR') {
+                    if (!content.endsWith('\n')) {
+                        content += '\n';
+                    }
+                    // Serialize children if it's a DIV
+                    if (element.tagName === 'DIV') {
+                        element.childNodes.forEach(serializeNode);
+                    }
+                } else if (element.classList.contains('jp-llm-ext-ref-widget') && element.hasAttribute('data-ref-text')) {
+                    // Use data-ref-text for widgets
+                    content += element.getAttribute('data-ref-text') || '';
+                } else {
+                    // Recursively serialize children of other elements
+                    element.childNodes.forEach(serializeNode);
+                }
+            }
+            // Ignore other node types (comments, etc.)
+        };
+
+        fragment.childNodes.forEach(serializeNode);
+
+        // Basic normalization (might need refinement based on how ranges/fragments handle line breaks)
+        return content.replace(/\n{2,}/g, '\n\n');
+    }
+
+    /**
+     * Handles the 'copy' event to put serialized plain text onto the clipboard.
+     */
+    private handleCopy(event: ClipboardEvent): void {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0 || !event.clipboardData) {
+            return; // No selection or clipboard access
+        }
+
+        const range = selection.getRangeAt(0);
+        if (range.collapsed) {
+            return; // Nothing selected to copy
+        }
+
+        // Serialize the selected range
+        const selectedText = this.serializeRangeContent(range);
+
+        // Set plain text data on the clipboard
+        event.clipboardData.setData('text/plain', selectedText);
+
+        // Prevent the browser's default copy behavior (which might copy HTML)
+        event.preventDefault();
+        console.log('UIManager: Copied serialized selection to clipboard:', selectedText);
+    }
+
+    /**
+     * Handles the 'paste' event to insert plain text content.
+     */
+    private handlePaste(event: ClipboardEvent): void {
+        if (!event.clipboardData) {
+            return; // No clipboard data available
+        }
+
+        // Get plain text from clipboard
+        const pastedText = event.clipboardData.getData('text/plain');
+
+        if (pastedText) {
+            // Prevent the browser's default paste behavior (avoids pasting HTML)
+            event.preventDefault();
+
+            // Insert the plain text using execCommand
+            // This handles replacing selected content or inserting at the cursor
+            document.execCommand('insertText', false, pastedText);
+
+            console.log('UIManager: Pasted plain text from clipboard:', pastedText);
+
+            // Ensure the input field is scrolled into view if necessary after paste
+            this.inputField.scrollIntoView({ block: 'nearest' }); 
+        } else {
+            // If no plain text, let the default behavior happen (might handle files etc.)
+            console.log('UIManager: No plain text found on clipboard for paste.');
         }
     }
 
