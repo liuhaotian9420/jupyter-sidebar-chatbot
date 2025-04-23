@@ -2,7 +2,7 @@ import { getCaretPosition, setCaretPosition } from '../utils/content-editable-ut
 
 // Interface for callbacks provided to the InputHandler
 export interface InputHandlerCallbacks {
-  handleSendMessage: (message: string, isMarkdown: boolean) => void;
+  handleSendMessage: (message: string) => void;
   showPopupMenu: (left: number, top: number) => void;
   hidePopupMenu: () => void;
   // Placeholder for markdown toggle effect on placeholder
@@ -10,8 +10,16 @@ export interface InputHandlerCallbacks {
   // Placeholder for expand/collapse effects
   toggleInputExpansionUI: (isExpanded: boolean) => void; 
   // For code ref map management (might move later)
-  getCodeRefMap: () => Map<string, string>;
+  getCodeRefMap: () => Map<string, CodeRefData>;
   resetCodeRefMap: () => void;
+}
+
+// NEW Interface for storing code reference metadata
+export interface CodeRefData {
+  code: string;
+  notebookName: string;
+  cellIndex: number;
+  lineNumber: number;
 }
 
 /**
@@ -23,7 +31,7 @@ export class InputHandler {
   // private uiManager: UIManager; // Removed unused member
 
   // --- Code Reference State ---
-  private codeRefMap: Map<string, string> = new Map();
+  private codeRefMap: Map<string, CodeRefData> = new Map();
   private nextRefId = 1;
   // ---------------------------
 
@@ -161,19 +169,34 @@ export class InputHandler {
   /**
    * Adds a code reference to the internal map and returns its ID.
    * @param code The actual code content.
+   * @param notebookName The name of the notebook the code is from.
+   * @param cellIndex The index of the cell the code is from.
+   * @param lineNumber The starting line number of the code within the cell.
    * @returns The generated reference ID (e.g., "ref-1").
    */
-  public addCodeReference(code: string): string {
+  public addCodeReference(
+    code: string,
+    notebookName: string,
+    cellIndex: number,
+    lineNumber: number
+  ): string {
       const refId = `ref-${this.nextRefId++}`;
-      this.codeRefMap.set(refId, code);
-      console.log('Added code reference:', refId, '->', code.substring(0, 50) + '...'); // Debug log
+      const refData: CodeRefData = { code, notebookName, cellIndex, lineNumber };
+      this.codeRefMap.set(refId, refData);
+      console.log(
+        'Added code reference:',
+        refId, 
+        '->',
+        `(${notebookName}, Cell ${cellIndex}, Line ${lineNumber}) ` + 
+        code.substring(0, 30) + '...' // Log metadata too
+      ); 
       return refId;
   }
 
   /**
    * Returns the current map of code references.
    */
-  public getCodeReferenceMap(): Map<string, string> {
+  public getCodeReferenceMap(): Map<string, CodeRefData> {
       return this.codeRefMap;
   }
 
@@ -201,11 +224,12 @@ export class InputHandler {
       const placeholderRegex = /\[(ref-\d+)\]/g;
       
       let resolvedMessage = message.replace(placeholderRegex, (match, refId) => {
-          const code = this.codeRefMap.get(refId);
-          if (code !== undefined) {
+          // Access the .code property from the stored object
+          const refData = this.codeRefMap.get(refId);
+          if (refData) {
               console.log('Resolving code reference:', refId); // Debug log
               // Add context around the replaced code
-              return `\n\`\`\`\n${code}\n\`\`\`\n`; 
+              return `\n\`\`\`\n${refData.code}\n\`\`\`\n`; // Use refData.code
           } else {
               console.warn('Could not find code for reference:', refId); // Warn if ref ID not found
               return match; // Keep the placeholder if not found
@@ -219,26 +243,55 @@ export class InputHandler {
   // --- Private Event Handlers ---
 
   private _handleKeyPress = (event: KeyboardEvent): void => {
-    // Handle Enter key (send message)
+    // Handle Enter key press (send message)
     if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
+      event.preventDefault(); // Prevent default newline insertion
       // Use textContent for div
-      const rawMessage = this.chatInput.textContent?.trim() || '';
-      if (rawMessage) {
-          // Resolve code references BEFORE sending
-          const resolvedMessage = this.resolveCodeReferences(rawMessage);
-          console.log('Sending resolved message:', resolvedMessage); // Debug log
-          // Pass markdown state along with the message
-          this.callbacks.handleSendMessage(resolvedMessage, this.isMarkdownMode);
-          // Clearing is handled separately (e.g., by MessageHandler calling clearInput)
+      let message = this.chatInput.textContent || '';
+      message = this.resolveCodeReferences(message.trim()); // Resolve refs before sending
+      
+      if (message) {
+        this.callbacks.handleSendMessage(message); // Pass resolved message - REMOVED isMarkdown
+        this.clearInput(); // Clear input after sending
       }
     }
-    // Note: '@' key handling might be better in handleKeyDown if needed globally,
-    // but keeping here for now as it relates directly to input field focus.
-    // Or handled by shortcut-handler listening globally. Let's assume shortcut-handler handles it.
+    // --- Handle Tab/Escape/Arrows for popup interaction ---
+    // Check if popup is visible (needs a way to know, maybe via callbacks or direct reference?)
+    // Assuming popupMenuManager reference is available or state is tracked
+    // else if (this.popupMenuManager.isPopupMenuVisible()) { // Pseudo-code
+    //    if (event.key === 'Tab' || event.key === 'Escape' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    //        // Prevent default input field behavior
+    //        event.preventDefault();
+    //        // Let the PopupMenuManager's document handler manage the event
+    //    }
+    // }
+    // --- End Popup Interaction Handling ---
   };
 
   private _handleInput = (): void => {
+    // Use textContent for div
+    const currentText = this.chatInput.textContent || '';
+    
+    // --- Update Code Ref Placeholders --- 
+    // Optional: If we want visual placeholders to update live
+    // This could involve complex DOM manipulation or using a library.
+    // For now, we resolve refs only on send.
+    
+    // --- At Symbol Detection for Popup --- 
+    // This logic was moved to UIManager.handleInputForReference
+    // because UIManager needs to coordinate showing the popup.
+    // InputHandler might still need to know *if* an @ was typed recently
+    // to adjust behavior (e.g., how Enter works), but UIManager handles the popup trigger.
+    
+    // Simple check if text contains '@' for potential state management
+    this.hasAtSymbol = currentText.includes('@'); 
+
+    // Adjust input height dynamically based on content?
+    // Can be complex with contenteditable divs. Requires careful calculation.
+    // this.adjustInputHeight(); 
+  };
+  
+  /**
     // Handle @ symbol removal to hide popup using selection API
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount) return;
