@@ -1883,3 +1883,59 @@
   border-bottom: 1px solid var(--jp-border-color2, #e0e0e0); /* Add bottom border */
   box-sizing: border-box; /* Include padding and border in the element's total width and height */
 }
+
+/* Styling for inline reference widgets */
+.jp-llm-ext-ref-widget {
+  display: inline-block; /* Allows padding and margins */
+  padding: 1px 5px;
+  margin: 0 2px;
+  border-radius: 4px;
+  background-color: var(--jp-layout-color2); /* Subtle background */
+  border: 1px solid var(--jp-border-color2);
+  font-family: var(--jp-code-font-family);
+  font-size: var(
+    --jp-code-font-size
+  ); /* Match code font size, slightly smaller */
+  color: var(--jp-content-font-color1);
+  cursor: default; /* Indicate non-interactive */
+  white-space: nowrap; /* Prevent wrapping */
+}
+
+/* Style variants for different reference types */
+.jp-llm-ext-ref-widget-file {
+  background-color: var(
+    --jp-success-color-light2
+  ); /* Light green background */
+  border-color: var(--jp-success-color1);
+  color: var(--jp-success-color0); /* Darker green text */
+}
+
+.jp-llm-ext-ref-widget-dir {
+  background-color: var(--jp-info-color-light2); /* Light blue background */
+  border-color: var(--jp-info-color1);
+  color: var(--jp-info-color0); /* Darker blue text */
+}
+
+.jp-llm-ext-ref-widget-cell {
+  background-color: var(
+    --jp-warning-color-light2
+  ); /* Light orange background */
+  border-color: var(--jp-warning-color1);
+  color: var(--jp-warning-color0); /* Darker orange text */
+}
+
+.jp-llm-ext-ref-widget-code {
+  background-color: var(
+    --jp-error-color-light2
+  ); /* Light purple/red background */
+  border-color: var(--jp-error-color1);
+  color: var(--jp-error-color0); /* Darker purple/red text */
+}
+
+/* Optional: Add icons using :before pseudo-element if desired */
+/* Example for file:
+.jp-llm-ext-ref-widget-file::before {
+  content: '📄';
+  margin-right: 3px;
+}
+*/
