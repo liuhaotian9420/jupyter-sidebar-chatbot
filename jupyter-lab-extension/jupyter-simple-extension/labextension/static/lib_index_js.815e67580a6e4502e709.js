@@ -705,13 +705,18 @@ class MessageHandler {
     }
     /**
      * Sends an automatic message (e.g., 'confirmed', 'rejected')
-     * and handles the streaming response.
+     * to the backend and handles the streaming response.
+     * Also adds the user's confirmation/rejection action to the UI.
      */
     handleSendAutoMessage(message) {
         if (!message.trim())
             return;
-        // Auto messages are typically not saved as user messages, 
-        // but the response *is* saved.
+        // Add the user's action ('Confirmed' or 'Rejected') to the UI immediately
+        // Use a slightly more descriptive, capitalized text for the UI display.
+        const userDisplayMessage = message.charAt(0).toUpperCase() + message.slice(1);
+        this.addMessage(userDisplayMessage, 'user', true, true); // Add the user message to UI and state
+        // Send the technical message ('confirmed' or 'rejected') to the backend
+        // and handle the streaming response from the backend.
         this.streamAndRenderResponse(message);
     }
     /**
@@ -4181,4 +4186,4 @@ function insertCellContentByIndex(index, insertCallback) {
 /***/ })
 
 }]);
-//# sourceMappingURL=lib_index_js.a4dee8bf86f54112ea92.js.map
+//# sourceMappingURL=lib_index_js.815e67580a6e4502e709.js.map

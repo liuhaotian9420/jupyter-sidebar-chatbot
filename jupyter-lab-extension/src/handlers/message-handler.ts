@@ -51,13 +51,20 @@ export class MessageHandler {
     }
 
     /**
-     * Sends an automatic message (e.g., 'confirmed', 'rejected') 
-     * and handles the streaming response.
+     * Sends an automatic message (e.g., 'confirmed', 'rejected')
+     * to the backend and handles the streaming response.
+     * Also adds the user's confirmation/rejection action to the UI.
      */
     public handleSendAutoMessage(message: string): void {
         if (!message.trim()) return;
-        // Auto messages are typically not saved as user messages, 
-        // but the response *is* saved.
+
+        // Add the user's action ('Confirmed' or 'Rejected') to the UI immediately
+        // Use a slightly more descriptive, capitalized text for the UI display.
+        const userDisplayMessage = message.charAt(0).toUpperCase() + message.slice(1);
+        this.addMessage(userDisplayMessage, 'user', true, true); // Add the user message to UI and state
+
+        // Send the technical message ('confirmed' or 'rejected') to the backend
+        // and handle the streaming response from the backend.
         this.streamAndRenderResponse(message);
     }
 

@@ -21,7 +21,8 @@ export declare class MessageHandler {
     handleSendMessage(message: string): void;
     /**
      * Sends an automatic message (e.g., 'confirmed', 'rejected')
-     * and handles the streaming response.
+     * to the backend and handles the streaming response.
+     * Also adds the user's confirmation/rejection action to the UI.
      */
     handleSendAutoMessage(message: string): void;
     /**
