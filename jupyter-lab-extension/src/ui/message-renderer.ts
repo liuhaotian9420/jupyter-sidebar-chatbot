@@ -65,13 +65,12 @@ export function renderUserMessage(
   options: Partial<MessageRenderOptions> = {},
   callbacks: Partial<MessageRendererCallbacks> = {}
 ): HTMLDivElement {
+  console.log(`[renderUserMessage] Rendering with isMarkdown: ${options.isMarkdown}, text: "${text}"`);
   const messageDiv = createMessageDiv('user');
 
   if (options.isMarkdown) {
-    // TODO: Integrate Code Reference rendering properly here
-    // For now, render the whole body as Markdown
-    const contentDiv = document.createElement('div');
     // Use 'markdown-content' class for consistent styling
+    const contentDiv = document.createElement('div');
     contentDiv.className = 'markdown-content'; 
 
     try {
@@ -81,13 +80,17 @@ export function renderUserMessage(
       const sanitizedHtml = DOMPurify.sanitize(rawHtml);
       contentDiv.innerHTML = sanitizedHtml;
 
+      // Add markdown indicator (similar to bot messages)
+      const markdownIndicator = document.createElement('div');
+      markdownIndicator.textContent = "MD";
+      markdownIndicator.className = 'markdown-indicator';
+      messageDiv.appendChild(markdownIndicator);
+
       // Enhance code blocks if user messages can contain them
       const codeBlocks = contentDiv.querySelectorAll('pre code');
       codeBlocks.forEach(block => {
         // Pass only relevant callbacks if needed for user code blocks
-        enhanceCodeBlock(block as HTMLElement, { 
-          // e.g., showCopyFeedback: callbacks.showCopyFeedback 
-        }); 
+        enhanceCodeBlock(block as HTMLElement, callbacks); 
       });
 
     } catch (error) {
@@ -103,8 +106,6 @@ export function renderUserMessage(
     // messageDiv.textContent = text;
     renderMessageContentWithRefs(messageDiv, text, callbacks);
   }
-
-  // TODO: Add user message specific actions if needed (e.g., copy text)
 
   return messageDiv;
 }

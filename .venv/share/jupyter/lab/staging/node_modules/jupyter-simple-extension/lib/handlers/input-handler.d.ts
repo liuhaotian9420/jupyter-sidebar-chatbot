@@ -1,5 +1,5 @@
 export interface InputHandlerCallbacks {
-    handleSendMessage: (message: string) => void;
+    handleSendMessage: (message: string, isMarkdown?: boolean) => void;
     showPopupMenu: (left: number, top: number) => void;
     hidePopupMenu: () => void;
     updatePlaceholder: (isMarkdown: boolean) => void;
@@ -71,6 +71,7 @@ export declare class InputHandler {
      * Replaces code reference placeholders (e.g., "[ref-1]") in a message string
      * with the actual code from the map.
      * @param message The message string potentially containing placeholders.
+     * @param isMarkdown Whether the message should be formatted for markdown
      * @returns The message string with placeholders resolved.
      */
     private resolveCodeReferences;

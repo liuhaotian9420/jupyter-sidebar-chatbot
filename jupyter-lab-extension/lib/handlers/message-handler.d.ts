@@ -19,7 +19,7 @@ export declare class MessageHandler {
      * Also handles adding the user message to the UI and clearing the input.
      * Accepts the message text.
      */
-    handleSendMessage(message: string): void;
+    handleSendMessage(message: string, isMarkdown?: boolean): void;
     /**
      * Sends an automatic message (e.g., 'confirmed', 'rejected')
      * to the backend and handles the streaming response.

@@ -63,3 +63,21 @@
 - [ ] **(P?)** `sidebar-widget.ts:223`: Merge `insertCollapsedCodeRef` with `insertCode`.
 - [ ] **(P?)** `settings-handler.ts:76`: Have `ApiClient` observe `SettingsState` changes.
 - [ ] **(P?)** `history-handler.ts:84`: Enhance history display (preview, timestamp, delete button).
+
+---
+
+### Feature: Notes System (Timestamp: 2023-11-08T12:00:00Z)
+
+**Goal:** Implement a notes system that allows users to create, view, and manage markdown notes.
+
+**Tasks:**
+- [x] **(P0)** Create a state manager `NoteState` to store and manage notes.
+- [x] **(P0)** Create a UI container for the notes view in `UIManager.createLayout()`.
+- [x] **(P0)** Add a "Notes" button to the bottom row alongside "New Chat" and "History".
+- [x] **(P1)** Create a `NoteHandler` class to manage note interactions and rendering.
+- [x] **(P1)** Implement toggling between chat view and notes view, similar to history view.
+- [x] **(P1)** Add an "Add Note" button to the notes view.
+- [x] **(P2)** Create a modal for adding/editing notes with title and markdown content.
+- [x] **(P2)** Implement rendering of note list items with clickable titles.
+- [x] **(P2)** Add functionality to view note content when a note is selected.
+- [x] **(P3)** Update `TESTING_TODO.md` with corresponding test cases.

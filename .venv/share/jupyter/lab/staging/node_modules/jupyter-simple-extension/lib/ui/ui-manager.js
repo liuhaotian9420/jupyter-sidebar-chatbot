@@ -20,6 +20,7 @@ class UIManager {
         this.historyContainer = layoutElements.historyContainer;
         this.titleInput = layoutElements.titleInput;
         this.bottomBarContainer = layoutElements.bottomBarContainer;
+        this.notesContainer = layoutElements.notesContainer;
         // Initialize and append the keyboard shortcut indicator
         this.keyboardShortcutIndicator = document.createElement('div');
         this.keyboardShortcutIndicator.className = 'jp-llm-ext-shortcut-indicator';
@@ -127,7 +128,8 @@ class UIManager {
                 event.preventDefault(); // Prevent default newline insertion
                 const message = this.getSerializedInput();
                 if (message.trim()) {
-                    this.callbacks.handleSendMessage(message);
+                    console.log(`[UIManager] Sending message with markdown mode: ${this.isMarkdownMode}`);
+                    this.callbacks.handleSendMessage(message, this.isMarkdownMode);
                     this.clearInputField();
                 }
             }
@@ -161,7 +163,8 @@ class UIManager {
         sendButton.addEventListener('click', () => {
             const message = this.getSerializedInput();
             if (message.trim()) {
-                this.callbacks.handleSendMessage(message);
+                console.log(`[UIManager] Sending message from button click with markdown mode: ${this.isMarkdownMode}`);
+                this.callbacks.handleSendMessage(message, this.isMarkdownMode);
                 this.clearInputField();
             }
         });
@@ -189,6 +192,7 @@ class UIManager {
             titleInput: this.titleInput,
             historyContainer: this.historyContainer,
             bottomBarContainer: this.bottomBarContainer,
+            notesContainer: this.notesContainer,
         };
     }
     /**
@@ -206,6 +210,7 @@ class UIManager {
         this.markdownToggle.addEventListener('change', (e) => {
             const target = e.target;
             this.isMarkdownMode = target.checked;
+            console.log(`[UIManager] Markdown mode changed to: ${this.isMarkdownMode}`);
             const placeholderText = this.isMarkdownMode
                 ? 'Write markdown here...\\n\\n# Example heading\\n- List item\\n\\n```code block```'
                 : 'Ask me anything...';
@@ -298,11 +303,21 @@ class UIManager {
         }
     }
     /**
+     * Switches the view to show the notes.
+     */
+    showNotesView() {
+        this.layoutElements.messageContainer.style.display = 'none';
+        this.layoutElements.historyContainer.style.display = 'none';
+        this.layoutElements.notesContainer.style.display = 'block';
+        this.layoutElements.bottomBarContainer.style.display = 'none';
+    }
+    /**
      * Switches the view to show the chat history.
      */
     showHistoryView() {
         this.layoutElements.messageContainer.style.display = 'none';
         this.layoutElements.historyContainer.style.display = 'block';
+        this.layoutElements.notesContainer.style.display = 'none';
         this.layoutElements.bottomBarContainer.style.display = 'none';
         // Optionally update header/title elements if needed
     }
@@ -311,6 +326,7 @@ class UIManager {
      */
     showChatView() {
         this.layoutElements.historyContainer.style.display = 'none';
+        this.layoutElements.notesContainer.style.display = 'none';
         this.layoutElements.messageContainer.style.display = 'block';
         this.layoutElements.bottomBarContainer.style.display = 'flex'; // Assuming flex display
         this.scrollToBottom(); // Scroll down when showing chat

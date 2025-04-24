@@ -36,14 +36,14 @@ export class MessageHandler {
      * Also handles adding the user message to the UI and clearing the input.
      * Accepts the message text.
      */
-    public handleSendMessage(message: string): void {
+    public handleSendMessage(message: string, isMarkdown: boolean = false): void {
         if (!message.trim()) return;
 
-        console.log(`[MessageHandler] Handling send: "${message}"`);
+        console.log(`[MessageHandler] Handling send: "${message}", Markdown: ${isMarkdown}`);
+        console.log(`[MessageHandler] isMarkdown type: ${typeof isMarkdown}, value: ${isMarkdown}`);
 
-        // Add user message to UI FIRST
-        // Assume user messages aren't markdown unless specific toggle is used elsewhere
-        this.addMessage(message, 'user');
+        // Add user message to UI with isMarkdown flag
+        this.addMessage(message, 'user', isMarkdown);
 
         // Clear input via InputHandler (which uses UIManager)
         // REMOVED: this.inputHandler.clearInput(); // Input clearing is now handled by UIManager after the callback
@@ -103,6 +103,7 @@ export class MessageHandler {
         isAuto: boolean = false // Flag for auto messages like confirm/reject
     ): void {
         console.log(`[MessageHandler] Adding message: Sender=${sender}, Markdown=${isMarkdown}, Auto=${isAuto}`);
+        console.log(`[MessageHandler] isMarkdown type in addMessage: ${typeof isMarkdown}, value: ${isMarkdown}`);
         
         let messageElement: HTMLElement;
 
@@ -124,6 +125,7 @@ export class MessageHandler {
         };
 
         if (sender === 'user') {
+             console.log(`[MessageHandler] Calling renderUserMessage with isMarkdown=${isMarkdown}`);
              // Pass the isMarkdown option and extended callbacks to the renderer
             messageElement = renderUserMessage(text, { isMarkdown }, extendedCallbacks);
         } else {

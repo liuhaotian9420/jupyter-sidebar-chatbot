@@ -42,8 +42,22 @@ class HistoryHandler {
         this.historyContainer.innerHTML = ''; // Clear previous list
         const history = this.chatState.getChatHistory();
         const currentChatId = this.chatState.getCurrentChatId();
+        // Create header with back button
+        const header = document.createElement('div');
+        header.className = 'jp-llm-ext-history-header';
+        // Create back button
+        const backButton = document.createElement('button');
+        backButton.className = 'jp-Button jp-llm-ext-back-button';
+        backButton.innerHTML = '<span class="jp-icon3 jp-icon-selectable" role="presentation"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></span>';
+        backButton.title = 'Back to chat';
+        backButton.addEventListener('click', () => this.hideHistoryView());
+        const title = document.createElement('h2');
+        title.textContent = 'Chat History';
+        header.appendChild(backButton);
+        header.appendChild(title);
+        this.historyContainer.appendChild(header);
         if (history.length === 0) {
-            this.historyContainer.innerHTML = '<div class="jp-llm-ext-history-empty">No chat history yet.</div>';
+            this.historyContainer.innerHTML += '<div class="jp-llm-ext-history-empty">No chat history yet.</div>';
             return;
         }
         const list = document.createElement('ul');
@@ -105,6 +119,18 @@ class HistoryHandler {
         // Optional: Re-render history list to update the active item indicator
         // Only really needed if not switching views
         // if (!this.isHistoryViewActive) { this.renderChatHistory(); }
+    }
+    /**
+     * Hides the history view and shows the chat view.
+     */
+    hideHistoryView() {
+        this.isHistoryViewActive = false;
+        this.uiManager.showChatView();
+        // Ensure the correct title is displayed when switching back
+        const currentChat = this.chatState.getCurrentChat();
+        if (currentChat) {
+            this.callbacks.updateTitleInput(currentChat.title);
+        }
     }
 }
 exports.HistoryHandler = HistoryHandler;

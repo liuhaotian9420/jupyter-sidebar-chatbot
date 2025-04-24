@@ -21,13 +21,13 @@ class MessageHandler {
      * Also handles adding the user message to the UI and clearing the input.
      * Accepts the message text.
      */
-    handleSendMessage(message) {
+    handleSendMessage(message, isMarkdown = false) {
         if (!message.trim())
             return;
-        console.log(`[MessageHandler] Handling send: "${message}"`);
-        // Add user message to UI FIRST
-        // Assume user messages aren't markdown unless specific toggle is used elsewhere
-        this.addMessage(message, 'user');
+        console.log(`[MessageHandler] Handling send: "${message}", Markdown: ${isMarkdown}`);
+        console.log(`[MessageHandler] isMarkdown type: ${typeof isMarkdown}, value: ${isMarkdown}`);
+        // Add user message to UI with isMarkdown flag
+        this.addMessage(message, 'user', isMarkdown);
         // Clear input via InputHandler (which uses UIManager)
         // REMOVED: this.inputHandler.clearInput(); // Input clearing is now handled by UIManager after the callback
         // Send message to backend API and handle streaming response
@@ -78,6 +78,7 @@ class MessageHandler {
     isAuto = false // Flag for auto messages like confirm/reject
     ) {
         console.log(`[MessageHandler] Adding message: Sender=${sender}, Markdown=${isMarkdown}, Auto=${isAuto}`);
+        console.log(`[MessageHandler] isMarkdown type in addMessage: ${typeof isMarkdown}, value: ${isMarkdown}`);
         let messageElement;
         // Prepare extended callbacks for the renderer
         const extendedCallbacks = Object.assign(Object.assign({}, this.rendererCallbacks), { getCodeRefData: (refId) => {
@@ -93,6 +94,7 @@ class MessageHandler {
                 return undefined;
             } });
         if (sender === 'user') {
+            console.log(`[MessageHandler] Calling renderUserMessage with isMarkdown=${isMarkdown}`);
             // Pass the isMarkdown option and extended callbacks to the renderer
             messageElement = (0, message_renderer_1.renderUserMessage)(text, { isMarkdown }, extendedCallbacks);
         }

@@ -168,3 +168,24 @@ This list tracks the progress of testing the refactored Jupyter LLM Extension ba
 - [ ] Test `Ctrl+L` in a code cell editor *without* text selected -> Check if warning indicator appears ("Cannot insert reference...") and no text is inserted.
 - [ ] Test `@` key when chat input field *is* focused -> Verify `@` is inserted and reference popup appears (should be handled by `UIManager`'s input listener).
 - [ ] Test `@` key when chat input field is *not* focused -> Verify chat input gains focus, `@` is inserted, and reference popup appears (handled by `ShortcutHandler`).
+
+### Feature: Notes System
+
+**Goal:** Ensure the Notes System allows users to create, view, edit, and delete markdown notes.
+
+**Testing Tasks:**
+- [ ] **UI/Integration:** Verify that clicking the "Notes" button in the bottom row toggles the notes view.
+- [ ] **UI/Integration:** Verify that the notes view shows an empty state message when no notes exist.
+- [ ] **UI/Integration:** Verify that clicking the "+ Add Note" button opens the note modal with empty fields.
+- [ ] **UI/Integration:** Test creating a new note with title and content, and verify it appears in the notes list.
+- [ ] **UI/Integration:** Test clicking on a note in the list to view its content in the right panel.
+- [ ] **UI/Integration:** Verify the note content shows the title and content correctly.
+- [ ] **UI/Integration:** Test editing a note via the "Edit" button, verify changes are saved and reflected in the view.
+- [ ] **UI/Integration:** Test deleting a note and verify it disappears from the list.
+- [ ] **UI/Integration:** Verify switching back to chat view by clicking the "Notes" button again.
+- [ ] **State Management:** Verify notes persist across page refreshes (future implementation).
+- [ ] **Edge Cases:** Test with notes containing markdown syntax (bold, lists, code blocks).
+- [ ] **Edge Cases:** Test with very long note titles and content.
+- [ ] **Edge Cases:** Test with special characters in note titles and content.
+- [ ] **Edge Cases:** Test creating multiple notes and verifying sort order (newest first).
+- [ ] **Edge Cases:** Test deleting the currently selected note and verify proper UI update.

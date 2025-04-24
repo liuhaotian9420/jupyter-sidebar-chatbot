@@ -43,8 +43,10 @@
     "@jupyterlab/application": "^4.4.0",
     "@jupyterlab/launcher": "^4.4.0",
     "@jupyterlab/ui-components": "^4.4.0",
+    "@types/markdown-it": "^14.1.2",
     "dompurify": "^3.2.5",
     "highlight.js": "^11.11.1",
+    "markdown-it": "^14.1.0",
     "marked": "^15.0.8",
     "uuid": "^11.1.0"
   },
@@ -64,7 +66,7 @@
     "extension": true,
     "outputDir": "jupyter-simple-extension/labextension",
     "_build": {
-      "load": "static\\remoteEntry.3f1e8b9c006b2513485f.js",
+      "load": "static\\remoteEntry.b473b205343b1d716d76.js",
       "extension": "./extension",
       "style": "./style"
     }

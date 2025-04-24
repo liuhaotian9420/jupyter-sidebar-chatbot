@@ -77,23 +77,40 @@ export class PopupMenuManager {
                     // Handle Escape directly here
                     this.hidePopupMenu();
                 } else if (event.key === 'Enter') {
-                    // Maybe select first item on Enter?
+                    // Select first item on Enter
                     const menuItems = this.getMenuItems();
                     if (menuItems.length > 0) {
-                        this.selectedMenuItemIndex = 0;
-                        this.updateSelectionHighlight();
-                        // Optionally activate the item:
-                        // menuItems[0].click(); 
+                        // If we already have a selection, click it
+                        if (this.selectedMenuItemIndex >= 0 && this.selectedMenuItemIndex < menuItems.length) {
+                            menuItems[this.selectedMenuItemIndex].click();
+                        } else { 
+                            // Otherwise, select and click the first item
+                            this.selectedMenuItemIndex = 0;
+                            this.updateSelectionHighlight();
+                            menuItems[0].click(); 
+                        }
                     }
                 } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                    // const menuItems = this.getMenuItems();
-                    // if (menuItems.length > 0) {
-                    //     const direction = event.key === 'ArrowDown' ? 1 : -1;
-                    //     this.selectedMenuItemIndex = (this.selectedMenuItemIndex + direction + menuItems.length) % menuItems.length;
-                    //     this.updateSelectionHighlight();
-                    // }
+                    const menuItems = this.getMenuItems();
+                    if (menuItems.length > 0) {
+                        const direction = event.key === 'ArrowDown' ? 1 : -1;
+                        
+                        // If no selection yet, select first or last based on direction
+                        if (this.selectedMenuItemIndex < 0) {
+                            this.selectedMenuItemIndex = direction > 0 ? 0 : menuItems.length - 1;
+                        } else {
+                            // Otherwise move in the specified direction with wraparound
+                            this.selectedMenuItemIndex = (this.selectedMenuItemIndex + direction + menuItems.length) % menuItems.length;
+                        }
+                        
+                        this.updateSelectionHighlight();
+                        
+                        // Keep focus in search input but update selection visually
+                        this.searchInput.focus();
+                    }
                 }
                 
+                event.preventDefault();
                 event.stopPropagation();
             }
             
@@ -193,9 +210,7 @@ export class PopupMenuManager {
             } else { // Top level or cells
                 this.selectedMenuItemIndex = -1;
                  this.selectNextMenuItem(); // Select first item
-                 // Optionally focus the first item for immediate keyboard nav
-                 // const menuItems = this.getMenuItems();
-                 // if (menuItems.length > 0) menuItems[0].focus(); 
+                 console.log('POPUP: Selected first menu item');
             }
         }, 0); // 0ms delay is usually sufficient
     }
@@ -502,6 +517,18 @@ export class PopupMenuManager {
         if (path) {
             item.dataset.path = path;
         }
+        
+        // Add mouse events to coordinate with keyboard navigation
+        item.onmouseover = () => {
+            // Find index of this item
+            const menuItems = this.getMenuItems();
+            const index = menuItems.indexOf(item);
+            if (index !== -1) {
+                this.selectedMenuItemIndex = index;
+                this.updateSelectionHighlight();
+            }
+        };
+        
         item.onclick = (event) => this.handleMenuClick(event);
 
         const labelSpan = document.createElement('span');
@@ -743,7 +770,12 @@ export class PopupMenuManager {
             this.renderMenuContent().then(() => {
                  // Focus search input if going back to file/dir view
                 if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
-                    setTimeout(() => this.searchInput.focus(), 0);
+                    setTimeout(() => {
+                        this.searchInput.focus();
+                        // Move cursor to end of input text
+                        const length = this.searchInput.value.length;
+                        this.searchInput.setSelectionRange(length, length);
+                    }, 0);
                      this.selectedMenuItemIndex = -1; // Reset selection
                 } else {
                     // Select first item if going back to top level
@@ -912,32 +944,37 @@ export class PopupMenuManager {
              // Handle Tab and arrow keys specifically to move focus out of search
              if (event.key === 'Tab' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                  console.log(`POPUP (Document): Key='${event.key}' in search input - moving focus.`);
-                 this.searchInput.blur(); // Remove focus from search
-                 // Delay slightly to allow blur processing before selecting
-                 setTimeout(() => {
-                     if (event.key === 'ArrowDown') {
-                         this.selectedMenuItemIndex = -1;
-                         this.selectNextMenuItem();
-                     } else if (event.key === 'ArrowUp') {
-                         this.selectedMenuItemIndex = this.getMenuItems().length;
-                         this.selectPreviousMenuItem();
-                     } else { // Tab
-                         // Potentially select first/next element after search?
-                         this.selectedMenuItemIndex = -1;
-                         this.selectNextMenuItem();
+                 
+                 // Instead of blurring, let's handle arrows directly in the input
+                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                     const direction = event.key === 'ArrowDown' ? 1 : -1;
+                     const menuItems = this.getMenuItems();
+                     
+                     // If no items selected yet, select first/last based on direction
+                     if (this.selectedMenuItemIndex < 0) {
+                         this.selectedMenuItemIndex = direction > 0 ? 0 : menuItems.length - 1;
+                     } else {
+                         // Move selection in specified direction
+                         this.selectedMenuItemIndex = 
+                             (this.selectedMenuItemIndex + direction + menuItems.length) % menuItems.length;
                      }
-                 }, 0);
+                     
+                     this.updateSelectionHighlight();
+                     // Keep search input focused
+                     this.searchInput.focus();
+                 } else if (event.key === 'Tab') {
+                     // Tab should select next item but keep search focused
+                     this.selectNextMenuItem();
+                     this.searchInput.focus();
+                 }
+                 
                  event.preventDefault(); // Prevent default Tab behavior
                  event.stopPropagation();
                  return;
              }
 
             // Let other keys (like Escape, Enter) be handled by the search input's own listener
-            // OR let them fall through if the input listener doesn't stop propagation.
-             // Escape is handled by search listener, no need to handle here.
-             // Enter might need handling here if search listener doesn't always select.
-             // Text input keys should naturally fall through.
-             return; 
+            return; 
         }
 
         // Handle navigation if search is not focused
@@ -947,15 +984,21 @@ export class PopupMenuManager {
             event.stopPropagation();
             this.processMenuNavigation(event.key);
         } else {
-             // If typing characters and NOT in search input, maybe focus search?
-             // Only if in file/directory view?
-             if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories') {
+             // If typing characters and NOT in search input, focus search and add the character
+             if (this.currentMenuLevel === 'files' || this.currentMenuLevel === 'directories' || this.currentMenuLevel === 'cells') {
                  if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
                      console.log('POPUP (Document): Focusing search input due to character typed.');
                      this.searchInput.focus();
-                     // Optionally append the typed character? (Might be complex)
-                     // this.searchInput.value += event.key; 
-                     // this.renderMenuContent();
+                     
+                     // Append the typed character to search input if it's a printable character
+                     if (event.key.match(/^[\w\d\s.,\-_=+;:'"\[\]{}()*&^%$#@!~`|\\/<>?]$/)) {
+                         this.searchInput.value += event.key;
+                         // Trigger search input's 'input' event to update filtering
+                         this.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                     }
+                     
+                     event.preventDefault();
+                     event.stopPropagation();
                  }
              }
         }
@@ -966,19 +1009,17 @@ export class PopupMenuManager {
             case 'ArrowDown':
                 console.log('POPUP: Arrow Down pressed');
                 this.selectNextMenuItem();
-                this.updateSelectionHighlight();
                 break;
             case 'ArrowUp':
                 console.log('POPUP: Arrow Up pressed');
                 this.selectPreviousMenuItem();
-                this.updateSelectionHighlight();
                 break;
             case 'Enter':
             case 'Tab': // Treat Tab like Enter for selection
                 console.log(`POPUP: ${key} pressed`);
                 if (this.selectedMenuItemIndex >= 0) {
                     const menuItems = this.getMenuItems();
-                    if (menuItems[this.selectedMenuItemIndex]) {
+                    if (this.selectedMenuItemIndex < menuItems.length) {
                         console.log('POPUP: Simulating click on selected item:', menuItems[this.selectedMenuItemIndex].textContent);
                         // Simulate click to trigger handleMenuClick
                         menuItems[this.selectedMenuItemIndex].click();
@@ -987,10 +1028,15 @@ export class PopupMenuManager {
                     }
                 } else {
                      console.log('POPUP: Enter/Tab pressed but no item selected');
-                     // If no item is selected, maybe select the first one and activate?
+                     // If no item is selected, select the first one and activate
                      const menuItems = this.getMenuItems();
                      if (menuItems.length > 0) {
-                         menuItems[0].click(); // Activate first item
+                         this.selectedMenuItemIndex = 0;
+                         this.updateSelectionHighlight();
+                         // With Enter, always activate the newly selected item
+                         if (key === 'Enter') {
+                             menuItems[0].click(); // Activate first item
+                         }
                      }
                 }
                 break;
@@ -1008,6 +1054,12 @@ export class PopupMenuManager {
 
     private updateSelectionHighlight(): void {
         const menuItems = this.getMenuItems();
+        
+        // Handle out-of-bounds index
+        if (this.selectedMenuItemIndex >= menuItems.length) {
+            this.selectedMenuItemIndex = menuItems.length - 1;
+        }
+        
         menuItems.forEach((item, index) => {
             if (index === this.selectedMenuItemIndex) {
                 item.classList.add('jp-llm-ext-popup-menu-item-selected');
@@ -1031,7 +1083,7 @@ export class PopupMenuManager {
         const menuItems = this.getMenuItems();
         if (menuItems.length === 0) return;
 
-        this.selectedMenuItemIndex++
+        this.selectedMenuItemIndex++;
         if (this.selectedMenuItemIndex >= menuItems.length) {
             this.selectedMenuItemIndex = 0; // Wrap around
         }
@@ -1043,7 +1095,7 @@ export class PopupMenuManager {
         const menuItems = this.getMenuItems();
         if (menuItems.length === 0) return;
 
-        this.selectedMenuItemIndex--
+        this.selectedMenuItemIndex--;
         if (this.selectedMenuItemIndex < 0) {
             this.selectedMenuItemIndex = menuItems.length - 1; // Wrap around
         }

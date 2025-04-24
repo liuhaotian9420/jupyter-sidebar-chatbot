@@ -703,8 +703,10 @@
               "import": false,
               "singleton": true
             },
+            "@types/markdown-it": {},
             "dompurify": {},
             "highlight.js": {},
+            "markdown-it": {},
             "marked": {},
             "uuid": {},
             "jupyter-simple-extension": {

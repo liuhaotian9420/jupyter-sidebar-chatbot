@@ -17,6 +17,8 @@ const settings_handler_1 = require("./handlers/settings-handler");
 const ui_manager_1 = require("./ui/ui-manager");
 const ui_components_1 = require("@jupyterlab/ui-components");
 const globals_1 = require("./core/globals");
+const note_state_1 = require("./state/note-state");
+const note_handler_1 = require("./handlers/note-handler");
 // --- Import Utility Functions ---
 const clipboard_1 = require("./utils/clipboard");
 const notebook_integration_1 = require("./utils/notebook-integration");
@@ -74,16 +76,18 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             console.log('Handle Toggle History clicked');
             this.historyHandler.toggleHistoryView();
         };
-        this.handleSendMessage = (message) => {
+        this.handleToggleNotes = () => {
+            console.log('Handle Toggle Notes clicked');
+            this.noteHandler.toggleNotesView();
+        };
+        this.handleSendMessage = (message, isMarkdown = false) => {
             // 1. Get the current text from the input field via UIManager or LayoutElements
             // const text = this.layoutElements.inputField.value; // No longer needed, text is passed in
             if (!message.trim())
                 return; // Don't send empty messages (check the passed message)
-            // 2. Get the markdown state from UIManager - REMOVED
-            // const isMarkdown = this.uiManager.getIsMarkdownMode(); 
-            console.log(`[Widget] handleSendMessage: Text='${message}'`); // Debug log using passed message
+            console.log(`[Widget] handleSendMessage: Text='${message}', Markdown=${isMarkdown}`); // Debug log using passed message
             // 3. Call the MessageHandler's send method with text and state
-            this.messageHandler.handleSendMessage(message); // Pass the received message - REMOVED isMarkdown
+            this.messageHandler.handleSendMessage(message, isMarkdown); // Pass the received message and markdown state
             // NOTE: Input clearing is now handled by UIManager after this callback returns.
             // Do NOT clear input here or in MessageHandler.
         };
@@ -114,6 +118,7 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         const initialSettings = this.settingsState.getSettings();
         this.apiClient = new api_client_1.ApiClient((initialSettings === null || initialSettings === void 0 ? void 0 : initialSettings.apiUrl) || undefined);
         this.chatState = new chat_state_1.ChatState();
+        this.noteState = new note_state_1.NoteState();
         this.popupMenuManager = new popup_menu_manager_1.PopupMenuManager(this.docManager, this.node, {
             insertCode: (code) => {
                 var _a, _b, _c;
@@ -211,14 +216,12 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             var _a;
             (_a = this.historyHandler) === null || _a === void 0 ? void 0 : _a.toggleHistoryView();
         };
+        const toggleNotesCallback = () => {
+            this.noteHandler.toggleNotesView();
+        };
         const showSettingsCallback = () => {
             var _a;
             (_a = this.settingsHandler) === null || _a === void 0 ? void 0 : _a.showModal();
-        };
-        const updateTitleCallback = (newTitle) => {
-            var _a;
-            this.chatState.updateCurrentChatTitle(newTitle);
-            (_a = this.uiManager) === null || _a === void 0 ? void 0 : _a.showNotification('Chat title updated', 'info');
         };
         const showPopupMenuCallback = (event) => {
             const rect = event.target.getBoundingClientRect();
@@ -285,10 +288,13 @@ class SimpleSidebarWidget extends widgets_1.Widget {
             clearMessageContainer: () => this.uiManager.clearMessageContainer(),
             addRenderedMessage: (messageElement) => this.uiManager.addChatMessageElement(messageElement)
         };
+        const noteHandlerCallbacks = {
+            updateTitleInput: (title) => this.uiManager.updateTitleInput(title)
+        };
         const inputHandlerCallbacks = {
-            handleSendMessage: (message) => {
+            handleSendMessage: (message, isMarkdown) => {
                 if (this.messageHandler) {
-                    this.messageHandler.handleSendMessage(message);
+                    this.messageHandler.handleSendMessage(message, isMarkdown);
                 }
                 else {
                     console.error('MessageHandler not initialized when trying to send message from InputHandler');
@@ -329,8 +335,9 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.layoutElements = (0, layout_builder_1.buildLayout)({
             onNewChatClick: createNewChatCallback,
             onHistoryToggleClick: toggleHistoryCallback,
+            onNotesClick: toggleNotesCallback,
             onSettingsClick: showSettingsCallback,
-            onTitleChange: updateTitleCallback,
+            onTitleChange: this.handleUpdateTitle,
             onAtButtonClick: showPopupMenuCallback,
             onSendMessageClick: sendMessageViaButtonCallback,
             onMarkdownToggleChange: toggleMarkdownModeCallback,
@@ -340,12 +347,14 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         // --- Initialize State Managers ---
         this.chatState = new chat_state_1.ChatState();
         this.settingsState = new settings_state_1.SettingsState();
+        this.noteState = new note_state_1.NoteState();
         // --- Initialize Core Components ---
         this.apiClient = new api_client_1.ApiClient();
         // --- Initialize UI Manager (needs dependencies) ---
         const uiManagerCallbacks = {
             handleNewChat: this.handleNewChat,
             handleToggleHistory: this.handleToggleHistory,
+            handleToggleNotes: this.handleToggleNotes,
             handleSendMessage: this.handleSendMessage,
             handleShowSettings: this.handleShowSettings,
             handleShowPopupMenu: this.handleShowPopupMenu,
@@ -356,6 +365,16 @@ class SimpleSidebarWidget extends widgets_1.Widget {
         this.inputHandler = new input_handler_1.InputHandler(this.layoutElements.inputField, inputHandlerCallbacks);
         this.messageHandler = new message_handler_1.MessageHandler(this.apiClient, this.chatState, this.uiManager, messageRendererCallbacks, this.inputHandler);
         this.historyHandler = new history_handler_1.HistoryHandler(this.chatState, this.uiManager, historyHandlerCallbacks, messageRendererCallbacks);
+        this.noteHandler = new note_handler_1.NoteHandler(this.noteState, this.uiManager, noteHandlerCallbacks, this.node);
+        // Replace the layout's notes container with the one from NoteHandler
+        const noteContainer = this.noteHandler.getContainer();
+        const layoutNoteContainer = this.layoutElements.notesContainer;
+        const parent = layoutNoteContainer.parentNode;
+        if (parent) {
+            parent.replaceChild(noteContainer, layoutNoteContainer);
+            // Update the reference in layoutElements
+            this.layoutElements.notesContainer = noteContainer;
+        }
         this.settingsHandler = new settings_handler_1.SettingsHandler(this.settingsState, this.settingsModalContainer, this.uiManager);
         // --- 5. Final Setup (Attach event listeners, connect signals, etc.) ---
         const initialChatId = this.chatState.getCurrentChatId();

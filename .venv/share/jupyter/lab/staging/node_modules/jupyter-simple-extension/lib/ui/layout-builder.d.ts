@@ -2,6 +2,7 @@ export interface LayoutCallbacks {
     onTitleChange?: (newTitle: string) => void;
     onNewChatClick?: () => void;
     onHistoryToggleClick?: () => void;
+    onNotesClick?: () => void;
     onSendMessageClick?: () => void;
     onInputFieldKeyPress?: (event: KeyboardEvent) => void;
     onInputFieldValueChange?: (value: string) => void;
@@ -15,11 +16,13 @@ export interface LayoutElements {
     titleInput: HTMLInputElement;
     messageContainer: HTMLDivElement;
     historyContainer: HTMLDivElement;
+    notesContainer: HTMLDivElement;
     inputField: HTMLDivElement;
     bottomBarContainer: HTMLDivElement;
     sendButton: HTMLButtonElement;
     newChatButton: HTMLButtonElement;
     historyButton: HTMLButtonElement;
+    notesButton: HTMLButtonElement;
     markdownToggleButton: HTMLInputElement;
     expandButton: HTMLButtonElement;
     atButton: HTMLButtonElement;

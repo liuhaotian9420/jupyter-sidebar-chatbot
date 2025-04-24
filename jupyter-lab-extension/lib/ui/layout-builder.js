@@ -30,6 +30,8 @@ function buildLayout(callbacks = {}) {
         classes: 'jp-llm-ext-history-container',
         style: { display: 'none' } // Hidden by default
     });
+    // --- Notes Container ---
+    const notesContainer = (0, dom_elements_1.createDiv)({ classes: 'jp-llm-ext-notes-container', style: { display: 'none' } });
     // --- Bottom Bar Area ---
     const bottomBarContainer = (0, dom_elements_1.createDiv)({ classes: 'jp-llm-ext-bottom-bar-container' });
     // Row 1: Controls (Markdown Toggle, @, Expand, Settings)
@@ -116,9 +118,19 @@ function buildLayout(callbacks = {}) {
     if (callbacks.onHistoryToggleClick) {
         historyButton.addEventListener('click', callbacks.onHistoryToggleClick);
     }
+    // Notes button
+    const notesButton = (0, dom_elements_1.createButton)({
+        text: 'Notes',
+        attributes: { title: 'View notes' },
+        classes: 'jp-Button jp-llm-ext-action-button'
+    });
+    if (callbacks.onNotesClick) {
+        notesButton.addEventListener('click', callbacks.onNotesClick);
+    }
     buttonsRow.appendChild(sendButton);
     buttonsRow.appendChild(newChatButton);
     buttonsRow.appendChild(historyButton);
+    buttonsRow.appendChild(notesButton);
     // Assemble Bottom Bar
     bottomBarContainer.appendChild(controlsRow);
     bottomBarContainer.appendChild(inputRow);
@@ -127,17 +139,20 @@ function buildLayout(callbacks = {}) {
     mainElement.appendChild(titleContainer);
     mainElement.appendChild(messageContainer);
     mainElement.appendChild(historyContainer);
+    mainElement.appendChild(notesContainer);
     mainElement.appendChild(bottomBarContainer);
     return {
         mainElement,
         titleInput,
         messageContainer,
         historyContainer,
+        notesContainer,
         inputField,
         bottomBarContainer,
         sendButton,
         newChatButton,
         historyButton,
+        notesButton,
         markdownToggleButton,
         expandButton,
         atButton,

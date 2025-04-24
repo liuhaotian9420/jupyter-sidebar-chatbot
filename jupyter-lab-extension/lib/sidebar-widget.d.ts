@@ -7,10 +7,12 @@ export declare class SimpleSidebarWidget extends Widget {
     private apiClient;
     private chatState;
     private settingsState;
+    private noteState;
     private popupMenuManager;
     private inputHandler;
     private messageHandler;
     private historyHandler;
+    private noteHandler;
     private settingsHandler;
     private layoutElements;
     private settingsModalContainer;
@@ -18,6 +20,7 @@ export declare class SimpleSidebarWidget extends Widget {
     private docManager;
     private handleNewChat;
     private handleToggleHistory;
+    private handleToggleNotes;
     private handleSendMessage;
     private handleShowSettings;
     private handleShowPopupMenu;

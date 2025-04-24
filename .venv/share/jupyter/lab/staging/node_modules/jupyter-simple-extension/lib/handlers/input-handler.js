@@ -58,13 +58,14 @@ class InputHandler {
             // Handle Enter key press (send message)
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault(); // Prevent default newline insertion
-                // OLD: Use textContent for div
-                // let message = this.chatInput.textContent || '';
-                // NEW: Use serialization method
+                // NEW: Use serialization method to get the raw message with placeholders
                 let message = this._serializeInputContent();
                 message = message.trim(); // Trim whitespace
                 if (message) {
-                    this.callbacks.handleSendMessage(message); // Pass serialized message with placeholders
+                    // Resolve code references with proper formatting based on markdown mode
+                    const resolvedMessage = this.resolveCodeReferences(message, this.isMarkdownMode);
+                    // Pass resolved message with current markdown state
+                    this.callbacks.handleSendMessage(resolvedMessage, this.isMarkdownMode);
                 }
             }
             // --- Handle Tab/Escape/Arrows for popup interaction ---
@@ -349,9 +350,10 @@ class InputHandler {
      * Replaces code reference placeholders (e.g., "[ref-1]") in a message string
      * with the actual code from the map.
      * @param message The message string potentially containing placeholders.
+     * @param isMarkdown Whether the message should be formatted for markdown
      * @returns The message string with placeholders resolved.
      */
-    resolveCodeReferences(message) {
+    resolveCodeReferences(message, isMarkdown = false) {
         if (this.codeRefMap.size === 0) {
             return message; // No references to resolve
         }
@@ -367,12 +369,24 @@ class InputHandler {
                 console.log(`Resolving ${refData.type} reference:`, refId); // Debug log type
                 // Use refData.content (renamed from refData.code)
                 // Add context based on type?
-                const prefix = refData.type === 'cell' ?
-                    `\n--- Start Cell ${refData.cellIndex + 1} (${refData.notebookName}) ---\n` :
-                    `\n--- Start Code (${refData.notebookName}:Cell ${refData.cellIndex + 1}:L${refData.lineNumber}-${refData.lineEndNumber}) ---\n`;
-                const suffix = refData.type === 'cell' ?
-                    `\n--- End Cell ${refData.cellIndex + 1} ---` :
-                    `\n--- End Code ---`;
+                let prefix, suffix;
+                if (isMarkdown) {
+                    // Format for markdown with code block
+                    const lang = refData.type === 'code' ? 'python' : ''; // Default to python for code, blank for cell
+                    prefix = refData.type === 'cell' ?
+                        `\n\`\`\`${lang} # Cell ${refData.cellIndex + 1} (${refData.notebookName})\n` :
+                        `\n\`\`\`${lang} # Code (${refData.notebookName}:Cell ${refData.cellIndex + 1}:L${refData.lineNumber}-${refData.lineEndNumber})\n`;
+                    suffix = `\n\`\`\``;
+                }
+                else {
+                    // Plain text format
+                    prefix = refData.type === 'cell' ?
+                        `\n--- Start Cell ${refData.cellIndex + 1} (${refData.notebookName}) ---\n` :
+                        `\n--- Start Code (${refData.notebookName}:Cell ${refData.cellIndex + 1}:L${refData.lineNumber}-${refData.lineEndNumber}) ---\n`;
+                    suffix = refData.type === 'cell' ?
+                        `\n--- End Cell ${refData.cellIndex + 1} ---` :
+                        `\n--- End Code ---`;
+                }
                 return `${prefix}${refData.content}${suffix}`;
             }
             else {
@@ -567,8 +581,9 @@ class InputHandler {
                 console.error('Cannot insert file widget: No window selection found.');
                 return;
             }
+            // Get the current selection range
             const range = winSelection.getRangeAt(0);
-            // ADDED: Construct placeholder
+            // Construct placeholder
             const placeholder = `@file[${filePath}]`;
             // Render the widget - Pass placeholder (no refId needed)
             const widgetElement = (0, message_renderer_1.renderReferenceWidgetInline)('file', filePath, placeholder);
@@ -577,7 +592,6 @@ class InputHandler {
             // Add a normal space for separation
             const spaceNode = document.createTextNode(' ');
             // Check if the character before the cursor is '@' and replace it
-            // This needs careful checking of the range container and offset
             let replacedAtSymbol = false;
             if (range.startOffset > 0 && range.startContainer.nodeType === Node.TEXT_NODE) {
                 const textBefore = (_a = range.startContainer.textContent) === null || _a === void 0 ? void 0 : _a.substring(0, range.startOffset);
@@ -588,15 +602,21 @@ class InputHandler {
                     console.log("Replacing @ symbol before inserting file widget."); // Debug log
                 }
             }
-            range.deleteContents(); // Deletes the selection OR the '@' if range was modified
-            range.insertNode(spaceNode); // Insert space first (after potential @ deletion)
-            range.insertNode(widgetElement); // Insert the widget element
-            range.insertNode(zeroWidthSpace); // Insert ZWS after widget
-            // Move cursor after the zero-width space
-            range.setStartAfter(zeroWidthSpace);
-            range.setEndAfter(zeroWidthSpace);
+            // Wrap the widget and additional nodes in a fragment for cleaner insertion
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(widgetElement);
+            fragment.appendChild(zeroWidthSpace);
+            fragment.appendChild(spaceNode);
+            // Delete any selected content (including @ if found)
+            range.deleteContents();
+            // Insert the fragment with all elements
+            range.insertNode(fragment);
+            // Explicitly move cursor after the inserted space node
+            const newRange = document.createRange();
+            newRange.setStartAfter(spaceNode);
+            newRange.setEndAfter(spaceNode);
             winSelection.removeAllRanges();
-            winSelection.addRange(range);
+            winSelection.addRange(newRange);
             // Trigger input event manually
             this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
         }
@@ -615,7 +635,7 @@ class InputHandler {
                 return;
             }
             const range = winSelection.getRangeAt(0);
-            // ADDED: Construct placeholder
+            // Construct placeholder
             const placeholder = `@dir[${dirPath}]`;
             // Render the widget - Pass placeholder (no refId needed)
             const widgetElement = (0, message_renderer_1.renderReferenceWidgetInline)('dir', dirPath, placeholder);
@@ -634,15 +654,21 @@ class InputHandler {
                     console.log("Replacing @ symbol before inserting dir widget."); // Debug log
                 }
             }
-            range.deleteContents(); // Deletes the selection OR the '@'
-            range.insertNode(spaceNode); // Insert space first
-            range.insertNode(widgetElement); // Insert the widget element
-            range.insertNode(zeroWidthSpace); // Insert ZWS after widget
-            // Move cursor after the zero-width space
-            range.setStartAfter(zeroWidthSpace);
-            range.setEndAfter(zeroWidthSpace);
+            // Wrap the widget and additional nodes in a fragment for cleaner insertion
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(widgetElement);
+            fragment.appendChild(zeroWidthSpace);
+            fragment.appendChild(spaceNode);
+            // Delete any selected content (including @ if found)
+            range.deleteContents();
+            // Insert the fragment with all elements
+            range.insertNode(fragment);
+            // Explicitly move cursor after the inserted space node
+            const newRange = document.createRange();
+            newRange.setStartAfter(spaceNode);
+            newRange.setEndAfter(spaceNode);
             winSelection.removeAllRanges();
-            winSelection.addRange(range);
+            winSelection.addRange(newRange);
             // Trigger input event manually
             this.chatInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
         }
@@ -702,13 +728,18 @@ class InputHandler {
                     console.log("Replacing @ symbol before inserting cell widget.");
                 }
             }
-            range.deleteContents(); // Deletes the selection OR the '@'
-            range.insertNode(spaceNode);
-            range.insertNode(widgetElement);
-            range.insertNode(zeroWidthSpace);
+            // Create a fragment to hold our nodes in the correct order
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(widgetElement);
+            fragment.appendChild(zeroWidthSpace);
+            fragment.appendChild(spaceNode);
+            // Delete any selected content (including @ if found)
+            range.deleteContents();
+            // Insert all elements at once in the correct order
+            range.insertNode(fragment);
             // Move cursor after the zero-width space
-            range.setStartAfter(zeroWidthSpace);
-            range.setEndAfter(zeroWidthSpace);
+            range.setStartAfter(spaceNode);
+            range.setEndAfter(spaceNode);
             winSelection.removeAllRanges();
             winSelection.addRange(range);
             // Trigger input event manually
@@ -760,13 +791,18 @@ class InputHandler {
                     console.log("Replacing @ symbol before inserting code widget.");
                 }
             }
-            range.deleteContents(); // Deletes the selection OR the '@'
-            range.insertNode(spaceNode);
-            range.insertNode(widgetElement);
-            range.insertNode(zeroWidthSpace);
+            // Create a fragment to hold our nodes in the correct order
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(widgetElement);
+            fragment.appendChild(zeroWidthSpace);
+            fragment.appendChild(spaceNode);
+            // Delete any selected content (including @ if found)
+            range.deleteContents();
+            // Insert all elements at once in the correct order
+            range.insertNode(fragment);
             // Move cursor after the zero-width space
-            range.setStartAfter(zeroWidthSpace);
-            range.setEndAfter(zeroWidthSpace);
+            range.setStartAfter(spaceNode);
+            range.setEndAfter(spaceNode);
             winSelection.removeAllRanges();
             winSelection.addRange(range);
             // Trigger input event manually

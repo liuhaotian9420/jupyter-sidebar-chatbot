@@ -16,6 +16,8 @@ import { SettingsHandler } from './handlers/settings-handler';
 import { UIManager, UIManagerCallbacks } from './ui/ui-manager';
 import { LabIcon } from '@jupyterlab/ui-components';
 import { globals } from './core/globals';
+import { NoteState } from './state/note-state';
+import { NoteHandler, NoteHandlerCallbacks } from './handlers/note-handler';
 
 // --- Import Utility Functions ---
 import {
@@ -38,10 +40,12 @@ export class SimpleSidebarWidget extends Widget {
   private apiClient: ApiClient;
   private chatState: ChatState;
   private settingsState: SettingsState;
+  private noteState: NoteState;
   private popupMenuManager: PopupMenuManager;
   private inputHandler!: InputHandler;
   private messageHandler!: MessageHandler;
   private historyHandler!: HistoryHandler;
+  private noteHandler!: NoteHandler;
   private settingsHandler!: SettingsHandler;
   private layoutElements!: LayoutElements;
   private settingsModalContainer!: HTMLDivElement;
@@ -60,18 +64,19 @@ export class SimpleSidebarWidget extends Widget {
       console.log('Handle Toggle History clicked');
       this.historyHandler.toggleHistoryView(); 
   };
-  private handleSendMessage = (message: string) => {
+  private handleToggleNotes = () => {
+      console.log('Handle Toggle Notes clicked');
+      this.noteHandler.toggleNotesView();
+  };
+  private handleSendMessage = (message: string, isMarkdown: boolean = false) => {
     // 1. Get the current text from the input field via UIManager or LayoutElements
     // const text = this.layoutElements.inputField.value; // No longer needed, text is passed in
     if (!message.trim()) return; // Don't send empty messages (check the passed message)
 
-    // 2. Get the markdown state from UIManager - REMOVED
-    // const isMarkdown = this.uiManager.getIsMarkdownMode(); 
-
-    console.log(`[Widget] handleSendMessage: Text='${message}'`); // Debug log using passed message
+    console.log(`[Widget] handleSendMessage: Text='${message}', Markdown=${isMarkdown}`); // Debug log using passed message
 
     // 3. Call the MessageHandler's send method with text and state
-    this.messageHandler.handleSendMessage(message); // Pass the received message - REMOVED isMarkdown
+    this.messageHandler.handleSendMessage(message, isMarkdown); // Pass the received message and markdown state
 
     // NOTE: Input clearing is now handled by UIManager after this callback returns.
     // Do NOT clear input here or in MessageHandler.
@@ -146,6 +151,7 @@ export class SimpleSidebarWidget extends Widget {
     const initialSettings = this.settingsState.getSettings();
     this.apiClient = new ApiClient(initialSettings?.apiUrl || undefined);
     this.chatState = new ChatState();
+    this.noteState = new NoteState();
     this.popupMenuManager = new PopupMenuManager(this.docManager, this.node, {
         insertCode: (code: string) => {
             if (!this.inputHandler || !globals.notebookTracker) return;
@@ -240,12 +246,11 @@ export class SimpleSidebarWidget extends Widget {
     const toggleHistoryCallback = () => {
         this.historyHandler?.toggleHistoryView();
     };
+    const toggleNotesCallback = () => {
+        this.noteHandler.toggleNotesView();
+    };
     const showSettingsCallback = () => {
         this.settingsHandler?.showModal();
-    };
-    const updateTitleCallback = (newTitle: string) => {
-        this.chatState.updateCurrentChatTitle(newTitle);
-        this.uiManager?.showNotification('Chat title updated', 'info');
     };
     const showPopupMenuCallback = (event: MouseEvent) => {
          const rect = (event.target as HTMLElement).getBoundingClientRect();
@@ -312,10 +317,14 @@ export class SimpleSidebarWidget extends Widget {
         addRenderedMessage: (messageElement: HTMLElement) => this.uiManager.addChatMessageElement(messageElement)
      };
 
+     const noteHandlerCallbacks: NoteHandlerCallbacks = {
+        updateTitleInput: (title: string) => this.uiManager.updateTitleInput(title)
+     };
+
      const inputHandlerCallbacks: InputHandlerCallbacks = {
-        handleSendMessage: (message: string) => {
+        handleSendMessage: (message: string, isMarkdown?: boolean) => {
           if (this.messageHandler) {
-            this.messageHandler.handleSendMessage(message);
+            this.messageHandler.handleSendMessage(message, isMarkdown);
           } else {
             console.error('MessageHandler not initialized when trying to send message from InputHandler');
           }
@@ -355,8 +364,9 @@ export class SimpleSidebarWidget extends Widget {
     this.layoutElements = buildLayout({
         onNewChatClick: createNewChatCallback,
         onHistoryToggleClick: toggleHistoryCallback,
+        onNotesClick: toggleNotesCallback,
         onSettingsClick: showSettingsCallback,
-        onTitleChange: updateTitleCallback,
+        onTitleChange: this.handleUpdateTitle,
         onAtButtonClick: showPopupMenuCallback,
         onSendMessageClick: sendMessageViaButtonCallback,
         onMarkdownToggleChange: toggleMarkdownModeCallback,
@@ -367,6 +377,7 @@ export class SimpleSidebarWidget extends Widget {
     // --- Initialize State Managers ---
     this.chatState = new ChatState();
     this.settingsState = new SettingsState();
+    this.noteState = new NoteState();
 
     // --- Initialize Core Components ---
     this.apiClient = new ApiClient();
@@ -375,6 +386,7 @@ export class SimpleSidebarWidget extends Widget {
     const uiManagerCallbacks: UIManagerCallbacks = {
         handleNewChat: this.handleNewChat,
         handleToggleHistory: this.handleToggleHistory,
+        handleToggleNotes: this.handleToggleNotes,
         handleSendMessage: this.handleSendMessage,
         handleShowSettings: this.handleShowSettings,
         handleShowPopupMenu: this.handleShowPopupMenu,
@@ -407,6 +419,23 @@ export class SimpleSidebarWidget extends Widget {
         historyHandlerCallbacks,
         messageRendererCallbacks
     );
+
+    this.noteHandler = new NoteHandler(
+        this.noteState,
+        this.uiManager,
+        noteHandlerCallbacks,
+        this.node
+    );
+
+    // Replace the layout's notes container with the one from NoteHandler
+    const noteContainer = this.noteHandler.getContainer();
+    const layoutNoteContainer = this.layoutElements.notesContainer;
+    const parent = layoutNoteContainer.parentNode;
+    if (parent) {
+        parent.replaceChild(noteContainer, layoutNoteContainer);
+        // Update the reference in layoutElements
+        this.layoutElements.notesContainer = noteContainer;
+    }
 
     this.settingsHandler = new SettingsHandler(
         this.settingsState,

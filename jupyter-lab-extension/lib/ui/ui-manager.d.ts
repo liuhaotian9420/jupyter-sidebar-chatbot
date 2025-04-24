@@ -6,7 +6,8 @@ import { LayoutElements } from './layout-builder';
 export interface UIManagerCallbacks {
     handleNewChat: () => void;
     handleToggleHistory: () => void;
-    handleSendMessage: (message: string) => void;
+    handleToggleNotes: () => void;
+    handleSendMessage: (message: string, isMarkdownMode: boolean) => void;
     handleShowSettings: (event: MouseEvent) => void;
     handleShowPopupMenu: (event: MouseEvent, targetButton: HTMLElement) => void;
     handleUpdateTitle: () => void;
@@ -21,6 +22,7 @@ export interface UIElements {
     titleInput: HTMLInputElement;
     historyContainer: HTMLDivElement;
     bottomBarContainer: HTMLDivElement;
+    notesContainer: HTMLDivElement;
 }
 /**
  * Manages UI elements and transitions for the chat interface.
@@ -39,6 +41,7 @@ export declare class UIManager {
     private bottomBarContainer;
     private markdownToggle;
     private expandButton;
+    private notesContainer;
     private isInputExpanded;
     private isMarkdownMode;
     constructor(popupMenuManager: PopupMenuManager, callbacks: UIManagerCallbacks, layoutElements: LayoutElements);
@@ -72,6 +75,10 @@ export declare class UIManager {
      * Scrolls the message container to the bottom.
      */
     scrollToBottom(): void;
+    /**
+     * Switches the view to show the notes.
+     */
+    showNotesView(): void;
     /**
      * Switches the view to show the chat history.
      */

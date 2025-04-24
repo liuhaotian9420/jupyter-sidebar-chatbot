@@ -29,4 +29,8 @@ export declare class HistoryHandler {
      * Loads a specific chat session from history into the main view.
      */
     loadChat(chatId: string): void;
+    /**
+     * Hides the history view and shows the chat view.
+     */
+    hideHistoryView(): void;
 }

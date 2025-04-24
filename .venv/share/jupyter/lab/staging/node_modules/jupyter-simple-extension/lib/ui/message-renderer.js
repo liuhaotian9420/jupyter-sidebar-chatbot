@@ -33,12 +33,11 @@ function createMessageDiv(sender) {
  * Renders a user message.
  */
 function renderUserMessage(text, options = {}, callbacks = {}) {
+    console.log(`[renderUserMessage] Rendering with isMarkdown: ${options.isMarkdown}, text: "${text}"`);
     const messageDiv = createMessageDiv('user');
     if (options.isMarkdown) {
-        // TODO: Integrate Code Reference rendering properly here
-        // For now, render the whole body as Markdown
-        const contentDiv = document.createElement('div');
         // Use 'markdown-content' class for consistent styling
+        const contentDiv = document.createElement('div');
         contentDiv.className = 'markdown-content';
         try {
             // Preprocess, parse, and sanitize like in bot messages
@@ -46,13 +45,16 @@ function renderUserMessage(text, options = {}, callbacks = {}) {
             const rawHtml = marked_1.marked.parse(processedText);
             const sanitizedHtml = dompurify_1.default.sanitize(rawHtml);
             contentDiv.innerHTML = sanitizedHtml;
+            // Add markdown indicator (similar to bot messages)
+            const markdownIndicator = document.createElement('div');
+            markdownIndicator.textContent = "MD";
+            markdownIndicator.className = 'markdown-indicator';
+            messageDiv.appendChild(markdownIndicator);
             // Enhance code blocks if user messages can contain them
             const codeBlocks = contentDiv.querySelectorAll('pre code');
             codeBlocks.forEach(block => {
                 // Pass only relevant callbacks if needed for user code blocks
-                enhanceCodeBlock(block, {
-                // e.g., showCopyFeedback: callbacks.showCopyFeedback 
-                });
+                enhanceCodeBlock(block, callbacks);
             });
         }
         catch (error) {
@@ -68,7 +70,6 @@ function renderUserMessage(text, options = {}, callbacks = {}) {
         // messageDiv.textContent = text;
         renderMessageContentWithRefs(messageDiv, text, callbacks);
     }
-    // TODO: Add user message specific actions if needed (e.g., copy text)
     return messageDiv;
 }
 /**

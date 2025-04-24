@@ -7,7 +7,8 @@ import { LayoutElements } from './layout-builder';
 export interface UIManagerCallbacks {
     handleNewChat: () => void;
     handleToggleHistory: () => void;
-    handleSendMessage: (message: string) => void;
+    handleToggleNotes: () => void;
+    handleSendMessage: (message: string, isMarkdownMode: boolean) => void;
     handleShowSettings: (event: MouseEvent) => void;
     handleShowPopupMenu: (event: MouseEvent, targetButton: HTMLElement) => void;
     handleUpdateTitle: () => void;
@@ -24,6 +25,7 @@ export interface UIElements {
     titleInput: HTMLInputElement;
     historyContainer: HTMLDivElement;
     bottomBarContainer: HTMLDivElement;
+    notesContainer: HTMLDivElement;
     // Keep references to interactive elements if needed outside
 }
 
@@ -46,6 +48,7 @@ export class UIManager {
     private bottomBarContainer!: HTMLDivElement;
     private markdownToggle!: HTMLInputElement;
     private expandButton!: HTMLButtonElement;
+    private notesContainer!: HTMLDivElement;
 
     // Internal UI state
     private isInputExpanded: boolean = false;
@@ -66,6 +69,7 @@ export class UIManager {
         this.historyContainer = layoutElements.historyContainer;
         this.titleInput = layoutElements.titleInput;
         this.bottomBarContainer = layoutElements.bottomBarContainer;
+        this.notesContainer = layoutElements.notesContainer;
 
         // Initialize and append the keyboard shortcut indicator
         this.keyboardShortcutIndicator = document.createElement('div');
@@ -188,7 +192,8 @@ export class UIManager {
                 event.preventDefault(); // Prevent default newline insertion
                 const message = this.getSerializedInput();
                 if (message.trim()) {
-                    this.callbacks.handleSendMessage(message);
+                    console.log(`[UIManager] Sending message with markdown mode: ${this.isMarkdownMode}`);
+                    this.callbacks.handleSendMessage(message, this.isMarkdownMode);
                     this.clearInputField();
                 }
             }
@@ -225,7 +230,8 @@ export class UIManager {
         sendButton.addEventListener('click', () => {
             const message = this.getSerializedInput();
             if (message.trim()) {
-                 this.callbacks.handleSendMessage(message);
+                 console.log(`[UIManager] Sending message from button click with markdown mode: ${this.isMarkdownMode}`);
+                 this.callbacks.handleSendMessage(message, this.isMarkdownMode);
                  this.clearInputField();
             }
         });
@@ -256,6 +262,7 @@ export class UIManager {
             titleInput: this.titleInput,
             historyContainer: this.historyContainer,
             bottomBarContainer: this.bottomBarContainer,
+            notesContainer: this.notesContainer,
         };
     }
 
@@ -275,6 +282,7 @@ export class UIManager {
         this.markdownToggle.addEventListener('change', (e) => {
             const target = e.target as HTMLInputElement;
             this.isMarkdownMode = target.checked;
+            console.log(`[UIManager] Markdown mode changed to: ${this.isMarkdownMode}`);
             const placeholderText = this.isMarkdownMode
                 ? 'Write markdown here...\\n\\n# Example heading\\n- List item\\n\\n```code block```'
                 : 'Ask me anything...';
@@ -376,11 +384,22 @@ export class UIManager {
     }
 
     /**
+     * Switches the view to show the notes.
+     */
+    public showNotesView(): void {
+        this.layoutElements.messageContainer.style.display = 'none';
+        this.layoutElements.historyContainer.style.display = 'none';
+        this.layoutElements.notesContainer.style.display = 'block';
+        this.layoutElements.bottomBarContainer.style.display = 'none';
+    }
+
+    /**
      * Switches the view to show the chat history.
      */
     public showHistoryView(): void {
         this.layoutElements.messageContainer.style.display = 'none';
         this.layoutElements.historyContainer.style.display = 'block';
+        this.layoutElements.notesContainer.style.display = 'none';
         this.layoutElements.bottomBarContainer.style.display = 'none';
         // Optionally update header/title elements if needed
     }
@@ -390,6 +409,7 @@ export class UIManager {
      */
     public showChatView(): void {
         this.layoutElements.historyContainer.style.display = 'none';
+        this.layoutElements.notesContainer.style.display = 'none';
         this.layoutElements.messageContainer.style.display = 'block';
         this.layoutElements.bottomBarContainer.style.display = 'flex'; // Assuming flex display
         this.scrollToBottom(); // Scroll down when showing chat
