@@ -44,5 +44,22 @@
 - [x] **(P0)** Implement immediate rendering of reference widgets in the `contenteditable` input `div` upon insertion, mimicking the style in user messages.
 - [x] **(P1)** Ensure the rendered widgets in the input `div` can be selected and deleted using standard editing actions (e.g., backspace, selection + delete).
 - [x] **(P1)** Add an "expand" functionality (e.g., on hover or click) to code/cell widgets within the input `div` to show a preview of the first 3 lines.
-- [ ] **(P2)** Update `FEAT_TODO.md` with these tasks (this task).
-- [ ] **(P2)** Update `TESTING_TODO.md` with corresponding test cases.
+- [x] **(P2)** Update `FEAT_TODO.md` with these tasks (this task).
+- [x] **(P2)** Update `TESTING_TODO.md` with corresponding test cases.
+
+---
+
+### Feature: Codebase TODO Cleanup (Timestamp: YYYY-MM-DDTHH:mm:ssZ)  <-- Replace with current timestamp
+
+**Goal:** Address remaining TODO comments found in the codebase.
+
+**Tasks:**
+- [ ] **(P?)** `notebook-integration.ts:50`: Handle selection in notebook output areas.
+- [ ] **(P?)** `ui-manager.ts:447`: Implement a more robust notification system (e.g., toast).
+- [ ] **(P?)** `ui-manager.ts:568, 621`: Update reference popup query dynamically if text changes.
+- [ ] **(P?)** `message-renderer.ts:70`: Integrate code reference rendering properly in messages.
+- [ ] **(P?)** `message-renderer.ts:106`: Add user message-specific actions (e.g., copy text).
+- [ ] **(P?)** `message-renderer.ts:332, 551`: Make base URL for images configurable.
+- [ ] **(P?)** `sidebar-widget.ts:223`: Merge `insertCollapsedCodeRef` with `insertCode`.
+- [ ] **(P?)** `settings-handler.ts:76`: Have `ApiClient` observe `SettingsState` changes.
+- [ ] **(P?)** `history-handler.ts:84`: Enhance history display (preview, timestamp, delete button).

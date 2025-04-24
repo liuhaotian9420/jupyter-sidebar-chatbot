@@ -86,8 +86,12 @@ export class PopupMenuManager {
                         // menuItems[0].click(); 
                     }
                 } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                    // Move to first/last menu item
-                    // The blur() will be handled by main key handler
+                    // const menuItems = this.getMenuItems();
+                    // if (menuItems.length > 0) {
+                    //     const direction = event.key === 'ArrowDown' ? 1 : -1;
+                    //     this.selectedMenuItemIndex = (this.selectedMenuItemIndex + direction + menuItems.length) % menuItems.length;
+                    //     this.updateSelectionHighlight();
+                    // }
                 }
                 
                 event.stopPropagation();
@@ -962,10 +966,12 @@ export class PopupMenuManager {
             case 'ArrowDown':
                 console.log('POPUP: Arrow Down pressed');
                 this.selectNextMenuItem();
+                this.updateSelectionHighlight();
                 break;
             case 'ArrowUp':
                 console.log('POPUP: Arrow Up pressed');
                 this.selectPreviousMenuItem();
+                this.updateSelectionHighlight();
                 break;
             case 'Enter':
             case 'Tab': // Treat Tab like Enter for selection
