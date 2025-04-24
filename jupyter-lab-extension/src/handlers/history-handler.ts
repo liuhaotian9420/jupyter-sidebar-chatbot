@@ -128,6 +128,13 @@ export class HistoryHandler {
         // Set this chat as the active one in the state
         this.chatState.setCurrentChatId(chatId);
 
+        // Log thread_id if available for debugging
+        if (chat.thread_id) {
+            console.log(`Loaded chat with thread_id: ${chat.thread_id}`);
+        } else {
+            console.log('Loaded chat does not have a thread_id');
+        }
+
         // Update the main UI title input
         this.callbacks.updateTitleInput(chat.title);
 
@@ -138,10 +145,13 @@ export class HistoryHandler {
         // Use the renderer functions via callbacks
         chat.messages.forEach((msg: ChatMessage) => {
             let messageElement: HTMLElement;
+            // Get message content, supporting both old (text) and new (content) message formats
+            const messageContent = (msg as any).content || (msg as any).text || '';
+            
             if (msg.sender === 'user') {
-                messageElement = renderUserMessage(msg.text, { isMarkdown: msg.isMarkdown }, this.rendererCallbacks);
+                messageElement = renderUserMessage(messageContent, { isMarkdown: msg.isMarkdown }, this.rendererCallbacks);
             } else { // 'bot'
-                messageElement = renderBotMessage(msg.text, { isMarkdown: msg.isMarkdown }, this.rendererCallbacks);
+                messageElement = renderBotMessage(messageContent, { isMarkdown: msg.isMarkdown }, this.rendererCallbacks);
             }
             // Add the rendered element to the message container via callback
             this.callbacks.addRenderedMessage(messageElement); 

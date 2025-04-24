@@ -1,37 +1,50 @@
+import { ApiClient } from '../core/api-client';
 /**
- * Interface for the application settings.
+ * Interface for application settings
  */
 export interface AppSettings {
-    provider: 'OpenAI' | 'HuggingFace' | 'Local' | string;
+    provider: string;
     apiKey: string;
     apiUrl: string;
     rules: string;
+    model: string;
 }
 /**
- * Manages loading and saving application settings to localStorage.
+ * Default settings values
  */
-export declare class SettingsState {
+export declare const DEFAULT_SETTINGS: AppSettings;
+/**
+ * Utility class for managing application settings
+ */
+export declare class SettingsManager {
+    private apiClient;
+    private static instance;
     private currentSettings;
-    constructor();
+    private constructor();
     /**
-     * Loads settings from localStorage.
-     * @returns The loaded settings or null if none are saved or an error occurs.
+     * Get the singleton instance of SettingsManager
+     * @param apiClient The API client to use
+     * @returns The singleton instance
      */
-    loadSettings(): AppSettings | null;
+    static getInstance(apiClient: ApiClient): SettingsManager;
     /**
-     * Saves the provided settings to localStorage.
-     * @param settings - The settings object to save.
+     * Update the API client reference
+     * @param apiClient The new API client to use
      */
-    saveSettings(settings: AppSettings): void;
+    updateApiClient(apiClient: ApiClient): void;
     /**
-     * Gets the currently loaded settings.
-     * @returns The current settings object or null if not loaded.
+     * Get the current settings
+     * @returns The current settings
      */
-    getSettings(): AppSettings | null;
+    getSettings(): AppSettings;
     /**
-     * Gets a specific setting value.
-     * @param key - The key of the setting to retrieve.
-     * @returns The value of the setting or undefined if not found.
+     * Save settings to localStorage and update the backend
+     * @param settings The settings to save
+     * @returns A promise that resolves when the settings are saved
      */
-    getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] | undefined;
+    saveSettings(settings: AppSettings): Promise<void>;
+    /**
+     * Load settings from localStorage
+     */
+    private loadSettingsFromStorage;
 }

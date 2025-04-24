@@ -1,4 +1,5 @@
 import { AppSettings } from '../state/settings-state';
+import { ApiClient } from '../core/api-client';
 /**
  * Callbacks for the settings modal actions.
  */
@@ -25,5 +26,26 @@ export declare function createSettingsModalElement(callbacks: SettingsModalCallb
  * Creates and manages the settings modal dialog.
  */
 export declare class SettingsModal {
-    constructor(callbacks: SettingsModalCallbacks);
+    private modalElement;
+    private settings;
+    private apiClient;
+    constructor(apiClient: ApiClient);
+    /**
+     * Load existing settings into the form
+     */
+    private loadSettingsIntoForm;
+    /**
+     * Show the modal dialog and load current settings
+     * @param currentSettings Current settings to pre-fill
+     */
+    showModal(currentSettings?: AppSettings): void;
+    /**
+     * Hide the modal dialog
+     */
+    hideModal(): void;
+    /**
+     * Save the settings and hide the modal
+     * @param settings Settings to save
+     */
+    private saveSettings;
 }

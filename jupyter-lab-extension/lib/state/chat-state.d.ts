@@ -1,18 +1,20 @@
 /**
- * Interface for a single message within a chat.
+ * Interface for chat messages (user or bot)
  */
 export interface ChatMessage {
-    text: string;
     sender: 'user' | 'bot';
-    isMarkdown: boolean;
+    content: string;
+    timestamp: number;
+    isMarkdown?: boolean;
 }
 /**
- * Interface for a chat session.
+ * Interface for chat history items
  */
 export interface ChatHistoryItem {
     id: string;
     title: string;
     messages: ChatMessage[];
+    thread_id?: string;
 }
 /**
  * Manages the state of chat history and the currently active chat.
@@ -20,13 +22,20 @@ export interface ChatHistoryItem {
 export declare class ChatState {
     private chatHistory;
     private currentChatId;
-    constructor();
+    private apiClient;
+    constructor(apiClient?: any);
+    /**
+     * Initialize the chat state with an initial chat
+     * Creates a new thread and sets up the welcome chat
+     */
+    private initializeChat;
     /**
      * Creates a new chat session and sets it as the current chat.
      * @param title - The initial title for the new chat.
+     * @param thread_id - Optional backend thread ID for the chat
      * @returns The newly created chat item.
      */
-    createNewChat(title?: string): ChatHistoryItem;
+    createNewChat(title?: string, thread_id?: string): ChatHistoryItem;
     /**
      * Sets the currently active chat ID.
      * @param chatId - The ID of the chat to set as current.
@@ -53,6 +62,28 @@ export declare class ChatState {
      * @param newTitle - The new title for the chat.
      */
     updateCurrentChatTitle(newTitle: string): void;
+    /**
+     * Sets a backend thread ID for a specific chat.
+     * @param chatId - The ID of the chat to update
+     * @param threadId - The backend thread ID to set
+     */
+    setThreadId(chatId: string, threadId: string): void;
+    /**
+     * Sets a backend thread ID for the current chat.
+     * @param threadId - The backend thread ID to set
+     */
+    setCurrentChatThreadId(threadId: string): void;
+    /**
+     * Gets the backend thread ID for the current chat.
+     * @returns The thread ID or undefined if not set
+     */
+    getCurrentChatThreadId(): string | undefined;
+    /**
+     * Gets the backend thread ID for a specific chat.
+     * @param chatId - The ID of the chat to get the thread ID for
+     * @returns The thread ID or undefined if not set
+     */
+    getThreadId(chatId: string): string | undefined;
     /**
      * Adds a message to the currently active chat.
      * @param message - The message object to add.

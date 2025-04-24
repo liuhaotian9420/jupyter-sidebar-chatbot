@@ -1,78 +1,106 @@
+import { ApiClient } from '../core/api-client';
+
 /**
- * Interface for the application settings.
+ * Interface for application settings
  */
 export interface AppSettings {
-  provider: 'OpenAI' | 'HuggingFace' | 'Local' | string; // Allow string for future extensibility
-  apiKey: string;
-  apiUrl: string; // Optional API URL
-  rules: string; // Custom rules/prompt prefix
+    provider: string;
+    apiKey: string;
+    apiUrl: string;
+    rules: string;
+    model: string;
 }
 
-const SETTINGS_STORAGE_KEY = 'jp-llm-ext-settings';
+/**
+ * Default settings values
+ */
+export const DEFAULT_SETTINGS: AppSettings = {
+    provider: 'OpenAI',
+    apiKey: '',
+    apiUrl: '',
+    rules: '',
+    model: 'gpt-4'
+};
 
 /**
- * Manages loading and saving application settings to localStorage.
+ * Utility class for managing application settings
  */
-export class SettingsState {
-  private currentSettings: AppSettings | null = null;
+export class SettingsManager {
+    private apiClient: ApiClient;
+    private static instance: SettingsManager;
+    private currentSettings: AppSettings;
 
-  constructor() {
-    this.currentSettings = this.loadSettings();
-  }
+    private constructor(apiClient: ApiClient) {
+        this.apiClient = apiClient;
+        this.currentSettings = { ...DEFAULT_SETTINGS };
+        this.loadSettingsFromStorage();
+    }
 
-  /**
-   * Loads settings from localStorage.
-   * @returns The loaded settings or null if none are saved or an error occurs.
-   */
-  loadSettings(): AppSettings | null {
-    const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings) as AppSettings;
-        // Basic validation (can be expanded)
-        if (settings && settings.provider) {
-          this.currentSettings = settings;
-          console.log('Loaded settings:', this.currentSettings);
-          return this.currentSettings;
+    /**
+     * Get the singleton instance of SettingsManager
+     * @param apiClient The API client to use
+     * @returns The singleton instance
+     */
+    public static getInstance(apiClient: ApiClient): SettingsManager {
+        if (!SettingsManager.instance) {
+            SettingsManager.instance = new SettingsManager(apiClient);
         }
-      } catch (error) {
-        console.error('Error loading saved settings:', error);
-        localStorage.removeItem(SETTINGS_STORAGE_KEY); // Clear corrupted data
-      }
+        return SettingsManager.instance;
     }
-    console.log('No valid settings found in localStorage.');
-    return null;
-  }
 
-  /**
-   * Saves the provided settings to localStorage.
-   * @param settings - The settings object to save.
-   */
-  saveSettings(settings: AppSettings): void {
-    try {
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-      this.currentSettings = { ...settings }; // Update internal state
-      console.log('Settings saved:', this.currentSettings);
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      // Optional: Notify user of save failure
+    /**
+     * Update the API client reference
+     * @param apiClient The new API client to use
+     */
+    public updateApiClient(apiClient: ApiClient): void {
+        this.apiClient = apiClient;
     }
-  }
 
-  /**
-   * Gets the currently loaded settings.
-   * @returns The current settings object or null if not loaded.
-   */
-  getSettings(): AppSettings | null {
-    return this.currentSettings ? { ...this.currentSettings } : null; // Return a copy
-  }
+    /**
+     * Get the current settings
+     * @returns The current settings
+     */
+    public getSettings(): AppSettings {
+        return { ...this.currentSettings };
+    }
 
-  /**
-   * Gets a specific setting value.
-   * @param key - The key of the setting to retrieve.
-   * @returns The value of the setting or undefined if not found.
-   */
-  getSetting<K extends keyof AppSettings>(key: K): AppSettings[K] | undefined {
-    return this.currentSettings ? this.currentSettings[key] : undefined;
-  }
+    /**
+     * Save settings to localStorage and update the backend
+     * @param settings The settings to save
+     * @returns A promise that resolves when the settings are saved
+     */
+    public async saveSettings(settings: AppSettings): Promise<void> {
+        // Update local settings
+        this.currentSettings = { ...settings };
+        
+        // Save to localStorage
+        localStorage.setItem('jupyter-llm-ext-settings', JSON.stringify(settings));
+        
+        // Update backend
+        try {
+            await this.apiClient.updateSettings(settings);
+            console.log('Settings saved to backend');
+        } catch (error) {
+            console.error('Failed to save settings to backend:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Load settings from localStorage
+     */
+    private loadSettingsFromStorage(): void {
+        const storedSettings = localStorage.getItem('jupyter-llm-ext-settings');
+        if (storedSettings) {
+            try {
+                const parsed = JSON.parse(storedSettings);
+                this.currentSettings = {
+                    ...DEFAULT_SETTINGS,
+                    ...parsed
+                };
+            } catch (error) {
+                console.error('Failed to parse stored settings:', error);
+            }
+        }
+    }
 } 

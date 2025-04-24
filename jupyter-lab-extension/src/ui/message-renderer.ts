@@ -661,12 +661,20 @@ function enhanceCodeBlock(
         actionsDiv.appendChild(addToButton);
     }
 
-    // Add the actions to the header, and insert header before the <pre>
+    // Add the actions to the header
     if (actionsDiv.hasChildNodes()) {
         codeHeader.appendChild(actionsDiv);
     }
+    
+    // Insert header before the <pre> element if it has content
     if (codeHeader.hasChildNodes()) {
-        preElement.parentNode?.insertBefore(codeHeader, preElement);
+        const parentElement = preElement.parentElement;
+        if (parentElement) {
+            parentElement.insertBefore(codeHeader, preElement);
+        } else {
+            // Fallback: Try parentNode if parentElement is null
+            preElement.parentNode?.insertBefore(codeHeader, preElement);
+        }
     }
 }
 

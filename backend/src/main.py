@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,10 +11,31 @@ from PIL import Image  # For image processing
 import io
 import os
 from typing import Optional, List, Dict, Any, Union
+import sys
+import uuid
+
+# Add parent directory to path to make imports work in different contexts
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Import our new modules
+try:
+    from backend.src.settings import LLMSettings, update_settings, get_settings
+    from backend.src.llm_graph import LLMGraphChat
+    LANGGRAPH_AVAILABLE = True
+except ImportError:
+    try:
+        from src.settings import LLMSettings, update_settings, get_settings
+        from src.llm_graph import LLMGraphChat
+        LANGGRAPH_AVAILABLE = True
+    except ImportError:
+        print("LangGraph not available, falling back to mock responses")
+        LANGGRAPH_AVAILABLE = False
 
 app = FastAPI(
-    title="Mock LLM API",
-    description="A mock API for testing LLM integrations",
+    title="LLM API",
+    description="API for LLM integrations with JupyterLab",
     version="1.0.0"
 )
 
@@ -30,12 +51,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global state variable to store the latest action
+# Global state variables
 LATEST_ACTION: str = "idle"
+llm_chat = None  # Will be initialized on first use or settings update
 
 class ChatRequest(BaseModel):
     message: str
     context: dict = None
+    thread_id: Optional[str] = None
+
+class SettingsRequest(BaseModel):
+    provider: str
+    apiKey: str
+    apiUrl: Optional[str] = None
+    rules: Optional[str] = None
+    model: Optional[str] = "gpt-4"
 
 def ensure_image_size_constraint(image_path, max_size=(512, 512)):
     """
@@ -104,12 +134,45 @@ MOCK_RESPONSES = [
     import seaborn as sns
     ```
     """,
-
 ]
 
-async def stream_response(message: str):
-    """Stream a standard mock response character by character with random delays"""
-    # Always choose from the standard MOCK_RESPONSES
+# Function to lazily initialize the LLM client
+def get_llm_chat():
+    global llm_chat
+    if not llm_chat and LANGGRAPH_AVAILABLE:
+        try:
+            settings = get_settings()
+            llm_chat = LLMGraphChat(
+                provider=settings.provider,
+                api_key=settings.api_key,
+                api_url=settings.api_url,
+                model=settings.model
+            )
+            print(f"LLM client initialized with settings: provider={settings.provider}, model={settings.model}")
+        except Exception as e:
+            print(f"Error initializing LLM client: {e}")
+            # Return None to indicate initialization failed
+            return None
+    return llm_chat
+
+async def stream_response(message: str, context: dict = None, thread_id: Optional[str] = None):
+    """Stream a response using either LangGraph or mock responses"""
+    # Try to use LangGraph if available
+    chat = get_llm_chat()
+    
+    if chat and LANGGRAPH_AVAILABLE:
+        try:
+            print(f"Using LangGraph to stream response for message: {message}")
+            async for chunk in chat.astream_chat(message, context, thread_id):
+                print(f"Streaming chunk: {chunk}")
+                yield chunk
+            return
+        except Exception as e:
+            print(f"Error using LangGraph: {e}")
+            # Fall back to mock responses if LangGraph fails
+    
+    # Use mock responses as fallback
+    print("Using mock responses as fallback")
     response = random.choice(MOCK_RESPONSES)
     
     # Start with a brief delay
@@ -122,7 +185,7 @@ async def stream_response(message: str):
 
 @app.post("/chat")
 async def chat(request: ChatRequest) -> Response:
-    """Endpoint for chat messages. Updates state if action received, always streams a mock response."""
+    """Endpoint for chat messages. Updates state if action received, always streams a response."""
     global LATEST_ACTION # Declare intent to modify the global variable
 
     message_lower = request.message.lower().strip()
@@ -144,11 +207,76 @@ async def chat(request: ChatRequest) -> Response:
             media_type="text/plain"
         )
     else:
-        # For regular messages, return a standard streaming response
+        # For regular messages, return a streaming response with thread_id if provided
         return StreamingResponse(
-            stream_response(request.message),
+            stream_response(request.message, request.context, request.thread_id),
             media_type="text/plain"
         )
+
+@app.post("/create-thread")
+async def create_thread():
+    """Create a new thread for chat conversation"""
+    try:
+        chat = get_llm_chat()
+        if chat and LANGGRAPH_AVAILABLE:
+            try:
+                thread_id = chat.create_thread()
+                print(f"Created thread with ID: {thread_id}")
+                return {"thread_id": thread_id}
+            except Exception as e:
+                print(f"Error in LangGraph create_thread: {e}")
+                # Fallback to random UUID
+                fallback_id = str(uuid.uuid4())
+                print(f"Using fallback thread ID: {fallback_id}")
+                return {"thread_id": fallback_id}
+        else:
+            # Generate a random thread ID if LangGraph is not available
+            random_id = str(uuid.uuid4())
+            print(f"LangGraph not available, using random thread ID: {random_id}")
+            return {"thread_id": random_id}
+    except Exception as e:
+        error_msg = f"Unexpected error in create_thread: {str(e)}"
+        print(error_msg)
+        return JSONResponse(
+            status_code=500,
+            content={"error": error_msg}
+        )
+
+@app.get("/threads")
+async def list_threads():
+    """List all available chat threads"""
+    chat = get_llm_chat()
+    if chat and LANGGRAPH_AVAILABLE:
+        threads = chat.get_threads()
+        return {"threads": threads}
+    else:
+        return {"threads": []}
+
+@app.post("/settings")
+async def update_llm_settings(request: SettingsRequest):
+    """Update LLM settings"""
+    # Update the settings
+    settings_dict = {
+        "provider": request.provider,
+        "api_key": request.apiKey,
+        "api_url": request.apiUrl,
+        "rules": request.rules,
+        "model": request.model
+    }
+    
+    updated_settings = update_settings(settings_dict)
+    
+    # Recreate the LLM chat instance with new settings
+    global llm_chat
+    if LANGGRAPH_AVAILABLE:
+        llm_chat = LLMGraphChat(
+            provider=updated_settings.provider,
+            api_key=updated_settings.api_key,
+            api_url=updated_settings.api_url,
+            model=updated_settings.model
+        )
+    
+    return {"status": "ok", "settings": updated_settings.dict()}
 
 async def stream_image_url():
     """Stream just the image URL with minimal delay"""
@@ -164,8 +292,10 @@ async def stream_image_url():
 @app.get("/health")
 async def health_check():
     """Simple health check endpoint"""
+    print(f"Health check requested at {time.time()}")
     return {"status": "ok", "timestamp": time.time()}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True) 
+    # Run the app directly
+    uvicorn.run("src.main:app", host="127.0.0.1", port=8000, reload=True) 

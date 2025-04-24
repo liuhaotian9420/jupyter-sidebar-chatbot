@@ -1,68 +1,84 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SettingsState = void 0;
-const SETTINGS_STORAGE_KEY = 'jp-llm-ext-settings';
+exports.SettingsManager = exports.DEFAULT_SETTINGS = void 0;
 /**
- * Manages loading and saving application settings to localStorage.
+ * Default settings values
  */
-class SettingsState {
-    constructor() {
-        this.currentSettings = null;
-        this.currentSettings = this.loadSettings();
+exports.DEFAULT_SETTINGS = {
+    provider: 'OpenAI',
+    apiKey: '',
+    apiUrl: '',
+    rules: '',
+    model: 'gpt-4'
+};
+/**
+ * Utility class for managing application settings
+ */
+class SettingsManager {
+    constructor(apiClient) {
+        this.apiClient = apiClient;
+        this.currentSettings = Object.assign({}, exports.DEFAULT_SETTINGS);
+        this.loadSettingsFromStorage();
     }
     /**
-     * Loads settings from localStorage.
-     * @returns The loaded settings or null if none are saved or an error occurs.
+     * Get the singleton instance of SettingsManager
+     * @param apiClient The API client to use
+     * @returns The singleton instance
      */
-    loadSettings() {
-        const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-        if (savedSettings) {
-            try {
-                const settings = JSON.parse(savedSettings);
-                // Basic validation (can be expanded)
-                if (settings && settings.provider) {
-                    this.currentSettings = settings;
-                    console.log('Loaded settings:', this.currentSettings);
-                    return this.currentSettings;
-                }
-            }
-            catch (error) {
-                console.error('Error loading saved settings:', error);
-                localStorage.removeItem(SETTINGS_STORAGE_KEY); // Clear corrupted data
-            }
+    static getInstance(apiClient) {
+        if (!SettingsManager.instance) {
+            SettingsManager.instance = new SettingsManager(apiClient);
         }
-        console.log('No valid settings found in localStorage.');
-        return null;
+        return SettingsManager.instance;
     }
     /**
-     * Saves the provided settings to localStorage.
-     * @param settings - The settings object to save.
+     * Update the API client reference
+     * @param apiClient The new API client to use
      */
-    saveSettings(settings) {
-        try {
-            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-            this.currentSettings = Object.assign({}, settings); // Update internal state
-            console.log('Settings saved:', this.currentSettings);
-        }
-        catch (error) {
-            console.error('Error saving settings:', error);
-            // Optional: Notify user of save failure
-        }
+    updateApiClient(apiClient) {
+        this.apiClient = apiClient;
     }
     /**
-     * Gets the currently loaded settings.
-     * @returns The current settings object or null if not loaded.
+     * Get the current settings
+     * @returns The current settings
      */
     getSettings() {
-        return this.currentSettings ? Object.assign({}, this.currentSettings) : null; // Return a copy
+        return Object.assign({}, this.currentSettings);
     }
     /**
-     * Gets a specific setting value.
-     * @param key - The key of the setting to retrieve.
-     * @returns The value of the setting or undefined if not found.
+     * Save settings to localStorage and update the backend
+     * @param settings The settings to save
+     * @returns A promise that resolves when the settings are saved
      */
-    getSetting(key) {
-        return this.currentSettings ? this.currentSettings[key] : undefined;
+    async saveSettings(settings) {
+        // Update local settings
+        this.currentSettings = Object.assign({}, settings);
+        // Save to localStorage
+        localStorage.setItem('jupyter-llm-ext-settings', JSON.stringify(settings));
+        // Update backend
+        try {
+            await this.apiClient.updateSettings(settings);
+            console.log('Settings saved to backend');
+        }
+        catch (error) {
+            console.error('Failed to save settings to backend:', error);
+            throw error;
+        }
+    }
+    /**
+     * Load settings from localStorage
+     */
+    loadSettingsFromStorage() {
+        const storedSettings = localStorage.getItem('jupyter-llm-ext-settings');
+        if (storedSettings) {
+            try {
+                const parsed = JSON.parse(storedSettings);
+                this.currentSettings = Object.assign(Object.assign({}, exports.DEFAULT_SETTINGS), parsed);
+            }
+            catch (error) {
+                console.error('Failed to parse stored settings:', error);
+            }
+        }
     }
 }
-exports.SettingsState = SettingsState;
+exports.SettingsManager = SettingsManager;

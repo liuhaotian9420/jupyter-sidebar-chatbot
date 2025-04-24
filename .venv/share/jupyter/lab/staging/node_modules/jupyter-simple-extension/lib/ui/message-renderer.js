@@ -524,12 +524,20 @@ function enhanceCodeBlock(codeBlockElement, callbacks = {}) {
         });
         actionsDiv.appendChild(addToButton);
     }
-    // Add the actions to the header, and insert header before the <pre>
+    // Add the actions to the header
     if (actionsDiv.hasChildNodes()) {
         codeHeader.appendChild(actionsDiv);
     }
+    // Insert header before the <pre> element if it has content
     if (codeHeader.hasChildNodes()) {
-        (_a = preElement.parentNode) === null || _a === void 0 ? void 0 : _a.insertBefore(codeHeader, preElement);
+        const parentElement = preElement.parentElement;
+        if (parentElement) {
+            parentElement.insertBefore(codeHeader, preElement);
+        }
+        else {
+            // Fallback: Try parentNode if parentElement is null
+            (_a = preElement.parentNode) === null || _a === void 0 ? void 0 : _a.insertBefore(codeHeader, preElement);
+        }
     }
 }
 /**

@@ -8,7 +8,7 @@ import { buildLayout, LayoutElements } from './ui/layout-builder';
 import { createSettingsModalElement, SettingsModalCallbacks } from './ui/settings-modal';
 import { MessageRendererCallbacks } from './ui/message-renderer';
 import { ChatState } from './state/chat-state';
-import { SettingsState } from './state/settings-state';
+import { SettingsManager } from './state/settings-state';
 import { InputHandler, InputHandlerCallbacks, CodeRefData } from './handlers/input-handler';
 import { MessageHandler } from './handlers/message-handler';
 import { HistoryHandler, HistoryHandlerCallbacks } from './handlers/history-handler';
@@ -39,7 +39,7 @@ export class SimpleSidebarWidget extends Widget {
   // --- NEW Properties: Handlers, State Managers, UI Elements ---
   private apiClient: ApiClient;
   private chatState: ChatState;
-  private settingsState: SettingsState;
+  private settingsState: SettingsManager;
   private noteState: NoteState;
   private popupMenuManager: PopupMenuManager;
   private inputHandler!: InputHandler;
@@ -55,10 +55,49 @@ export class SimpleSidebarWidget extends Widget {
   private docManager: IDocumentManager;
 
   // Placeholder for handler methods used in UIManager callbacks
-  private handleNewChat = () => { 
+  private handleNewChat = async () => { 
       console.log('Handle New Chat clicked');
-      const newChat = this.chatState.createNewChat();
-      this.historyHandler?.loadChat(newChat.id);
+      try {
+          // First, check if the API is healthy
+          const isHealthy = await this.apiClient.healthCheck();
+          console.log(`API health check result for new chat: ${isHealthy}`);
+          
+          let thread_id: string;
+          // Try to create a backend thread if the API is healthy
+          if (isHealthy) {
+              try {
+                  thread_id = await this.apiClient.createThread();
+                  console.log('Created new thread with ID:', thread_id);
+              } catch (threadError) {
+                  console.error('Error creating thread despite healthy API:', threadError);
+                  // Generate a local thread ID as fallback
+                  thread_id = `local-${Math.random().toString(36).substring(2, 15)}`;
+                  console.log('Using local thread ID instead:', thread_id);
+                  // Notify user in UI
+                  this.uiManager.showNotification('Could not create thread on the backend. Using local thread instead.', 'info');
+              }
+          } else {
+              // API is not healthy, use local thread ID
+              thread_id = `local-${Math.random().toString(36).substring(2, 15)}`;
+              console.log('API is not healthy, using local thread ID:', thread_id);
+              // Notify user in UI
+              this.uiManager.showNotification('Backend API is unavailable. Using local thread instead.', 'info');
+          }
+          
+          // Create the chat with either the backend or local thread_id
+          const newChat = this.chatState.createNewChat('New Chat', thread_id);
+          this.historyHandler?.loadChat(newChat.id);
+      } catch (error) {
+          console.error('Error in handleNewChat:', error);
+          // Final fallback: create chat with a generated thread_id
+          const fallbackThreadId = `local-${Math.random().toString(36).substring(2, 15)}`;
+          console.log('Critical error in chat creation, using emergency fallback thread ID:', fallbackThreadId);
+          const newChat = this.chatState.createNewChat('New Chat', fallbackThreadId);
+          this.historyHandler?.loadChat(newChat.id);
+          
+          // Show error notification
+          this.uiManager.showNotification('Could not connect to backend service. Using local chat only.', 'error');
+      }
   };
   private handleToggleHistory = () => { 
       console.log('Handle Toggle History clicked');
@@ -147,10 +186,28 @@ export class SimpleSidebarWidget extends Widget {
     this.addClass('jp-llm-ext-sidebar');
 
     // --- 1. Initialize Core Components & State ---
-    this.settingsState = new SettingsState();
+    this.apiClient = new ApiClient();
+    this.settingsState = SettingsManager.getInstance(this.apiClient);
     const initialSettings = this.settingsState.getSettings();
-    this.apiClient = new ApiClient(initialSettings?.apiUrl || undefined);
-    this.chatState = new ChatState();
+    
+    // Update the API client with the correct URL from settings
+    if (initialSettings?.apiUrl) {
+      console.log(`Using API URL from settings: ${initialSettings.apiUrl}`);
+      this.apiClient = new ApiClient(initialSettings.apiUrl);
+      // Re-initialize settings manager with updated API client
+      this.settingsState = SettingsManager.getInstance(this.apiClient);
+    } else {
+      console.log(`Using default API URL: http://localhost:8000`);
+    }
+    
+    // Check API health on startup
+    this.apiClient.healthCheck().then(isHealthy => {
+      console.log(`API health check on initialization: ${isHealthy ? 'healthy' : 'not healthy'}`);
+    }).catch(error => {
+      console.error('Error during initial API health check:', error);
+    });
+    
+    this.chatState = new ChatState(this.apiClient);
     this.noteState = new NoteState();
     this.popupMenuManager = new PopupMenuManager(this.docManager, this.node, {
         insertCode: (code: string) => {
@@ -374,14 +431,6 @@ export class SimpleSidebarWidget extends Widget {
     });
     this.settingsModalContainer = createSettingsModalElement(settingsModalCallbacks);
 
-    // --- Initialize State Managers ---
-    this.chatState = new ChatState();
-    this.settingsState = new SettingsState();
-    this.noteState = new NoteState();
-
-    // --- Initialize Core Components ---
-    this.apiClient = new ApiClient();
-
     // --- Initialize UI Manager (needs dependencies) ---
     const uiManagerCallbacks: UIManagerCallbacks = {
         handleNewChat: this.handleNewChat,
@@ -440,7 +489,8 @@ export class SimpleSidebarWidget extends Widget {
     this.settingsHandler = new SettingsHandler(
         this.settingsState,
         this.settingsModalContainer,
-        this.uiManager
+        this.uiManager,
+        this.apiClient
     );
 
     // --- 5. Final Setup (Attach event listeners, connect signals, etc.) ---
@@ -455,6 +505,32 @@ export class SimpleSidebarWidget extends Widget {
 
     // Setup global keyboard shortcuts with the UIManager for proper @ key handling
     setupShortcuts(this.inputHandler, this.popupMenuManager, shortcutCallbacks);
+
+    // Listen for API client updates
+    window.addEventListener('api-client-updated', ((event: CustomEvent) => {
+      // Update the API client reference in this widget
+      const newApiClient = event.detail.apiClient;
+      if (newApiClient) {
+        this.apiClient = newApiClient;
+        
+        // Update references in components that use the API client
+        this.messageHandler = new MessageHandler(
+          this.apiClient,
+          this.chatState,
+          this.uiManager, 
+          messageRendererCallbacks,
+          this.inputHandler
+        );
+        
+        // Recreate the ChatState with the new API client to ensure thread_id creation works
+        // Only if there are no existing chats
+        if (this.chatState.getChatHistory().length === 0) {
+          this.chatState = new ChatState(this.apiClient);
+        }
+        
+        console.log('SimpleSidebarWidget: API client updated');
+      }
+    }) as EventListener);
 
     this.node.appendChild(this.layoutElements.mainElement);
     this.node.appendChild(this.settingsModalContainer);
