@@ -8,7 +8,7 @@ import { ICommandPalette } from '@jupyterlab/apputils';
 import { INotebookTracker } from '@jupyterlab/notebook';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 
-import { SimpleSidebarWidget } from './sidebar-widget';
+import { ChatbotSidebarWidget } from './sidebar-widget';
 import { initGlobals, globals } from './core/globals';
 import { registerCommands } from './commands';
 import { CellContextTracker } from './cell-context-tracker';
@@ -21,10 +21,10 @@ import '../style/index.css';
 export { ApiClient } from './core/api-client';
 
 /**
- * Initialization data for the jupyter-simple-extension extension.
+ * Initialization data for the jupyter-sidebar-chatbot extension.
  */
 const plugin: JupyterFrontEndPlugin<void> = {
-  id: 'jupyter-simple-extension:plugin',
+  id: 'jupyter-sidebar-chatbot:plugin',
   autoStart: true,
   requires: [ILauncher, ICommandPalette, INotebookTracker, IDocumentManager],
   activate: (
@@ -34,7 +34,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     tracker: INotebookTracker,
     docManager: IDocumentManager
   ) => {
-    console.log('JupyterLab extension jupyter-simple-extension is activated!');
+    console.log('JupyterLab extension jupyter-sidebar-chatbot is activated!');
     
     // Initialize global references
     initGlobals(jupyterApp, tracker);
@@ -43,7 +43,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     globals.cellContextTracker = new CellContextTracker(jupyterApp, tracker);
     
     // Create and add sidebar widget
-    const sidebarWidget = new SimpleSidebarWidget(docManager);
+    const sidebarWidget = new ChatbotSidebarWidget(docManager);
     jupyterApp.shell.add(sidebarWidget, 'left', { rank: 9999 });
 
     // Register commands

@@ -1,15 +1,15 @@
 {
-  "name": "jupyter-simple-extension",
+  "name": "jupyter-sidebar-chatbot",
   "version": "0.1.0",
-  "description": "A simple JupyterLab extension",
+  "description": "A JupyterLab extension providing a chatbot interface in the sidebar",
   "keywords": [
     "jupyter",
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/yourgithub/jupyter-simple-extension",
+  "homepage": "https://github.com/yourgithub/jupyter-sidebar-chatbot",
   "bugs": {
-    "url": "https://github.com/yourgithub/jupyter-simple-extension/issues"
+    "url": "https://github.com/yourgithub/jupyter-sidebar-chatbot/issues"
   },
   "license": "BSD-3-Clause",
   "author": "Your Name",
@@ -22,7 +22,7 @@
   "style": "style/index.css",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourgithub/jupyter-simple-extension.git"
+    "url": "https://github.com/yourgithub/jupyter-sidebar-chatbot.git"
   },
   "scripts": {
     "build": "jlpm build:lib && jlpm build:labextension:dev",
@@ -33,7 +33,7 @@
     "clean": "jlpm clean:lib",
     "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
     "clean:all": "jlpm clean:lib && jlpm clean:labextension",
-    "clean:labextension": "rimraf jupyter-simple-extension/labextension",
+    "clean:labextension": "rimraf jupyter-sidebar-chatbot/labextension",
     "install:extension": "jlpm build",
     "watch": "run-p watch:src watch:labextension",
     "watch:src": "tsc -w",
@@ -64,6 +64,6 @@
   },
   "jupyterlab": {
     "extension": true,
-    "outputDir": "jupyter-simple-extension/labextension"
+    "outputDir": "jupyter-sidebar-chatbot/labextension"
   }
 }

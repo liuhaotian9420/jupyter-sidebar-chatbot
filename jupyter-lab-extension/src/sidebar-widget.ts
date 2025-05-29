@@ -33,9 +33,9 @@ import {
 import { createCodeRefPlaceholder } from './ui/code-ref-widget'; 
 
 /**
- * Main sidebar widget for the AI chat interface - Now acts as an orchestrator.
+ * Main sidebar widget for the chatbot interface - Acts as an orchestrator for the sidebar chatbot.
  */
-export class SimpleSidebarWidget extends Widget {
+export class ChatbotSidebarWidget extends Widget {
   // --- NEW Properties: Handlers, State Managers, UI Elements ---
   private apiClient: ApiClient;
   private chatState: ChatState;
@@ -178,12 +178,13 @@ export class SimpleSidebarWidget extends Widget {
   constructor(docManager: IDocumentManager) {
     super();
     this.docManager = docManager;
-    this.id = 'simple-sidebar';
-    this.title.label = '';
+    this.id = 'jupyter-sidebar-chatbot';
+    this.title.label = 'Chatbot';
     this.title.caption = 'AI Chat Interface';
     this.title.icon = extensionIcon;
     this.title.closable = true;
     this.addClass('jp-llm-ext-sidebar');
+{{ ... }}
 
     // --- 1. Initialize Core Components & State ---
     this.apiClient = new ApiClient();
@@ -268,7 +269,7 @@ export class SimpleSidebarWidget extends Widget {
             }
             
             // --- DEBUG LOG --- 
-            console.log(`[SimpleSidebarWidget.insertCode] Determined lines: Start=${lineNumber}, End=${lineEndNumber}`);
+            console.log(`[ChatbotSidebarWidget.insertCode] Determined lines: Start=${lineNumber}, End=${lineEndNumber}`);
             // --- END DEBUG LOG ---
 
             // Pass both start and end line numbers
@@ -528,7 +529,7 @@ export class SimpleSidebarWidget extends Widget {
           this.chatState = new ChatState(this.apiClient);
         }
         
-        console.log('SimpleSidebarWidget: API client updated');
+        console.log('ChatbotSidebarWidget: API client updated');
       }
     }) as EventListener);
 
@@ -551,4 +552,4 @@ export class SimpleSidebarWidget extends Widget {
     super.dispose();
   }
 
-} // End of SimpleSidebarWidget class
+} // End of ChatbotSidebarWidget class

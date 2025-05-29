@@ -2,7 +2,7 @@ import { JupyterFrontEnd } from '@jupyterlab/application';
 import { ICommandPalette } from '@jupyterlab/apputils';
 import { ILauncher } from '@jupyterlab/launcher';
 // import { extensionIcon } from './icons'; // Removed: icons.ts not found
-import { SimpleSidebarWidget } from './sidebar-widget';
+import { ChatbotSidebarWidget } from './sidebar-widget';
 import { LabIcon } from '@jupyterlab/ui-components'; // Import LabIcon if needed as placeholder
 
 // Placeholder icon (replace if you have a specific icon)
@@ -15,7 +15,7 @@ export function registerCommands(
   app: JupyterFrontEnd,
   palette: ICommandPalette,
   launcher: ILauncher,
-  sidebarWidget: SimpleSidebarWidget
+  sidebarWidget: ChatbotSidebarWidget
 ): void {
   // Add command to toggle the sidebar
   app.commands.addCommand('simple-extension:toggle-sidebar', {

@@ -1,4 +1,7 @@
 {
+  "name": "jupyter-sidebar-chatbot",
+  "version": "0.1.0",
+  "description": "A JupyterLab extension providing a chatbot interface in the sidebar",
   "dependencies": {
     "@types/markdown-it": "^14.1.2",
     "markdown-it": "^14.1.0"
